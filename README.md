@@ -1,12 +1,12 @@
 # Open Motion
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Hada45/Open-Motion/refs/heads/Asset/Proyek Baru 45 [D19F673].png" width="300" alt="Open Motion Logo" />
+  <img src="https://raw.githubusercontent.com/Hada45/Open-Motion/refs/heads/Asset/Proyek Baru 45 [D19F673].png" width="150" alt="Open Motion Logo" />
 </p>
 
 ## Project Status
 
-⏳ **Waiting for Opus Framework** - Development on hold pending Opus Framework integration
+⏳ **Waiting for Opus Framework**
 
 ## About Open Motion
 
