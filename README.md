@@ -1,7 +1,8 @@
 # Open Motion
 
-![Open Motion Logo](https://img.shields.io/badge/Open-Motion-00D4FF?style=for-the-badge)
-
+<p align="center">
+  <img src="https://img.shields.io/badge/Open-Motion" width="128" alt="cypy Logo" />
+</p>
 ## Project Status
 
 ⏳ **Waiting for Opus Framework** - Development on hold pending Opus Framework integration
