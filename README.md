@@ -20,3 +20,7 @@ Open Motion is a free and open-source mobile motion graphics and video editor fo
 - ⚡ **High-Performance Rendering** - Optimized for speed and quality
 - 📱 **Mobile-Focused** - Designed for mobile devices
 - 🆓 **Free & Open Source** - Community-driven development
+
+## Contributing
+
+We welcome contributions!
