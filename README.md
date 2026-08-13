@@ -8,7 +8,9 @@
 
 > [!WARNING]
 > **Prototype / Work in Progress**
+> 
 > ⏳ **Waiting for [Opus Framework](https://youtu.be/bB4_B7TCoMY?si=6yFhzkhmmRT1DMR5)**
+> 
 > This repository currently contains an early browser-based prototype of Open Motion. It is intended for experimentation and validation of the editor UI, animation workflow, keyframes, and True 3D camera controls. It is not production-ready, and features, project data, and implementation may change significantly.
 
 Open `index.html` in a modern browser to run the prototype. No build step is required.
