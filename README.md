@@ -6,7 +6,6 @@
 
 ## Project Status
 
-> [!WARNING]
 > **Prototype / Work in Progress**
 > 
 > ⏳ **Waiting for [Opus Framework](https://youtu.be/bB4_B7TCoMY?si=6yFhzkhmmRT1DMR5)**
