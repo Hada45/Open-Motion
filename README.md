@@ -13,9 +13,7 @@
 > 
 > This repository currently contains an early browser-based prototype of Open Motion. It is intended for experimentation and validation of the editor UI, animation workflow, keyframes, and 3D camera controls. It is not production-ready, and features, project data, and implementation may change significantly.
 
-Open `[This Open Motion Prototype](https://hada45.github.io/Open-Motion/)
-
-` in a modern browser to run the prototype. No build step is required.
+Open this [Open Motion Prototype](https://hada45.github.io/Open-Motion/) in a modern browser to run the prototype. No build step is required.
 
 ## About Open Motion
 
