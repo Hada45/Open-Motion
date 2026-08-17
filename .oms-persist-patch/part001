@@ -1,0 +1,72 @@
+diff --git a/index.html b/index.html
+index b632d63..545ba91 100644
+--- a/index.html
++++ b/index.html
+@@ -5307,6 +5307,85 @@ class TimelineController{
+ }
+ const timeline=new TimelineController(model);
+ 
++
++/* V3.47 — durable project persistence + autosave */
++class OMSPersistentStore{
++  constructor(){this.dbName='open-motion-studio-v4';this.dbVersion=1;this.dbPromise=null;this.knownAssets=new Set();this.writeQueue=Promise.resolve()}
++  request(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('IndexedDB request failed'))})}
++  txDone(tx){return new Promise((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error||new Error('IndexedDB transaction failed'));tx.onabort=()=>reject(tx.error||new Error('IndexedDB transaction aborted'))})}
++  open(){
++    if(this.dbPromise)return this.dbPromise;
++    this.dbPromise=new Promise((resolve,reject)=>{
++      if(!('indexedDB' in window)){reject(new Error('IndexedDB tidak tersedia'));return}
++      const req=indexedDB.open(this.dbName,this.dbVersion);
++      req.onupgradeneeded=()=>{
++        const db=req.result;
++        if(!db.objectStoreNames.contains('projects')){const s=db.createObjectStore('projects',{keyPath:'id'});s.createIndex('updated','meta.updated',{unique:false})}
++        if(!db.objectStoreNames.contains('assets'))db.createObjectStore('assets',{keyPath:'id'})
++      };
++      req.onsuccess=()=>resolve(req.result);
++      req.onerror=()=>reject(req.error||new Error('IndexedDB gagal dibuka'));
++      req.onblocked=()=>console.warn('Open Motion database upgrade blocked')
++    });
++    return this.dbPromise
++  }
++  projectMeta(project){return{id:project.id,name:project.name,width:+project.width||0,height:+project.height||0,fps:+project.fps||30,updated:+project.updated||Date.now(),created:+project.created||Date.now()}}
++  readLocalIndex(){
++    const all=[];
++    for(const key of ['oms4_project_index','oms3_projects']){try{const arr=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(arr))all.push(...arr)}catch(e){}}
++    const map=new Map();for(const p of all)if(p?.id){const old=map.get(p.id);if(!old||(+p.updated||0)>(+old.updated||0))map.set(p.id,p)}return[...map.values()]
++  }
++  writeLocalIndex(meta){try{const arr=this.readLocalIndex().filter(x=>x.id!==meta.id);arr.push(meta);localStorage.setItem('oms4_project_index',JSON.stringify(arr))}catch(e){}}
++  saveLiteSync(){
++    if(!model.project)return false;
++    try{model.project.updated=Date.now();mediaAssets.captureLayers(model.layers);const data=model.serialize({includeMedia:false}),meta=this.projectMeta(model.project);localStorage.setItem('oms4_lite_'+meta.id,JSON.stringify(data));this.writeLocalIndex(meta);return true}
++    catch(e){console.warn('Emergency local save gagal:',e);return false}
++  }
++  async saveCurrent({notify=false}={}){
++    if(!model.project)return false;
++    const task=async()=>{
++      model.project.updated=Date.now();mediaAssets.captureLayers(model.layers);
++      const data=model.serialize({includeMedia:false}),meta=this.projectMeta(model.project),assetRecords=[];
++      for(const layer of model.layers){if(!mediaAssets.isMedia(layer)||!layer.dataUrl)continue;const id=mediaAssets.captureLayer(layer);if(id&&!this.knownAssets.has(id))assetRecords.push({id,dataUrl:layer.dataUrl,type:layer.type,name:layer.name||'',updated:Date.now()})}
++      try{
++        const db=await this.open(),tx=db.transaction(['projects','assets'],'readwrite');
++        tx.objectStore('projects').put({id:meta.id,meta,data});const assets=tx.objectStore('assets');for(const rec of assetRecords)assets.put(rec);await this.txDone(tx);
++        for(const rec of assetRecords)this.knownAssets.add(rec.id);
++        this.writeLocalIndex(meta);try{localStorage.setItem('oms4_lite_'+meta.id,JSON.stringify(data));localStorage.setItem('oms4_last_saved_project',meta.id)}catch(e){}
++        if(notify)toast('Proyek tersimpan');return true
++      }catch(err){console.warn('IndexedDB save gagal, memakai fallback lokal:',err);const ok=this.saveLiteSync();if(notify)toast(ok?'Proyek tersimpan (fallback lokal)':'Penyimpanan browser gagal — ekspor JSON sebagai cadangan');return ok}
++    };
++    this.writeQueue=this.writeQueue.catch(()=>{}).then(task);return this.writeQueue
++  }
++  async getProjectRecord(id){try{const db=await this.open(),tx=db.transaction('projects','readonly'),rec=await this.request(tx.objectStore('projects').get(id));await this.txDone(tx);return rec||null}catch(e){return null}}
++  async hydrateAssets(data){
++    const ids=[...new Set((data?.layers||[]).map(l=>l?.assetId).filter(Boolean))];if(!ids.length)return;
++    try{const db=await this.open(),tx=db.transaction('assets','readonly'),store=tx.objectStore('assets'),recs=await Promise.all(ids.map(id=>this.request(store.get(id)).catch(()=>null)));await this.txDone(tx);for(const rec of recs){if(rec?.id&&rec.dataUrl){mediaAssets.sources.set(rec.id,rec.dataUrl);this.knownAssets.add(rec.id)}}}catch(e){console.warn('Media persistence restore gagal:',e)}
++  }
++  async loadProjectData(id){
++    const rec=await this.getProjectRecord(id);if(rec?.data){await this.hydrateAssets(rec.data);return rec.data}
++    try{const lite=localStorage.getItem('oms4_lite_'+id);if(lite)return JSON.parse(lite)}catch(e){}
++    try{const old=localStorage.getItem('oms3_'+id);if(old){const data=JSON.parse(old);for(const layer of data.layers||[])if(layer?.dataUrl)mediaAssets.captureLayer(layer);return data}}catch(e){}
++    return null
++  }
++  async listProjects(){
++    const merged=new Map();
++    try{const db=await this.open(),tx=db.transaction('projects','readonly'),rows=await this.request(tx.objectStore('projects').getAll());await this.txDone(tx);for(const row of rows||[])if(row?.meta?.id)merged.set(row.meta.id,row.meta)}catch(e){}
