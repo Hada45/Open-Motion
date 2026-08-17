@@ -8520,10 +8520,12 @@ wholeAppObserver.observe(document.body,{childList:true,subtree:true,characterDat
 scheduleWholeAppLanguage();
 
 (async()=>{
+  // Always start at Home after opening or refreshing Open Motion.
+  // Saved projects and editing progress remain persisted; the user chooses
+  // a project from Home to continue editing.
+  try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}
+  ui.showHome();
   await ui.loadProjectList();
-  let resumeId=null;
-  try{resumeId=sessionStorage.getItem('oms4_resume_project')}catch(e){}
-  if(resumeId)await ui.loadLocal(resumeId,{silent:true});
 })();
 })();
 </script>
