@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.oms-persist-upload/READY'
+      - '.oms-persist-patch/READY'
 
 permissions:
   contents: write
@@ -18,14 +18,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Rebuild raw index.html
+      - name: Apply persistence patch
         shell: bash
         run: |
           set -euo pipefail
-          cat .oms-persist-upload/part* | base64 -d > /tmp/open-motion-index.html.xz
-          xz -dc /tmp/open-motion-index.html.xz > index.html
+          cat .oms-persist-patch/part* > /tmp/persistence.patch
+          git apply /tmp/persistence.patch
           echo "0e5c58961c9c9cf7314ef280386ae72aa0f5297f7e3a17c4e5ed38bff500e985  index.html" | sha256sum -c -
-          rm -rf .oms-persist-upload
+          rm -rf .oms-persist-patch
 
       - name: Commit persistence fix
         shell: bash
@@ -33,7 +33,7 @@ jobs:
           set -euo pipefail
           git config user.name "Hada"
           git config user.email "114206173+Hada45@users.noreply.github.com"
-          git add -A index.html .oms-persist-upload
+          git add -A index.html .oms-persist-patch
           if git diff --cached --quiet; then
             exit 0
           fi
