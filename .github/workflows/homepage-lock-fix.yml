@@ -1,0 +1,86 @@
+name: Open Motion homepage navigation lock fix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/homepage-lock-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-index:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Prevent automatic timeline reopening
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          old = "constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0}"
+          new = "constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true}"
+          if old not in s:
+              raise SystemExit('UIController constructor target not found')
+          s = s.replace(old, new, 1)
+
+          old = "  showEditor(){ $('#home').classList.add('hidden');$('#editor').classList.remove('hidden');this.rebuildAll();setTimeout(()=>this.fit(),30)}"
+          new = "  authorizeEditorOpen(){this._editorNavigationAuthorized=true}\n  showEditor(){if(this._bootHomepageLock&&!this._editorNavigationAuthorized){console.warn('Blocked automatic editor navigation during homepage-first mode');return false}this._editorNavigationAuthorized=false;$('#home').classList.add('hidden');$('#editor').classList.remove('hidden');this.rebuildAll();setTimeout(()=>this.fit(),30);return true}"
+          if old not in s:
+              raise SystemExit('showEditor target not found')
+          s = s.replace(old, new, 1)
+
+          old = "const open=()=>this.loadLocal(p.id);d.onclick=open;d.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}};root.appendChild(d)"
+          new = "const open=e=>{if(e&&e.isTrusted===false)return;this.loadLocal(p.id,{userInitiated:true})};d.onclick=e=>open(e);d.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.isTrusted){e.preventDefault();open(e)}};root.appendChild(d)"
+          if old not in s:
+              raise SystemExit('project card open target not found')
+          s = s.replace(old, new, 1)
+
+          old = "async loadLocal(id,{silent=false}={}){try{const data=await persistentStore.loadProjectData(id);if(!data)throw Error('missing project');model.restore(data);history.clear();autosave.lastFingerprint=autosave.fingerprint();try{sessionStorage.setItem('oms4_resume_project',id)}catch(e){}this.showEditor();persistentStore.saveCurrent().catch(()=>{});return true}catch(e){console.warn('Project load failed:',e);if(!silent)toast('Proyek tidak dapat dibuka');return false}}"
+          new = "async loadLocal(id,{silent=false,userInitiated=false}={}){if(!userInitiated){console.warn('Blocked automatic project restore to editor:',id);return false}try{const data=await persistentStore.loadProjectData(id);if(!data)throw Error('missing project');model.restore(data);history.clear();autosave.lastFingerprint=autosave.fingerprint();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}this.authorizeEditorOpen();this.showEditor();persistentStore.saveCurrent().catch(()=>{});return true}catch(e){console.warn('Project load failed:',e);if(!silent)toast('Proyek tidak dapat dibuka');return false}}"
+          if old not in s:
+              raise SystemExit('loadLocal target not found')
+          s = s.replace(old, new, 1)
+
+          old = "ui.showEditor();history.push();model.addLayer('camera',{name:'Main Camera'})"
+          new = "ui.authorizeEditorOpen();ui.showEditor();history.push();model.addLayer('camera',{name:'Main Camera'})"
+          if old not in s:
+              raise SystemExit('createProject showEditor target not found')
+          s = s.replace(old, new, 1)
+
+          old = "model.restore(payload);history.clear();ui.showEditor();toast(isXML?'XML dimigrasikan ke scene 3D':'Paket proyek dibuka')"
+          new = "model.restore(payload);history.clear();ui.authorizeEditorOpen();ui.showEditor();toast(isXML?'XML dimigrasikan ke scene 3D':'Paket proyek dibuka')"
+          if old not in s:
+              raise SystemExit('project import showEditor target not found')
+          s = s.replace(old, new, 1)
+
+          # Resume markers are obsolete in homepage-first mode.
+          s = s.replace("try{sessionStorage.setItem('oms4_resume_project',model.project.id)}catch(e){}", "try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}", 1)
+
+          p.write_text(s, encoding='utf-8')
+
+      - name: Verify JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          m=re.search(r'<script>(.*)</script>',s,re.S)
+          if not m: raise SystemExit('script not found')
+          Path('/tmp/open-motion.js').write_text(m.group(1),encoding='utf-8')
+          PY
+          node --check /tmp/open-motion.js
+
+      - name: Commit fix
+        run: |
+          git config user.name "Hada"
+          git config user.email "114206173+Hada45@users.noreply.github.com"
+          git add index.html
+          git commit -m "Keep saved projects on Home until user opens one"
+          git push origin HEAD:main
