@@ -1,0 +1,76 @@
++    for(const meta of this.readLocalIndex()){if(!meta?.id)continue;const old=merged.get(meta.id);if(!old||(+meta.updated||0)>(+old.updated||0))merged.set(meta.id,meta)}
++    return[...merged.values()]
++  }
++  async requestDurableStorage(){try{if(navigator.storage?.persist)await navigator.storage.persist()}catch(e){}}
++}
++const persistentStore=new OMSPersistentStore();
++class OMSAutoSave{
++  constructor(store){this.store=store;this.lastFingerprint='';this.busy=false;this.pending=false;this.timer=setInterval(()=>this.check(),700);bus.on('model:changed',()=>this.markDirty());bus.on('project:duration',()=>this.markDirty())}
++  fingerprint(){if(!model.project)return'';mediaAssets.captureLayers(model.layers);const d=model.serialize({includeMedia:false});delete d.time;delete d.selected;if(d.project){d.project={...d.project};delete d.project.updated}return JSON.stringify(d)}
++  markDirty(){this.lastFingerprint=''}
++  async check(force=false){if(!model.project)return false;const fp=this.fingerprint();if(!force&&fp===this.lastFingerprint)return false;if(this.busy){this.pending=true;return false}this.busy=true;try{const ok=await this.store.saveCurrent();if(ok)this.lastFingerprint=fp;return ok}finally{this.busy=false;if(this.pending){this.pending=false;setTimeout(()=>this.check(true),0)}}}
++  async flush(notify=false){if(!model.project)return false;const ok=await this.store.saveCurrent({notify});if(ok)this.lastFingerprint=this.fingerprint();return ok}
++}
++const autosave=new OMSAutoSave(persistentStore);
++
+ class UIController{
+   constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0}
+   cameraModeBadgeText(){
+@@ -7298,56 +7377,18 @@ class UIController{
+       if(sel) this.updateTransformKeyUI(sel);
+     }
+   }
+-  loadProjectList(){
+-    const root=$('#projectList');
+-    if(!root)return;
+-    root.innerHTML='';
+-    let metas=[];
+-    try{metas=JSON.parse(localStorage.getItem('oms3_projects')||'[]')}catch(e){}
+-    if(!Array.isArray(metas))metas=[];
+-
+-    const count=$('#projectCountBadge');
+-    if(count)count.textContent=String(metas.length);
+-    const sort=$('#projectSort')?.value||'newest';
+-    metas.sort((a,b)=>sort==='oldest'
+-      ?(+a.updated||0)-(+b.updated||0)
+-      :sort==='name'
+-        ?String(a.name||'').localeCompare(String(b.name||''),homeLocale())
+-        :(b.updated||0)-(a.updated||0));
+-
+-    if(!metas.length){
+-      root.innerHTML=`<div class="homeEmpty">
+-        <div class="emptyIcon" aria-hidden="true"></div>
+-        <div class="emptyCopy"><b>${homeTr('noProjects')}</b><p>${homeTr('noProjectsDesc')}</p></div>
+-      </div>`;
+-      return;
+-    }
+-
+-    const dateLabel=value=>{
+-      const time=Number(value)||0;
+-      if(!time)return homeTr('unsaved');
+-      const date=new Date(time),now=new Date(),sameDay=date.toDateString()===now.toDateString();
+-      if(sameDay)return homeTr('today')+' · '+date.toLocaleTimeString(homeLocale(),{hour:'2-digit',minute:'2-digit'});
+-      return date.toLocaleDateString(homeLocale(),{day:'2-digit',month:'short',year:date.getFullYear()===now.getFullYear()?undefined:'2-digit'});
+-    };
+-
+-    metas.forEach((p,index)=>{
+-      const d=document.createElement('article');
+-      const hash=String(p.id||p.name||index).split('').reduce((n,ch)=>(n*31+ch.charCodeAt(0))>>>0,7);
+-      d.className='projectCard';
+-      d.tabIndex=0;
+-      d.setAttribute('role','button');
+-      d.setAttribute('aria-label',homeTr('openProject').replace('{name}',p.name||homeTr('untitled')));
+-      d.style.setProperty('--thumb-hue',String(150+hash%105));
+-      d.innerHTML=`<div class="projectThumb"><span class="projectThumbBadge">SCENE 4</span></div><div class="projectMeta"><span class="projectArrow" aria-hidden="true">↗</span><b>${esc(p.name||homeTr('untitled'))}</b><div class="projectMetaLine"><span>${Number(p.width)||0}×${Number(p.height)||0} · ${Number(p.fps)||30} FPS</span><span class="projectDate">${dateLabel(p.updated)}</span></div></div>`;
+-      const open=()=>this.loadLocal(p.id);
+-      d.onclick=open;
+-      d.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}};
+-      root.appendChild(d);
+-    });
++  async loadProjectList(){
++    const root=$('#projectList');if(!root)return;root.innerHTML='';
++    let metas=[];try{metas=await persistentStore.listProjects()}catch(e){console.warn(e)}if(!Array.isArray(metas))metas=[];
++    const count=$('#projectCountBadge');if(count)count.textContent=String(metas.length);
++    const sort=$('#projectSort')?.value||'newest';metas.sort((a,b)=>sort==='oldest'?(+a.updated||0)-(+b.updated||0):sort==='name'?String(a.name||'').localeCompare(String(b.name||''),homeLocale()):(b.updated||0)-(a.updated||0));
++    if(!metas.length){root.innerHTML=`<div class="homeEmpty"><div class="emptyIcon" aria-hidden="true"></div><div class="emptyCopy"><b>${homeTr('noProjects')}</b><p>${homeTr('noProjectsDesc')}</p></div></div>`;return}
++    const dateLabel=value=>{const time=Number(value)||0;if(!time)return homeTr('unsaved');const date=new Date(time),now=new Date(),sameDay=date.toDateString()===now.toDateString();if(sameDay)return homeTr('today')+' · '+date.toLocaleTimeString(homeLocale(),{hour:'2-digit',minute:'2-digit'});return date.toLocaleDateString(homeLocale(),{day:'2-digit',month:'short',year:date.getFullYear()===now.getFullYear()?undefined:'2-digit'})};
