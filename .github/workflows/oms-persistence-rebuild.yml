@@ -1,0 +1,41 @@
+name: Open Motion persistence rebuild
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.oms-persist-upload/READY'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-index:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild raw index.html
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .oms-persist-upload/part* | base64 -d > /tmp/open-motion-index.html.xz
+          xz -dc /tmp/open-motion-index.html.xz > index.html
+          echo "0e5c58961c9c9cf7314ef280386ae72aa0f5297f7e3a17c4e5ed38bff500e985  index.html" | sha256sum -c -
+          rm -rf .oms-persist-upload
+
+      - name: Commit persistence fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Hada"
+          git config user.email "114206173+Hada45@users.noreply.github.com"
+          git add -A index.html .oms-persist-upload
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Persist projects and autosave editing progress"
+          git push origin HEAD:main
