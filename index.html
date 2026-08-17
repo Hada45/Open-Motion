@@ -5307,6 +5307,85 @@ class TimelineController{
 }
 const timeline=new TimelineController(model);
 
+
+/* V3.47 — durable project persistence + autosave */
+class OMSPersistentStore{
+  constructor(){this.dbName='open-motion-studio-v4';this.dbVersion=1;this.dbPromise=null;this.knownAssets=new Set();this.writeQueue=Promise.resolve()}
+  request(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('IndexedDB request failed'))})}
+  txDone(tx){return new Promise((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error||new Error('IndexedDB transaction failed'));tx.onabort=()=>reject(tx.error||new Error('IndexedDB transaction aborted'))})}
+  open(){
+    if(this.dbPromise)return this.dbPromise;
+    this.dbPromise=new Promise((resolve,reject)=>{
+      if(!('indexedDB' in window)){reject(new Error('IndexedDB tidak tersedia'));return}
+      const req=indexedDB.open(this.dbName,this.dbVersion);
+      req.onupgradeneeded=()=>{
+        const db=req.result;
+        if(!db.objectStoreNames.contains('projects')){const s=db.createObjectStore('projects',{keyPath:'id'});s.createIndex('updated','meta.updated',{unique:false})}
+        if(!db.objectStoreNames.contains('assets'))db.createObjectStore('assets',{keyPath:'id'})
+      };
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error||new Error('IndexedDB gagal dibuka'));
+      req.onblocked=()=>console.warn('Open Motion database upgrade blocked')
+    });
+    return this.dbPromise
+  }
+  projectMeta(project){return{id:project.id,name:project.name,width:+project.width||0,height:+project.height||0,fps:+project.fps||30,updated:+project.updated||Date.now(),created:+project.created||Date.now()}}
+  readLocalIndex(){
+    const all=[];
+    for(const key of ['oms4_project_index','oms3_projects']){try{const arr=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(arr))all.push(...arr)}catch(e){}}
+    const map=new Map();for(const p of all)if(p?.id){const old=map.get(p.id);if(!old||(+p.updated||0)>(+old.updated||0))map.set(p.id,p)}return[...map.values()]
+  }
+  writeLocalIndex(meta){try{const arr=this.readLocalIndex().filter(x=>x.id!==meta.id);arr.push(meta);localStorage.setItem('oms4_project_index',JSON.stringify(arr))}catch(e){}}
+  saveLiteSync(){
+    if(!model.project)return false;
+    try{model.project.updated=Date.now();mediaAssets.captureLayers(model.layers);const data=model.serialize({includeMedia:false}),meta=this.projectMeta(model.project);localStorage.setItem('oms4_lite_'+meta.id,JSON.stringify(data));this.writeLocalIndex(meta);return true}
+    catch(e){console.warn('Emergency local save gagal:',e);return false}
+  }
+  async saveCurrent({notify=false}={}){
+    if(!model.project)return false;
+    const task=async()=>{
+      model.project.updated=Date.now();mediaAssets.captureLayers(model.layers);
+      const data=model.serialize({includeMedia:false}),meta=this.projectMeta(model.project),assetRecords=[];
+      for(const layer of model.layers){if(!mediaAssets.isMedia(layer)||!layer.dataUrl)continue;const id=mediaAssets.captureLayer(layer);if(id&&!this.knownAssets.has(id))assetRecords.push({id,dataUrl:layer.dataUrl,type:layer.type,name:layer.name||'',updated:Date.now()})}
+      try{
+        const db=await this.open(),tx=db.transaction(['projects','assets'],'readwrite');
+        tx.objectStore('projects').put({id:meta.id,meta,data});const assets=tx.objectStore('assets');for(const rec of assetRecords)assets.put(rec);await this.txDone(tx);
+        for(const rec of assetRecords)this.knownAssets.add(rec.id);
+        this.writeLocalIndex(meta);try{localStorage.setItem('oms4_lite_'+meta.id,JSON.stringify(data));localStorage.setItem('oms4_last_saved_project',meta.id)}catch(e){}
+        if(notify)toast('Proyek tersimpan');return true
+      }catch(err){console.warn('IndexedDB save gagal, memakai fallback lokal:',err);const ok=this.saveLiteSync();if(notify)toast(ok?'Proyek tersimpan (fallback lokal)':'Penyimpanan browser gagal — ekspor JSON sebagai cadangan');return ok}
+    };
+    this.writeQueue=this.writeQueue.catch(()=>{}).then(task);return this.writeQueue
+  }
+  async getProjectRecord(id){try{const db=await this.open(),tx=db.transaction('projects','readonly'),rec=await this.request(tx.objectStore('projects').get(id));await this.txDone(tx);return rec||null}catch(e){return null}}
+  async hydrateAssets(data){
+    const ids=[...new Set((data?.layers||[]).map(l=>l?.assetId).filter(Boolean))];if(!ids.length)return;
+    try{const db=await this.open(),tx=db.transaction('assets','readonly'),store=tx.objectStore('assets'),recs=await Promise.all(ids.map(id=>this.request(store.get(id)).catch(()=>null)));await this.txDone(tx);for(const rec of recs){if(rec?.id&&rec.dataUrl){mediaAssets.sources.set(rec.id,rec.dataUrl);this.knownAssets.add(rec.id)}}}catch(e){console.warn('Media persistence restore gagal:',e)}
+  }
+  async loadProjectData(id){
+    const rec=await this.getProjectRecord(id);if(rec?.data){await this.hydrateAssets(rec.data);return rec.data}
+    try{const lite=localStorage.getItem('oms4_lite_'+id);if(lite)return JSON.parse(lite)}catch(e){}
+    try{const old=localStorage.getItem('oms3_'+id);if(old){const data=JSON.parse(old);for(const layer of data.layers||[])if(layer?.dataUrl)mediaAssets.captureLayer(layer);return data}}catch(e){}
+    return null
+  }
+  async listProjects(){
+    const merged=new Map();
+    try{const db=await this.open(),tx=db.transaction('projects','readonly'),rows=await this.request(tx.objectStore('projects').getAll());await this.txDone(tx);for(const row of rows||[])if(row?.meta?.id)merged.set(row.meta.id,row.meta)}catch(e){}
+    for(const meta of this.readLocalIndex()){if(!meta?.id)continue;const old=merged.get(meta.id);if(!old||(+meta.updated||0)>(+old.updated||0))merged.set(meta.id,meta)}
+    return[...merged.values()]
+  }
+  async requestDurableStorage(){try{if(navigator.storage?.persist)await navigator.storage.persist()}catch(e){}}
+}
+const persistentStore=new OMSPersistentStore();
+class OMSAutoSave{
+  constructor(store){this.store=store;this.lastFingerprint='';this.busy=false;this.pending=false;this.timer=setInterval(()=>this.check(),700);bus.on('model:changed',()=>this.markDirty());bus.on('project:duration',()=>this.markDirty())}
+  fingerprint(){if(!model.project)return'';mediaAssets.captureLayers(model.layers);const d=model.serialize({includeMedia:false});delete d.time;delete d.selected;if(d.project){d.project={...d.project};delete d.project.updated}return JSON.stringify(d)}
+  markDirty(){this.lastFingerprint=''}
+  async check(force=false){if(!model.project)return false;const fp=this.fingerprint();if(!force&&fp===this.lastFingerprint)return false;if(this.busy){this.pending=true;return false}this.busy=true;try{const ok=await this.store.saveCurrent();if(ok)this.lastFingerprint=fp;return ok}finally{this.busy=false;if(this.pending){this.pending=false;setTimeout(()=>this.check(true),0)}}}
+  async flush(notify=false){if(!model.project)return false;const ok=await this.store.saveCurrent({notify});if(ok)this.lastFingerprint=this.fingerprint();return ok}
+}
+const autosave=new OMSAutoSave(persistentStore);
+
 class UIController{
   constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0}
   cameraModeBadgeText(){
@@ -7298,56 +7377,18 @@ class UIController{
       if(sel) this.updateTransformKeyUI(sel);
     }
   }
-  loadProjectList(){
-    const root=$('#projectList');
-    if(!root)return;
-    root.innerHTML='';
-    let metas=[];
-    try{metas=JSON.parse(localStorage.getItem('oms3_projects')||'[]')}catch(e){}
-    if(!Array.isArray(metas))metas=[];
-
-    const count=$('#projectCountBadge');
-    if(count)count.textContent=String(metas.length);
-    const sort=$('#projectSort')?.value||'newest';
-    metas.sort((a,b)=>sort==='oldest'
-      ?(+a.updated||0)-(+b.updated||0)
-      :sort==='name'
-        ?String(a.name||'').localeCompare(String(b.name||''),homeLocale())
-        :(b.updated||0)-(a.updated||0));
-
-    if(!metas.length){
-      root.innerHTML=`<div class="homeEmpty">
-        <div class="emptyIcon" aria-hidden="true"></div>
-        <div class="emptyCopy"><b>${homeTr('noProjects')}</b><p>${homeTr('noProjectsDesc')}</p></div>
-      </div>`;
-      return;
-    }
-
-    const dateLabel=value=>{
-      const time=Number(value)||0;
-      if(!time)return homeTr('unsaved');
-      const date=new Date(time),now=new Date(),sameDay=date.toDateString()===now.toDateString();
-      if(sameDay)return homeTr('today')+' · '+date.toLocaleTimeString(homeLocale(),{hour:'2-digit',minute:'2-digit'});
-      return date.toLocaleDateString(homeLocale(),{day:'2-digit',month:'short',year:date.getFullYear()===now.getFullYear()?undefined:'2-digit'});
-    };
-
-    metas.forEach((p,index)=>{
-      const d=document.createElement('article');
-      const hash=String(p.id||p.name||index).split('').reduce((n,ch)=>(n*31+ch.charCodeAt(0))>>>0,7);
-      d.className='projectCard';
-      d.tabIndex=0;
-      d.setAttribute('role','button');
-      d.setAttribute('aria-label',homeTr('openProject').replace('{name}',p.name||homeTr('untitled')));
-      d.style.setProperty('--thumb-hue',String(150+hash%105));
-      d.innerHTML=`<div class="projectThumb"><span class="projectThumbBadge">SCENE 4</span></div><div class="projectMeta"><span class="projectArrow" aria-hidden="true">↗</span><b>${esc(p.name||homeTr('untitled'))}</b><div class="projectMetaLine"><span>${Number(p.width)||0}×${Number(p.height)||0} · ${Number(p.fps)||30} FPS</span><span class="projectDate">${dateLabel(p.updated)}</span></div></div>`;
-      const open=()=>this.loadLocal(p.id);
-      d.onclick=open;
-      d.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}};
-      root.appendChild(d);
-    });
+  async loadProjectList(){
+    const root=$('#projectList');if(!root)return;root.innerHTML='';
+    let metas=[];try{metas=await persistentStore.listProjects()}catch(e){console.warn(e)}if(!Array.isArray(metas))metas=[];
+    const count=$('#projectCountBadge');if(count)count.textContent=String(metas.length);
+    const sort=$('#projectSort')?.value||'newest';metas.sort((a,b)=>sort==='oldest'?(+a.updated||0)-(+b.updated||0):sort==='name'?String(a.name||'').localeCompare(String(b.name||''),homeLocale()):(b.updated||0)-(a.updated||0));
+    if(!metas.length){root.innerHTML=`<div class="homeEmpty"><div class="emptyIcon" aria-hidden="true"></div><div class="emptyCopy"><b>${homeTr('noProjects')}</b><p>${homeTr('noProjectsDesc')}</p></div></div>`;return}
+    const dateLabel=value=>{const time=Number(value)||0;if(!time)return homeTr('unsaved');const date=new Date(time),now=new Date(),sameDay=date.toDateString()===now.toDateString();if(sameDay)return homeTr('today')+' · '+date.toLocaleTimeString(homeLocale(),{hour:'2-digit',minute:'2-digit'});return date.toLocaleDateString(homeLocale(),{day:'2-digit',month:'short',year:date.getFullYear()===now.getFullYear()?undefined:'2-digit'})};
+    metas.forEach((p,index)=>{const d=document.createElement('article'),hash=String(p.id||p.name||index).split('').reduce((n,ch)=>(n*31+ch.charCodeAt(0))>>>0,7);d.className='projectCard';d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label',homeTr('openProject').replace('{name}',p.name||homeTr('untitled')));d.style.setProperty('--thumb-hue',String(150+hash%105));d.innerHTML=`<div class="projectThumb"><span class="projectThumbBadge">SCENE 4</span></div><div class="projectMeta"><span class="projectArrow" aria-hidden="true">↗</span><b>${esc(p.name||homeTr('untitled'))}</b><div class="projectMetaLine"><span>${Number(p.width)||0}×${Number(p.height)||0} · ${Number(p.fps)||30} FPS</span><span class="projectDate">${dateLabel(p.updated)}</span></div></div>`;const open=()=>this.loadLocal(p.id);d.onclick=open;d.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}};root.appendChild(d)})
   }
-  saveLocal(){if(!model.project)return;model.project.updated=Date.now();const data=model.snapshot();try{localStorage.setItem('oms3_'+model.project.id,data);let metas=JSON.parse(localStorage.getItem('oms3_projects')||'[]');const meta={id:model.project.id,name:model.project.name,width:model.project.width,height:model.project.height,fps:model.project.fps,updated:model.project.updated};const i=metas.findIndex(x=>x.id===meta.id);if(i>=0)metas[i]=meta;else metas.push(meta);localStorage.setItem('oms3_projects',JSON.stringify(metas));toast('Proyek disimpan lokal')}catch(e){toast('Penyimpanan lokal penuh — ekspor JSON')};this.loadProjectList()}
-  loadLocal(id){try{const s=localStorage.getItem('oms3_'+id);if(!s)throw Error();model.restore(s);history.clear();this.showEditor()}catch(e){toast('Proyek tidak dapat dibuka')}}
+  async saveLocal(notify=true){if(!model.project)return false;const ok=await autosave.flush(!!notify);await this.loadProjectList();return ok}
+  async loadLocal(id,{silent=false}={}){try{const data=await persistentStore.loadProjectData(id);if(!data)throw Error('missing project');model.restore(data);history.clear();autosave.lastFingerprint=autosave.fingerprint();try{sessionStorage.setItem('oms4_resume_project',id)}catch(e){}this.showEditor();persistentStore.saveCurrent().catch(()=>{});return true}catch(e){console.warn('Project load failed:',e);if(!silent)toast('Proyek tidak dapat dibuka');return false}}
+
 }
 
 const ui=new UIController();
@@ -8191,7 +8232,7 @@ function setHomeLanguage(id){
 function openLanguageModal(){const modal=$('#languageModal');if(!modal)return;renderLanguageList();modal.classList.remove('hidden')}
 function closeLanguageModal(){const modal=$('#languageModal');if(modal)modal.classList.add('hidden')}
 
-function createProject(){const name=$('#newName').value||'Project Baru',res=+$('#newRes').value,fps=+$('#newFps').value,dur=+$('#newDur').value,bg=$('#newBg').value,bgHex=String(bg||'#ffffff').replace('#',''),rgb=parseInt(bgHex,16),lum=(((rgb>>16)&255)*.2126+((rgb>>8)&255)*.7152+(rgb&255)*.0722),titleColor=lum>145?'#111827':'#ffffff';model.reset();model.project=model.defaultProject(name,ui.newRatio,res,fps,dur,bg);model.resetEditorCamera();model.mode3d=false;model.cameraView=true;renderer.resize();history.clear();$('#newModal').classList.add('hidden');const homeFab=$('#newProjectFab');if(homeFab){homeFab.style.display='none';homeFab.style.pointerEvents='none'}ui.showEditor();history.push();model.addLayer('camera',{name:'Main Camera'});const title=model.addLayer('text',{text:'OPEN MOTION',name:'Title',fontSize:model.project.height*.075,y:model.project.height*.44,color:titleColor});model.anim.setKey(title,'opacity',0,0,'ease-out');model.anim.setKey(title,'opacity',.45,1,'ease-out');model.anim.setKey(title,'scaleX',0,.72,'overshoot');model.anim.setKey(title,'scaleX',.7,1,'overshoot');model.anim.setKey(title,'scaleY',0,.72,'overshoot');model.anim.setKey(title,'scaleY',.7,1,'overshoot');history.clear();ui.rebuildAll()}
+function createProject(){const name=$('#newName').value||'Project Baru',res=+$('#newRes').value,fps=+$('#newFps').value,dur=+$('#newDur').value,bg=$('#newBg').value,bgHex=String(bg||'#ffffff').replace('#',''),rgb=parseInt(bgHex,16),lum=(((rgb>>16)&255)*.2126+((rgb>>8)&255)*.7152+(rgb&255)*.0722),titleColor=lum>145?'#111827':'#ffffff';model.reset();model.project=model.defaultProject(name,ui.newRatio,res,fps,dur,bg);model.resetEditorCamera();model.mode3d=false;model.cameraView=true;renderer.resize();history.clear();$('#newModal').classList.add('hidden');const homeFab=$('#newProjectFab');if(homeFab){homeFab.style.display='none';homeFab.style.pointerEvents='none'}ui.showEditor();history.push();model.addLayer('camera',{name:'Main Camera'});const title=model.addLayer('text',{text:'OPEN MOTION',name:'Title',fontSize:model.project.height*.075,y:model.project.height*.44,color:titleColor});model.anim.setKey(title,'opacity',0,0,'ease-out');model.anim.setKey(title,'opacity',.45,1,'ease-out');model.anim.setKey(title,'scaleX',0,.72,'overshoot');model.anim.setKey(title,'scaleX',.7,1,'overshoot');model.anim.setKey(title,'scaleY',0,.72,'overshoot');model.anim.setKey(title,'scaleY',.7,1,'overshoot');history.clear();ui.rebuildAll();try{sessionStorage.setItem('oms4_resume_project',model.project.id)}catch(e){}persistentStore.requestDurableStorage();autosave.check(true)}
 
 function canvasPointFromClient(clientX,clientY,rect){
   return {
@@ -8308,7 +8349,7 @@ $$('#aspectGrid .aspect').forEach(b=>b.onclick=()=>{
 });
 
 $('#createProject').onclick=createProject;
-$('#backHome').onclick=()=>ui.showHome();$('#saveProject').onclick=()=>ui.saveLocal();$('#undoBtn').onclick=()=>history.undo();$('#redoBtn').onclick=()=>history.redo();$('#fitBtn').onclick=()=>ui.fit();$('#zoom').oninput=e=>ui.setZoom(+e.target.value/100);
+$('#backHome').onclick=async()=>{await autosave.flush();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}ui.showHome()};$('#saveProject').onclick=()=>ui.saveLocal(true);$('#undoBtn').onclick=()=>history.undo();$('#redoBtn').onclick=()=>history.redo();$('#fitBtn').onclick=()=>ui.fit();$('#zoom').oninput=e=>ui.setZoom(+e.target.value/100);
 $('#toggle3d').onclick=()=>{model.mode3d=!model.mode3d;if(model.mode3d&&!model.hasActive3DLayer())toast('Aktifkan Ruang 3D pada layer atau tampilkan layer kamera');ui.syncProject();renderer.render()};
 $('#cameraView').onclick=()=>{if(model.cameraView){viewportNav.enterFromMainCamera();renderer.render()}else viewportNav.setCameraView(true)};
 $('#snapToggle').onclick=()=>{model.snap=!model.snap;ui.syncProject()};
@@ -8363,6 +8404,8 @@ bus.on('model:restored',()=>{renderer.resize();ui.rebuildAll()});
 bus.on('project:duration',()=>{timeline.rebuild();renderer.render()});
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
+    persistentStore.saveLiteSync();
+    autosave.flush().catch(()=>{});
     if(model.playing){
       model.playing=false;
       cancelAnimationFrame(clock.raf);
@@ -8377,6 +8420,10 @@ document.addEventListener('visibilitychange',()=>{
     renderer.render()
   }
 });
+
+
+window.addEventListener('pagehide',()=>{persistentStore.saveLiteSync();autosave.flush().catch(()=>{})});
+window.addEventListener('beforeunload',()=>{persistentStore.saveLiteSync()});
 
 /* V3.42 — whole-app language propagation */
 const APP_UI_I18N={
@@ -8472,7 +8519,12 @@ const wholeAppObserver=new MutationObserver(()=>{if(!appLangApplying)scheduleWho
 wholeAppObserver.observe(document.body,{childList:true,subtree:true,characterData:true});
 scheduleWholeAppLanguage();
 
-ui.loadProjectList();
+(async()=>{
+  await ui.loadProjectList();
+  let resumeId=null;
+  try{resumeId=sessionStorage.getItem('oms4_resume_project')}catch(e){}
+  if(resumeId)await ui.loadLocal(resumeId,{silent:true});
+})();
 })();
 </script>
 </body>
