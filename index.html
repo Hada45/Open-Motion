@@ -9571,5 +9571,167 @@ scheduleWholeAppLanguage();
 })();
 
 </script><!-- /oms-media-persistence-v356 -->
+
+<script id="oms-relink-v357">
+/* V3.57 — reliable media relink UI */
+(function(){
+  'use strict';
+  if(window.__OMS_RELINK_V357__)return;
+  window.__OMS_RELINK_V357__=true;
+
+  const MEDIA_TYPES=new Set(['image','video','audio']);
+  const isMedia=l=>!!l&&MEDIA_TYPES.has(l.type);
+  const selectedMedia=()=>{
+    try{
+      return model.selectedLayer?.() || (model.layers||[]).find(x=>x.id===model.selected) || null;
+    }catch(e){return null}
+  };
+  const registrySource=l=>{
+    try{return l?.assetId ? mediaAssets.sources.get(l.assetId) : null}catch(e){return null}
+  };
+  function sourceUnavailable(l){
+    if(!isMedia(l))return false;
+    const src=l.dataUrl || registrySource(l);
+    if(!src)return true;
+    if(l.type==='image'){
+      if(!l.img)return true;
+      return !!(l.img.complete && !l.img.naturalWidth);
+    }
+    if(l.type==='video'){
+      const v=l.video;
+      if(!v)return true;
+      if(v.error)return true;
+      try{
+        if(typeof HTMLMediaElement!=='undefined' && v.networkState===HTMLMediaElement.NETWORK_NO_SOURCE)return true;
+      }catch(e){}
+      // The renderer shows the missing-media placeholder while no decoded frame exists.
+      if(v.readyState<2 && !l.frameCacheReady){
+        const age=Date.now()-(l.__omsRelinkSeenAt||(l.__omsRelinkSeenAt=Date.now()));
+        if(age>1800)return true;
+      }else{
+        l.__omsRelinkSeenAt=Date.now();
+      }
+      return false;
+    }
+    if(l.type==='audio'){
+      const a=l.audio||l.video;
+      if(!a)return !src;
+      if(a.error)return true;
+      try{
+        if(typeof HTMLMediaElement!=='undefined' && a.networkState===HTMLMediaElement.NETWORK_NO_SOURCE)return true;
+      }catch(e){}
+    }
+    return false;
+  }
+
+  const input=document.createElement('input');
+  input.type='file';
+  input.hidden=true;
+  input.id='omsMediaRelinkInputV357';
+  document.body.appendChild(input);
+  let target=null;
+
+  function startRelink(layer){
+    if(!isMedia(layer))return;
+    target=layer;
+    input.accept=layer.type==='image'?'image/*':layer.type==='video'?'video/*':'audio/*';
+    input.value='';
+    input.click();
+  }
+
+  input.addEventListener('change',async()=>{
+    const file=input.files?.[0],layer=target;
+    target=null;
+    if(!file||!layer)return;
+    const actual=file.type.startsWith('image/')?'image':
+      file.type.startsWith('video/')?'video':
+      file.type.startsWith('audio/')?'audio':null;
+    if(actual!==layer.type){
+      try{toast(`Pilih file ${layer.type} yang sesuai`)}catch(e){}
+      return;
+    }
+    try{
+      const dataUrl=await fileDataURL(file);
+      try{history.push()}catch(e){}
+      try{model.disposeLayerRuntime(layer)}catch(e){}
+      layer.dataUrl=dataUrl;
+      layer.assetId ||= uid('asset');
+      mediaAssets.sources.set(layer.assetId,dataUrl);
+      if(mediaAssets.blobs)mediaAssets.blobs.set(layer.assetId,file);
+      try{persistentStore.knownAssets.delete(layer.assetId)}catch(e){}
+      model.hydrateLayer(layer);
+      try{await media.probe(layer)}catch(e){}
+      try{ui.rebuildAll()}catch(e){}
+      try{bus.emit('model:changed')}catch(e){}
+      try{await autosave.flush(true)}catch(e){}
+      try{toast('Media berhasil ditautkan ulang')}catch(e){}
+    }catch(err){
+      console.error('Relink media gagal:',err);
+      try{toast('Gagal menautkan ulang media')}catch(e){}
+    }
+  });
+
+  window.relinkSelectedMedia=()=>startRelink(selectedMedia());
+
+  function ensureInspectorButton(layer){
+    let btn=document.getElementById('omsInspectorRelinkBtn');
+    if(!isMedia(layer)){
+      if(btn)btn.remove();
+      return;
+    }
+    const grid=document.querySelector('.drawer:not(.hidden) .inspectorGrid') || document.querySelector('.inspectorGrid');
+    if(!grid){
+      if(btn)btn.remove();
+      return;
+    }
+    const parent=grid.parentNode;
+    if(!parent)return;
+    if(!btn){
+      btn=document.createElement('button');
+      btn.type='button';
+      btn.id='omsInspectorRelinkBtn';
+      btn.onclick=()=>startRelink(selectedMedia());
+      Object.assign(btn.style,{
+        width:'100%',
+        minHeight:'44px',
+        margin:'0 0 10px',
+        padding:'9px 12px',
+        border:'1px solid rgba(115,226,189,.55)',
+        borderRadius:'10px',
+        background:'#20283a',
+        color:'#73e2bd',
+        fontWeight:'700',
+        fontSize:'12px',
+        textAlign:'center'
+      });
+    }
+    if(btn.parentNode!==parent)parent.insertBefore(btn,grid);
+    else if(btn.nextSibling!==grid)parent.insertBefore(btn,grid);
+    btn.textContent=sourceUnavailable(layer)
+      ? '↻ Tautkan ulang media — sumber tidak tersedia'
+      : '↻ Ganti / tautkan ulang media';
+  }
+
+  function refresh(){
+    const layer=selectedMedia();
+    ensureInspectorButton(layer);
+
+    // Keep the preview shortcut, but make its missing-source detection robust.
+    const previewBtn=document.getElementById('omsRelinkMediaBtn');
+    if(previewBtn){
+      previewBtn.onclick=()=>startRelink(selectedMedia());
+      previewBtn.style.display=isMedia(layer)&&sourceUnavailable(layer)?'block':'none';
+    }
+  }
+
+  setInterval(refresh,300);
+  try{
+    bus.on('model:restored',()=>setTimeout(refresh,50));
+    bus.on('model:changed',()=>setTimeout(refresh,50));
+  }catch(e){}
+  setTimeout(refresh,100);
+})();
+</script>
+
 </body>
 </html>
