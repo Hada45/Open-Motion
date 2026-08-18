@@ -1,0 +1,66 @@
+name: Restore Open Motion single-file structure
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    if: github.event.issue.title == 'Trigger restore Open Motion single-file structure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Restore full app to index.html
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          include = Path('_includes/open-motion-app.html')
+          index = Path('index.html')
+          app = include.read_text(encoding='utf-8')
+
+          marker = 'V3.56 — align desktop Home FAB with workspace content'
+          if marker not in app:
+              css = r'''
+
+/* V3.56 — align desktop Home FAB with workspace content */
+@media(min-width:521px){
+  .simpleHome .fabHome{
+    left:max(20px,calc((100vw - 760px)/2 + 20px))!important;
+    right:auto!important;
+    transform:none!important;
+  }
+}
+'''
+              if '</style>' not in app:
+                  raise SystemExit('No </style> tag found in Open Motion app')
+              app = app.replace('</style>', css + '\n</style>', 1)
+
+          index.write_text(app, encoding='utf-8')
+          include.unlink()
+          include.parent.rmdir()
+
+          workflow = Path('.github/workflows/restore-single-file.yml')
+          if workflow.exists():
+              workflow.unlink()
+          try:
+              workflow.parent.rmdir()
+              workflow.parent.parent.rmdir()
+          except OSError:
+              pass
+          PY
+
+      - name: Commit restored single-file structure
+        run: |
+          git config user.name "OpenAI"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Restore Open Motion single-file index"
+          git push origin main
