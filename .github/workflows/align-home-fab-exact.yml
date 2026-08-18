@@ -1,10 +1,8 @@
 name: Align Home FAB exactly
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/align-home-fab-exact.yml'
 
 permissions:
   contents: write
@@ -15,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - name: Align new project button to workspace heading
         run: |
@@ -42,17 +40,12 @@ jobs:
   }
   window.alignHomeFabToWorkspace=alignHomeFabToWorkspace;
   const realign=()=>requestAnimationFrame(()=>requestAnimationFrame(alignHomeFabToWorkspace));
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',realign,{once:true});
-  }else{
-    realign();
-  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',realign,{once:true});
+  else realign();
   window.addEventListener('load',realign,{once:true});
   window.addEventListener('resize',realign,{passive:true});
   window.addEventListener('orientationchange',()=>setTimeout(realign,80),{passive:true});
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('resize',realign,{passive:true});
-  }
+  if(window.visualViewport) window.visualViewport.addEventListener('resize',realign,{passive:true});
 })();
 </script>
 '''
@@ -61,9 +54,9 @@ jobs:
               s=s.replace('</body>',script+'\n</body>',1)
               p.write_text(s,encoding='utf-8')
           PY
-      - name: Remove temporary workflow and commit
+      - name: Remove temporary files and commit
         run: |
-          rm -f .github/workflows/align-home-fab-exact.yml
+          rm -f .github/workflows/align-home-fab-exact.yml .align-home-fab-trigger
           git config user.name "OpenAI"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -72,4 +65,4 @@ jobs:
             exit 0
           fi
           git commit -m "Align new project button exactly with workspace heading"
-          git push origin main
+          git push origin HEAD:${{ github.head_ref }}
