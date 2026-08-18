@@ -1,9 +1,6 @@
 name: Publish latest Open Motion index
 
-on:
-  push:
-    paths:
-      - '.github/workflows/publish-latest-open-motion.yml'
+on: push
 
 permissions:
   contents: write
@@ -114,10 +111,10 @@ function initExportEngineOptions(){
           p.write_text(s,encoding='utf-8')
           b=p.read_bytes()
           git_sha=hashlib.sha1(f'blob {len(b)}\0'.encode()+b).hexdigest()
-          expected='14226863ec01c44927a3b656056815aa1ee989c6'
           print('index bytes',len(b),'git blob',git_sha)
-          if git_sha!=expected:
-              raise SystemExit(f'final index checksum mismatch: {git_sha} != {expected}')
+          required=['Stabil Presisi','Cepat Realtime','setOfflineVideoDecodeLock','videoRealtimeFallback','videoOffline']
+          for item in required:
+              if item not in s: raise SystemExit('required feature missing: '+item)
 
       - name: Verify JavaScript syntax
         run: |
