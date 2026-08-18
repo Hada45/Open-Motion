@@ -1,0 +1,141 @@
+name: Publish latest Open Motion index
+
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-latest-open-motion.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-index:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply latest Open Motion build
+        shell: python
+        run: |
+          from pathlib import Path
+          import re, zlib, base64, hashlib
+
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+
+          old="delete l.frameCacheReady;delete l.frameCacheTime;delete l.cacheVideoFrame;\n    bus.emit('layer:disposed',l.id)"
+          new="delete l.frameCacheReady;delete l.frameCacheTime;delete l.cacheVideoFrame;\n    delete l._offlineDecodeLock;delete l._offlineDecodeEpoch;delete l._offlineCachedTarget;delete l._offlinePresentedMediaTime;\n    bus.emit('layer:disposed',l.id)"
+          if old not in s: raise SystemExit('dispose runtime anchor missing')
+          s=s.replace(old,new,1)
+
+          old="frameCacheReady:undefined,frameCacheTime:undefined,cacheVideoFrame:undefined,\n      _disposed:undefined"
+          new="frameCacheReady:undefined,frameCacheTime:undefined,cacheVideoFrame:undefined,\n      _offlineDecodeLock:undefined,_offlineDecodeEpoch:undefined,_offlineCachedTarget:undefined,_offlinePresentedMediaTime:undefined,\n      _disposed:undefined"
+          if old not in s: raise SystemExit('cleanLayer raw anchor missing')
+          s=s.replace(old,new,1)
+
+          old="delete c.frameCacheReady;delete c.frameCacheTime;delete c.cacheVideoFrame;delete c._disposed;delete c.waveformPending;delete c.waveformError;"
+          new="delete c.frameCacheReady;delete c.frameCacheTime;delete c.cacheVideoFrame;\n    delete c._offlineDecodeLock;delete c._offlineDecodeEpoch;delete c._offlineCachedTarget;delete c._offlinePresentedMediaTime;\n    delete c._disposed;delete c.waveformPending;delete c.waveformError;"
+          if old not in s: raise SystemExit('cleanLayer delete anchor missing')
+          s=s.replace(old,new,1)
+
+          hydrate=zlib.decompress(base64.b64decode(Path('.oms-update/hydrate.b64').read_text().strip())).decode('utf-8')
+          s,n=re.subn(r"  hydrateLayer\(l\)\{.*?\n  prop\(l,p,t=this.time\)",lambda m:hydrate,s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('hydrateLayer replacement failed')
+
+          css_anchor=".codecSeg button.active{background:#171b2b;color:#36d7b1}.exportFoot"
+          css_insert=".codecSeg button.active{background:#171b2b;color:#36d7b1}.exportEngineSeg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}.exportEngineSeg button{min-height:48px;border:1px solid #d8dce4;border-radius:9px;background:#f5f7fa;color:#364152;padding:8px 10px;font-weight:700;line-height:1.15;text-align:left}.exportEngineSeg button small{display:block;margin-top:4px;font-size:10px;font-weight:500;color:#7b8697;line-height:1.35}.exportEngineSeg button.active{background:#171b2b;border-color:#171b2b;color:#36d7b1}.exportEngineSeg button.active small{color:#c6f7ec}.exportEngineNotes{margin-top:8px;display:grid;gap:6px}.exportEngineNotes div{font-size:10px;line-height:1.45;color:#7d8492;background:#f8fafc;border:1px solid #eaedf2;border-radius:8px;padding:8px 9px}.exportEngineNotes b{color:#202939}.exportFoot"
+          if css_anchor not in s: raise SystemExit('export CSS anchor missing')
+          s=s.replace(css_anchor,css_insert,1)
+
+          html_anchor='''<div id="codecSupportHint" style="margin-top:7px;font-size:10px;color:#7d8492;line-height:1.4">Opsi disaring otomatis sesuai kemampuan browser/perangkat.</div>
+      <div style="height:10px"></div><label>Frame Rate</label>'''
+          html_insert='''<div id="codecSupportHint" style="margin-top:7px;font-size:10px;color:#7d8492;line-height:1.4">Opsi disaring otomatis sesuai kemampuan browser/perangkat.</div>
+      <div style="height:10px"></div><label>Mesin Ekspor</label>
+<div id="exportEngineOptions" class="exportEngineSeg">
+  <button type="button" class="active" data-engine="deterministic"><span>Stabil Presisi</span><small>Mesin baru • frame-by-frame</small></button>
+  <button type="button" data-engine="realtime"><span>Cepat Realtime</span><small>Mesin lama • rekam canvas langsung</small></button>
+</div>
+<div class="exportEngineNotes">
+  <div><b>Stabil Presisi</b> menghasilkan ekspor yang lebih stabil dan akurat karena dirender frame demi frame. Cocok untuk edit berat, tetapi prosesnya biasanya lebih lambat.</div>
+  <div><b>Cepat Realtime</b> mengekspor dengan merekam canvas preview secara langsung. Lebih cepat, tetapi pada proyek berat hasil bisa patah-patah, frame loncat, atau kurang stabil.</div>
+</div>
+      <div style="height:10px"></div><label>Frame Rate</label>'''
+          if html_anchor not in s: raise SystemExit('export HTML anchor missing')
+          s=s.replace(html_anchor,html_insert,1)
+
+          codec_fn='''function selectedExportCodec(){
+  const b=$('#codecOptions button.active')||$('#codecOptions button');
+  if(!b)return {mime:'',ext:'webm',id:'auto',label:'Otomatis'};
+  return {
+    mime:b.dataset.mime||'',
+    ext:b.dataset.ext||'webm',
+    id:b.dataset.codecId||'auto',
+    label:b.textContent||'Otomatis'
+  };
+}
+'''
+          engine_fn='''function selectedExportEngine(){
+  const active=$('#exportEngineOptions button.active');
+  return active?.dataset.engine||'deterministic';
+}
+
+function initExportEngineOptions(){
+  const root=$('#exportEngineOptions');
+  if(!root||root.dataset.bound==='1')return;
+  root.dataset.bound='1';
+  let saved='deterministic';
+  try{saved=localStorage.getItem('oms_export_engine')||'deterministic'}catch(e){}
+  const buttons=$$('#exportEngineOptions button');
+  const valid=buttons.some(b=>b.dataset.engine===saved)?saved:'deterministic';
+  buttons.forEach(b=>b.classList.toggle('active',b.dataset.engine===valid));
+  buttons.forEach(b=>b.onclick=()=>{
+    buttons.forEach(x=>x.classList.toggle('active',x===b));
+    try{localStorage.setItem('oms_export_engine',b.dataset.engine||'deterministic')}catch(e){}
+  });
+}
+'''
+          if codec_fn not in s: raise SystemExit('selectedExportCodec anchor missing')
+          s=s.replace(codec_fn,codec_fn+'\n'+engine_fn,1)
+
+          exporter_b64=''.join(Path(f'.oms-update/exporter.part{i:02d}').read_text().strip() for i in range(4))
+          exporter=zlib.decompress(base64.b64decode(exporter_b64)).decode('utf-8')
+          s,n=re.subn(r"class Exporter\{.*?\n\}\nconst exporter=new Exporter\(\);",lambda m:exporter,s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('Exporter replacement failed')
+
+          old="$('#openExport').onclick=async()=>{$('#exportSheet').classList.remove('hidden');refreshCodecOptions();await refreshResolutionOptions()};"
+          new="initExportEngineOptions();$('#openExport').onclick=async()=>{$('#exportSheet').classList.remove('hidden');initExportEngineOptions();refreshCodecOptions();await refreshResolutionOptions()};"
+          if old not in s: raise SystemExit('openExport wiring anchor missing')
+          s=s.replace(old,new,1)
+
+          p.write_text(s,encoding='utf-8')
+          b=p.read_bytes()
+          git_sha=hashlib.sha1(f'blob {len(b)}\0'.encode()+b).hexdigest()
+          expected='14226863ec01c44927a3b656056815aa1ee989c6'
+          print('index bytes',len(b),'git blob',git_sha)
+          if git_sha!=expected:
+              raise SystemExit(f'final index checksum mismatch: {git_sha} != {expected}')
+
+      - name: Verify JavaScript syntax
+        run: |
+          python - <<'PY2'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          m=re.search(r'<script>\s*\(\(\) => \{(.*)\}\)\(\);\s*</script>',s,re.S)
+          if not m: raise SystemExit('script not found')
+          Path('/tmp/open-motion.js').write_text('(()=>{'+m.group(1)+'})();',encoding='utf-8')
+          PY2
+          node --check /tmp/open-motion.js
+
+      - name: Commit latest index
+        run: |
+          git config user.name "Hada"
+          git config user.email "114206173+Hada45@users.noreply.github.com"
+          rm -rf .oms-update .github/workflows/publish-latest-open-motion.yml
+          git add index.html .oms-update .github/workflows/publish-latest-open-motion.yml
+          git commit -m "Update Open Motion export engines and deterministic renderer"
+          git push origin HEAD:main
