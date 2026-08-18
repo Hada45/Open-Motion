@@ -3,6 +3,8 @@ name: Fix True 3D mobile width
 on:
   push:
     branches: [main]
+    paths:
+      - '.github/workflows/fix-true3d-mobile-width.yml'
 
 permissions:
   contents: write
@@ -19,97 +21,18 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import base64
           path = Path('index.html')
           text = path.read_text(encoding='utf-8')
           marker = 'V3.48 — responsive True 3D / Inspector width containment'
           if marker not in text:
-              css = r'''
-/* V3.48 — responsive True 3D / Inspector width containment */
-.drawerBody.propPanel{
-  min-width:0;
-  width:100%;
-  max-width:100%;
-  overflow-y:auto;
-  overflow-x:hidden;
-}
-.drawerBody.propPanel > *{
-  min-width:0;
-  max-width:100%;
-}
-.drawerBody.propPanel .true3dCard{
-  grid-template-columns:34px minmax(0,1fr);
-  min-width:0;
-  width:100%;
-  max-width:100%;
-}
-.drawerBody.propPanel .true3dCard > div{
-  min-width:0;
-  max-width:100%;
-}
-.drawerBody.propPanel .true3dCard small,
-.drawerBody.propPanel .miniNote{
-  overflow-wrap:anywhere;
-  word-break:break-word;
-}
-.drawerBody.propPanel .switchRow{
-  min-width:0;
-  width:100%;
-  max-width:100%;
-}
-.drawerBody.propPanel .switchRow > span{
-  min-width:0;
-  overflow-wrap:anywhere;
-}
-.drawerBody.propPanel .propRow{
-  grid-template-columns:minmax(0,88px) minmax(0,1fr) minmax(0,34px);
-  min-width:0;
-  width:100%;
-  max-width:100%;
-}
-.drawerBody.propPanel .propRow > *{
-  min-width:0;
-  max-width:100%;
-}
-.drawerBody.propPanel .propRow input,
-.drawerBody.propPanel .propRow select{
-  box-sizing:border-box;
-  min-width:0;
-  width:100%;
-  max-width:100%;
-}
-#cameraOrbitTarget{
-  min-width:0;
-  width:100%;
-  max-width:100%;
-  text-overflow:ellipsis;
-}
-@media(max-width:520px){
-  .drawerBody.propPanel{
-    padding-left:9px;
-    padding-right:9px;
-  }
-  .drawerBody.propPanel .propRow{
-    grid-template-columns:minmax(0,76px) minmax(0,1fr) minmax(0,42px);
-    gap:6px;
-  }
-  .drawerBody.propPanel .propRow label{
-    min-width:0;
-    white-space:normal;
-    font-size:9px;
-  }
-  .drawerBody.propPanel .projectionPill{
-    min-width:0;
-    justify-self:end;
-    white-space:nowrap;
-  }
-}
-'''
+              css = base64.b64decode('LyogVjMuNDgg4oCUIHJlc3BvbnNpdmUgVHJ1ZSAzRCAvIEluc3BlY3RvciB3aWR0aCBjb250YWlubWVudCAqLwouZHJhd2VyQm9keS5wcm9wUGFuZWx7CiAgbWluLXdpZHRoOjA7CiAgd2lkdGg6MTAwJTsKICBtYXgtd2lkdGg6MTAwJTsKICBvdmVyZmxvdy15OmF1dG87CiAgb3ZlcmZsb3cteDpoaWRkZW47Cn0KLmRyYXdlckJvZHkucHJvcFBhbmVsID4gKnsKICBtaW4td2lkdGg6MDsKICBtYXgtd2lkdGg6MTAwJTsKfQouZHJhd2VyQm9keS5wcm9wUGFuZWwgLnRydWUzZENhcmR7CiAgZ3JpZC10ZW1wbGF0ZS1jb2x1bW5zOjM0cHggbWlubWF4KDAsMWZyKTsKICBtaW4td2lkdGg6MDsKICB3aWR0aDoxMDAlOwogIG1heC13aWR0aDoxMDAlOwp9Ci5kcmF3ZXJCb2R5LnByb3BQYW5lbCAudHJ1ZTNkQ2FyZCA+IGRpdnsKICBtaW4td2lkdGg6MDsKICBtYXgtd2lkdGg6MTAwJTsKfQouZHJhd2VyQm9keS5wcm9wUGFuZWwgLnRydWUzZENhcmQgc21hbGwsCi5kcmF3ZXJCb2R5LnByb3BQYW5lbCAubWluaU5vdGV7CiAgb3ZlcmZsb3ctd3JhcDphbnl3aGVyZTsKICB3b3JkLWJyZWFrOmJyZWFrLXdvcmQ7Cn0KLmRyYXdlckJvZHkucHJvcFBhbmVsIC5zd2l0Y2hSb3d7CiAgbWluLXdpZHRoOjA7CiAgd2lkdGg6MTAwJTsKICBtYXgtd2lkdGg6MTAwJTsKfQouZHJhd2VyQm9keS5wcm9wUGFuZWwgLnN3aXRjaFJvdyA+IHNwYW57CiAgbWluLXdpZHRoOjA7CiAgb3ZlcmZsb3ctd3JhcDphbnl3aGVyZTsKfQouZHJhd2VyQm9keS5wcm9wUGFuZWwgLnByb3BSb3d7CiAgZ3JpZC10ZW1wbGF0ZS1jb2x1bW5zOm1pbm1heCgwLDg4cHgpIG1pbm1heCgwLDFmcikgbWlubWF4KDAsMzRweCk7CiAgbWluLXdpZHRoOjA7CiAgd2lkdGg6MTAwJTsKICBtYXgtd2lkdGg6MTAwJTsKfQouZHJhd2VyQm9keS5wcm9wUGFuZWwgLnByb3BSb3cgPiAqewogIG1pbi13aWR0aDowOwogIG1heC13aWR0aDoxMDAlOwp9Ci5kcmF3ZXJCb2R5LnByb3BQYW5lbCAucHJvcFJvdyBpbnB1dCwKLmRyYXdlckJvZHkucHJvcFBhbmVsIC5wcm9wUm93IHNlbGVjdHsKICBib3gtc2l6aW5nOmJvcmRlci1ib3g7CiAgbWluLXdpZHRoOjA7CiAgd2lkdGg6MTAwJTsKICBtYXgtd2lkdGg6MTAwJTsKfQojY2FtZXJhT3JiaXRUYXJnZXR7CiAgbWluLXdpZHRoOjA7CiAgd2lkdGg6MTAwJTsKICBtYXgtd2lkdGg6MTAwJTsKICB0ZXh0LW92ZXJmbG93OmVsbGlwc2lzOwp9CkBtZWRpYShtYXgtd2lkdGg6NTIwcHgpewogIC5kcmF3ZXJCb2R5LnByb3BQYW5lbHsKICAgIHBhZGRpbmctbGVmdDo5cHg7CiAgICBwYWRkaW5nLXJpZ2h0OjlweDsKICB9CiAgLmRyYXdlckJvZHkucHJvcFBhbmVsIC5wcm9wUm93ewogICAgZ3JpZC10ZW1wbGF0ZS1jb2x1bW5zOm1pbm1heCgwLDc2cHgpIG1pbm1heCgwLDFmcikgbWlubWF4KDAsNDJweCk7CiAgICBnYXA6NnB4OwogIH0KICAuZHJhd2VyQm9keS5wcm9wUGFuZWwgLnByb3BSb3cgbGFiZWx7CiAgICBtaW4td2lkdGg6MDsKICAgIHdoaXRlLXNwYWNlOm5vcm1hbDsKICAgIGZvbnQtc2l6ZTo5cHg7CiAgfQogIC5kcmF3ZXJCb2R5LnByb3BQYW5lbCAucHJvamVjdGlvblBpbGx7CiAgICBtaW4td2lkdGg6MDsKICAgIGp1c3RpZnktc2VsZjplbmQ7CiAgICB3aGl0ZS1zcGFjZTpub3dyYXA7CiAgfQp9Cg==').decode('utf-8')
               if '</style>' not in text:
                   raise SystemExit('No </style> tag found')
               text = text.replace('</style>', css + '\n</style>', 1)
               path.write_text(text, encoding='utf-8')
           PY
-      - name: Remove temporary workflow and trigger, then commit
+      - name: Remove one-time files and commit
         run: |
           rm -f .github/workflows/fix-true3d-mobile-width.yml .true3d-layout-trigger
           git config user.name "OpenAI"
