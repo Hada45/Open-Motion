@@ -1,7 +1,7 @@
 name: Fix True 3D mobile width
 
 on:
-  pull_request:
+  push:
     branches: [main]
 
 permissions:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: main
           fetch-depth: 0
       - name: Patch responsive inspector layout
         run: |
@@ -120,4 +120,4 @@ jobs:
             exit 0
           fi
           git commit -m "Fix True 3D camera panel width on mobile"
-          git push origin HEAD:${{ github.head_ref }}
+          git push origin main
