@@ -1,15 +1,16 @@
 name: Restore Open Motion single-file structure
 
 on:
-  issues:
-    types: [opened]
+  push:
+    branches: [main]
+    paths:
+      - '.restore-single-file-trigger'
 
 permissions:
   contents: write
 
 jobs:
   restore:
-    if: github.event.issue.title == 'Trigger restore Open Motion single-file structure'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,12 +48,15 @@ jobs:
           include.unlink()
           include.parent.rmdir()
 
-          workflow = Path('.github/workflows/restore-single-file.yml')
-          if workflow.exists():
-              workflow.unlink()
+          for temp in [
+              Path('.restore-single-file-trigger'),
+              Path('.github/workflows/restore-single-file.yml')
+          ]:
+              if temp.exists():
+                  temp.unlink()
           try:
-              workflow.parent.rmdir()
-              workflow.parent.parent.rmdir()
+              Path('.github/workflows').rmdir()
+              Path('.github').rmdir()
           except OSError:
               pass
           PY
