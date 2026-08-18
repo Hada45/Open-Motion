@@ -1,0 +1,56 @@
+name: One-time Home FAB desktop alignment
+
+on:
+  push:
+    paths:
+      - '.github/workflows/one-time-home-fab-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-home-fab:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Align desktop Home FAB with workspace content
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+
+          marker = '/* V3.55 — align desktop Home FAB with workspace content */'
+          block = '''\n\n/* V3.55 — align desktop Home FAB with workspace content */
+@media(min-width:521px){
+  .simpleHome .fabHome{
+    left:max(20px,calc((100vw - 760px)/2 + 20px))!important;
+    right:auto!important;
+  }
+}
+'''
+
+          if marker not in text:
+              needle = '\n</style>'
+              if needle not in text:
+                  raise SystemExit('Could not find </style> insertion point in index.html')
+              text = text.replace(needle, block + needle, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit patched index.html
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then
+            echo "No index.html changes needed."
+            exit 0
+          fi
+          git commit -m "Fix desktop home project button alignment"
+          git push
