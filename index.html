@@ -9350,5 +9350,226 @@ scheduleWholeAppLanguage();
 </script>
 
 
+
+<script id="oms-media-persistence-v356">
+/* V3.56 — resilient mobile media persistence */
+(function(){
+  'use strict';
+  if(window.__OMS_MEDIA_PERSIST_V356__)return;
+  window.__OMS_MEDIA_PERSIST_V356__=true;
+
+  const MEDIA_TYPES=new Set(['image','video','audio']);
+  const isMedia=l=>!!l&&MEDIA_TYPES.has(l.type);
+  const safeToast=msg=>{try{toast(msg)}catch(e){console.warn(msg)}};
+  const sourceToBlob=async(source,knownBlob=null)=>{
+    if(knownBlob instanceof Blob)return knownBlob;
+    if(typeof source!=='string'||!source)return null;
+    if(source.startsWith('data:')){
+      try{
+        const comma=source.indexOf(',');
+        if(comma<0)return null;
+        const head=source.slice(0,comma),body=source.slice(comma+1),mime=(head.match(/^data:([^;,]+)/i)||[])[1]||'application/octet-stream';
+        if(/;base64/i.test(head)){
+          const bin=atob(body),u8=new Uint8Array(bin.length);
+          for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
+          return new Blob([u8],{type:mime});
+        }
+        return new Blob([decodeURIComponent(body)],{type:mime});
+      }catch(e){console.warn('Data URL -> Blob gagal:',e);return null}
+    }
+    if(source.startsWith('blob:')){
+      try{const r=await fetch(source);if(r.ok)return await r.blob()}catch(e){console.warn('Blob URL tidak bisa dibaca:',e)}
+    }
+    return null;
+  };
+
+  // Extend the in-memory registry so IndexedDB can keep native Blobs while
+  // runtime rendering can still use normal URL strings.
+  mediaAssets.blobs ||= new Map();
+  mediaAssets.objectUrls ||= new Map();
+  mediaAssets.attachBlob=function(id,blob){
+    if(!id||!(blob instanceof Blob))return null;
+    const prev=this.objectUrls.get(id);
+    if(prev){try{URL.revokeObjectURL(prev)}catch(e){}}
+    const url=URL.createObjectURL(blob);
+    this.blobs.set(id,blob);this.objectUrls.set(id,url);this.sources.set(id,url);
+    return url;
+  };
+  const originalPrune=mediaAssets.prune.bind(mediaAssets);
+  mediaAssets.prune=function(keepIds=[]){
+    const keep=keepIds instanceof Set?keepIds:new Set(keepIds);
+    for(const [id,url] of this.objectUrls.entries())if(!keep.has(id)){try{URL.revokeObjectURL(url)}catch(e){}this.objectUrls.delete(id);this.blobs.delete(id)}
+    originalPrune(keep);
+  };
+  const originalClear=mediaAssets.clear.bind(mediaAssets);
+  mediaAssets.clear=function(){
+    for(const url of this.objectUrls.values())try{URL.revokeObjectURL(url)}catch(e){}
+    this.objectUrls.clear();this.blobs.clear();originalClear();
+  };
+
+  persistentStore.storagePersistent=null;
+  persistentStore.lastMissingAssets=[];
+  persistentStore.lastMediaSaveComplete=true;
+  persistentStore.requestDurableStorage=async function(){
+    try{
+      if(!navigator.storage){this.storagePersistent=false;return false}
+      const already=await navigator.storage.persisted?.();
+      const granted=already||await navigator.storage.persist?.();
+      this.storagePersistent=!!granted;
+      return !!granted;
+    }catch(e){this.storagePersistent=false;return false}
+  };
+
+  persistentStore._readAssetRecords=async function(ids){
+    const out=new Map();if(!ids.length)return out;
+    const db=await this.open(),tx=db.transaction('assets','readonly'),store=tx.objectStore('assets');
+    const recs=await Promise.all(ids.map(id=>this.request(store.get(id)).catch(()=>null)));
+    await this.txDone(tx);
+    ids.forEach((id,i)=>out.set(id,recs[i]||null));return out;
+  };
+
+  persistentStore._legacySourcesFor=async function(data,missing){
+    const found=new Map(),projectId=data?.project?.id;if(!projectId||!missing.size)return found;
+    const snapshots=[];
+    for(const key of [`oms3_${projectId}`,`oms4_lite_${projectId}`]){
+      try{const raw=localStorage.getItem(key);if(raw){const parsed=JSON.parse(raw);if(parsed?.layers)snapshots.push(parsed)}}catch(e){}
+    }
+    for(const id of [...missing]){
+      try{const raw=localStorage.getItem(`oms4_asset_${id}`);if(raw&&raw.startsWith('data:')){found.set(id,raw);missing.delete(id)}}catch(e){}
+    }
+    for(const snap of snapshots){
+      for(const target of data.layers||[]){
+        if(!target?.assetId||!missing.has(target.assetId))continue;
+        let old=(snap.layers||[]).find(x=>x?.assetId===target.assetId&&x?.dataUrl);
+        if(!old)old=(snap.layers||[]).find(x=>x?.type===target.type&&x?.name===target.name&&x?.dataUrl);
+        if(old?.dataUrl){found.set(target.assetId,old.dataUrl);missing.delete(target.assetId)}
+      }
+    }
+    return found;
+  };
+
+  persistentStore._persistRecoveredSources=async function(data,sources){
+    if(!sources?.size)return;
+    const records=[];
+    for(const layer of data.layers||[]){
+      const id=layer?.assetId,src=id&&sources.get(id);if(!src)continue;
+      const blob=await sourceToBlob(src,mediaAssets.blobs.get(id));if(blob)records.push({id,blob,type:layer.type,name:layer.name||'',mime:blob.type||'',size:blob.size||0,updated:Date.now(),storageVersion:2});
+    }
+    if(!records.length)return;
+    try{const db=await this.open(),tx=db.transaction('assets','readwrite'),store=tx.objectStore('assets');for(const rec of records)store.put(rec);await this.txDone(tx);for(const rec of records)this.knownAssets.add(rec.id)}catch(e){console.warn('Media legacy berhasil dibaca tetapi gagal dimigrasikan:',e)}
+  };
+
+  persistentStore.hydrateAssets=async function(data){
+    const layers=(data?.layers||[]).filter(isMedia);
+    // Old full snapshots may still carry media inline. Capture them first.
+    for(const layer of layers)if(layer.dataUrl)mediaAssets.captureLayer(layer);
+    const ids=[...new Set(layers.map(l=>l?.assetId).filter(Boolean))];
+    if(!ids.length){this.lastMissingAssets=[];return []}
+    const missing=new Set(ids),recovered=new Map();
+    try{
+      const recMap=await this._readAssetRecords(ids);
+      for(const id of ids){
+        const rec=recMap.get(id);if(!rec)continue;
+        if(rec.blob instanceof Blob){const url=mediaAssets.attachBlob(id,rec.blob);if(url){this.knownAssets.add(id);missing.delete(id)}}
+        else if(typeof rec.dataUrl==='string'&&rec.dataUrl){mediaAssets.sources.set(id,rec.dataUrl);this.knownAssets.add(id);missing.delete(id)}
+      }
+    }catch(e){console.warn('Media persistence restore gagal:',e)}
+    // Inline data in a project record is also a valid recovery source.
+    for(const layer of layers){if(layer.assetId&&layer.dataUrl&&missing.has(layer.assetId)){mediaAssets.sources.set(layer.assetId,layer.dataUrl);recovered.set(layer.assetId,layer.dataUrl);missing.delete(layer.assetId)}}
+    if(missing.size){const legacy=await this._legacySourcesFor(data,missing);for(const [id,src] of legacy){mediaAssets.sources.set(id,src);recovered.set(id,src)}}
+    if(recovered.size)await this._persistRecoveredSources(data,recovered);
+    this.lastMissingAssets=[...missing];
+    return this.lastMissingAssets;
+  };
+
+  persistentStore._smallFallbackAssets=function(layers){
+    let total=0,complete=true;const MAX_ONE=1500000,MAX_TOTAL=3000000;
+    for(const layer of layers){
+      if(!isMedia(layer))continue;const id=layer.assetId,src=layer.dataUrl||mediaAssets.sources.get(id);if(!id||typeof src!=='string'||!src.startsWith('data:')){complete=false;continue}
+      if(src.length>MAX_ONE||total+src.length>MAX_TOTAL){complete=false;continue}
+      try{localStorage.setItem(`oms4_asset_${id}`,src);total+=src.length}catch(e){complete=false}
+    }
+    return complete;
+  };
+
+  persistentStore.saveCurrent=function({notify=false}={}){
+    if(!model.project)return Promise.resolve(false);
+    const task=async()=>{
+      model.project.updated=Date.now();mediaAssets.captureLayers(model.layers);
+      const data=model.serialize({includeMedia:false}),meta=this.projectMeta(model.project),mediaLayers=model.layers.filter(isMedia);
+      const ids=[...new Set(mediaLayers.map(l=>l.assetId).filter(Boolean))];
+      try{
+        let existing=new Map();try{existing=await this._readAssetRecords(ids)}catch(e){}
+        const assetRecords=[];
+        for(const layer of mediaLayers){
+          const id=layer.assetId;if(!id)continue;const old=existing.get(id);
+          if(old&&(old.blob instanceof Blob||old.dataUrl)){this.knownAssets.add(id);continue}
+          const src=layer.dataUrl||mediaAssets.sources.get(id),blob=await sourceToBlob(src,mediaAssets.blobs.get(id));
+          if(blob){mediaAssets.blobs.set(id,blob);assetRecords.push({id,blob,type:layer.type,name:layer.name||'',mime:blob.type||'',size:blob.size||0,updated:Date.now(),storageVersion:2})}
+          else if(typeof src==='string'&&src.startsWith('data:'))assetRecords.push({id,dataUrl:src,type:layer.type,name:layer.name||'',updated:Date.now(),storageVersion:1});
+        }
+        const db=await this.open(),tx=db.transaction(['projects','assets'],'readwrite');
+        tx.objectStore('projects').put({id:meta.id,meta,data});const assets=tx.objectStore('assets');for(const rec of assetRecords)assets.put(rec);await this.txDone(tx);
+        // Verify every media reference before reporting a complete save.
+        const verify=await this._readAssetRecords(ids),missing=ids.filter(id=>{const r=verify.get(id);return !(r&&(r.blob instanceof Blob||r.dataUrl))});
+        if(missing.length)throw new Error(`Asset media belum tersimpan: ${missing.length}`);
+        for(const id of ids)this.knownAssets.add(id);
+        this.lastMediaSaveComplete=true;this.lastMissingAssets=[];
+        this.writeLocalIndex(meta);try{localStorage.setItem('oms4_lite_'+meta.id,JSON.stringify(data));localStorage.setItem('oms4_last_saved_project',meta.id)}catch(e){}
+        if(notify)safeToast('Proyek dan media tersimpan');return true;
+      }catch(err){
+        console.warn('IndexedDB media save gagal:',err);
+        const lite=this.saveLiteSync(),fallbackComplete=this._smallFallbackAssets(mediaLayers);
+        this.lastMediaSaveComplete=mediaLayers.length===0||fallbackComplete;
+        if(mediaLayers.length&&!this.lastMediaSaveComplete){
+          if(!window.__omsMediaSaveWarned){window.__omsMediaSaveWarned=true;safeToast('Media belum tersimpan aman di browser. Jangan hapus file asli; coba simpan lagi atau ekspor cadangan proyek.')}
+        }else if(notify)safeToast(lite?'Proyek tersimpan':'Penyimpanan browser gagal');
+        return !!lite;
+      }
+    };
+    this.writeQueue=this.writeQueue.catch(()=>{}).then(task);return this.writeQueue;
+  };
+
+  // Relink keeps the original layer id, keyframes, trim, effects and transforms.
+  const relinkInput=document.createElement('input');
+  relinkInput.type='file';relinkInput.hidden=true;relinkInput.id='omsMediaRelinkInput';document.body.appendChild(relinkInput);
+  let relinkTarget=null;
+  function selectedMissingLayer(){const l=model.selectedLayer?.()||model.layers.find(x=>x.id===model.selected);return isMedia(l)&&!l.dataUrl&&!mediaAssets.sources.get(l.assetId)?l:null}
+  async function relinkLayer(layer){
+    if(!layer)return;relinkTarget=layer;relinkInput.accept=layer.type==='image'?'image/*':layer.type==='video'?'video/*':'audio/*';relinkInput.value='';relinkInput.click();
+  }
+  relinkInput.addEventListener('change',async()=>{
+    const file=relinkInput.files?.[0],layer=relinkTarget;relinkTarget=null;if(!file||!layer)return;
+    const expected=layer.type,actual=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
+    if(actual!==expected){safeToast(`Pilih file ${expected} yang sesuai`);return}
+    try{
+      const dataUrl=await fileDataURL(file);history.push();
+      model.disposeLayerRuntime(layer);layer.dataUrl=dataUrl;layer.assetId ||= uid('asset');mediaAssets.sources.set(layer.assetId,dataUrl);mediaAssets.blobs.set(layer.assetId,file);persistentStore.knownAssets.delete(layer.assetId);model.hydrateLayer(layer);
+      try{await media.probe(layer)}catch(e){}
+      ui.rebuildAll();bus.emit('model:changed');await autosave.flush(true);safeToast('Media berhasil ditautkan ulang');
+    }catch(e){console.error(e);safeToast('Gagal menautkan ulang media')}
+  });
+  window.relinkSelectedMedia=()=>relinkLayer(selectedMissingLayer());
+
+  const relinkBtn=document.createElement('button');
+  relinkBtn.type='button';relinkBtn.id='omsRelinkMediaBtn';relinkBtn.textContent='↻ Tautkan ulang media';
+  Object.assign(relinkBtn.style,{position:'absolute',left:'50%',bottom:'14px',transform:'translateX(-50%)',zIndex:'28',border:'1px solid rgba(115,226,189,.65)',borderRadius:'10px',padding:'9px 13px',background:'rgba(17,22,34,.92)',color:'#73e2bd',fontWeight:'700',display:'none',boxShadow:'0 8px 24px rgba(0,0,0,.28)'});
+  relinkBtn.onclick=()=>relinkLayer(selectedMissingLayer());
+  function mountRelinkButton(){const vp=document.querySelector('.viewport');if(vp&&!relinkBtn.isConnected)vp.appendChild(relinkBtn)}
+  function refreshRelinkButton(){mountRelinkButton();const missing=selectedMissingLayer();relinkBtn.style.display=missing?'block':'none'}
+  setInterval(refreshRelinkButton,500);
+  bus.on('model:restored',()=>setTimeout(()=>{
+    refreshRelinkButton();
+    const n=(model.layers||[]).filter(l=>isMedia(l)&&!l.dataUrl&&!mediaAssets.sources.get(l.assetId)).length;
+    if(n)safeToast(`${n} media proyek belum tersedia. Pilih layer lalu gunakan “Tautkan ulang media”.`);
+    persistentStore.requestDurableStorage();
+  },0));
+
+  // Ask mobile browsers for durable origin storage early. Whether the browser
+  // grants it is platform policy, so the result is recorded instead of assumed.
+  persistentStore.requestDurableStorage();
+})();
+
+</script><!-- /oms-media-persistence-v356 -->
 </body>
 </html>
