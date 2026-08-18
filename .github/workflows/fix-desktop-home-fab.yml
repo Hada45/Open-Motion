@@ -1,16 +1,17 @@
 name: Fix desktop Home FAB alignment
 
 on:
-  push:
-    branches: [main]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
     paths:
-      - '.desktop-fab-fix-trigger-main'
+      - '.desktop-fab-fix-trigger-pr'
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +33,7 @@ jobs:
   .simpleHome .fabHome{
     left:max(20px,calc((100vw - 760px)/2 + 20px))!important;
     right:auto!important;
+    transform:none!important;
   }
 }
 '''
@@ -40,15 +42,14 @@ jobs:
               s = s.replace('</style>', css + '\n</style>', 1)
               p.write_text(s, encoding='utf-8')
           PY
-      - name: Commit fix and clean trigger files
+      - name: Commit fix to main
         run: |
-          rm -f .github/workflows/fix-desktop-home-fab.yml .desktop-fab-fix-trigger-main
-          git config user.name "OpenAI"
+          git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add index.html
           if git diff --cached --quiet; then
             echo "No changes needed"
             exit 0
           fi
           git commit -m "Align desktop new project button with workspace"
-          git push origin main
+          git push origin HEAD:main
