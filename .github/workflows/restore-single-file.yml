@@ -1,10 +1,9 @@
 name: Restore Open Motion single-file structure
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths:
-      - '.restore-single-file-trigger'
+    types: [opened]
 
 permissions:
   contents: write
