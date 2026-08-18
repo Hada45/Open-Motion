@@ -1,8 +1,7 @@
 name: Align Home FAB exactly
 
 on:
-  push:
-    branches: [main]
+  page_build:
 
 permissions:
   contents: write
@@ -56,7 +55,7 @@ jobs:
           PY
       - name: Remove temporary files and commit
         run: |
-          rm -f .github/workflows/align-home-fab-exact.yml .align-home-fab-trigger .align-home-fab-merge-trigger
+          rm -f .github/workflows/align-home-fab-exact.yml .align-home-fab-trigger .align-home-fab-merge-trigger .align-home-fab-page-trigger
           git config user.name "OpenAI"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
