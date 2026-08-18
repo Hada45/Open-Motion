@@ -1,8 +1,10 @@
 name: Align Home FAB exactly
 
 on:
-  pull_request:
+  push:
     branches: [main]
+    paths:
+      - '.github/workflows/align-home-fab-exact.yml'
 
 permissions:
   contents: write
@@ -13,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: main
           fetch-depth: 0
       - name: Align new project button to workspace heading
         run: |
@@ -54,9 +56,9 @@ jobs:
               s=s.replace('</body>',script+'\n</body>',1)
               p.write_text(s,encoding='utf-8')
           PY
-      - name: Remove temporary files and commit
+      - name: Remove temporary workflow and commit
         run: |
-          rm -f .github/workflows/align-home-fab-exact.yml .align-home-fab-trigger
+          rm -f .github/workflows/align-home-fab-exact.yml
           git config user.name "OpenAI"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -65,4 +67,4 @@ jobs:
             exit 0
           fi
           git commit -m "Align new project button exactly with workspace heading"
-          git push origin HEAD:${{ github.head_ref }}
+          git push origin main
