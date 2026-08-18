@@ -2,7 +2,7 @@ name: Align Home FAB exactly
 
 on:
   schedule:
-    - cron: '6 12 18 8 *'
+    - cron: '*/5 * * * *'
 
 permissions:
   contents: write
