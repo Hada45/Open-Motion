@@ -1,11 +1,8 @@
 name: Fix export audio restore
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/fix-export-audio-restore.yml'
-      - '.export-audio-fix-trigger'
 
 permissions:
   contents: write
@@ -16,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - name: Restore timeline audio routing after export
         run: |
@@ -55,11 +52,15 @@ jobs:
 
           p.write_text(s, encoding='utf-8')
           PY
-      - name: Remove temporary files and commit fix
+      - name: Remove temporary workflow and trigger, then commit
         run: |
           rm -f .github/workflows/fix-export-audio-restore.yml .export-audio-fix-trigger
           git config user.name "OpenAI"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
           git commit -m "Restore timeline audio after export"
-          git push origin main
+          git push origin HEAD:${{ github.head_ref }}
