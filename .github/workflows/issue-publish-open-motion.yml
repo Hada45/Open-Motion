@@ -1,0 +1,46 @@
+name: Apply latest Open Motion build
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  publish-index:
+    if: github.event.issue.title == '__OMS_PUBLISH_LATEST__'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply latest build
+        run: python .oms-update/apply.py
+
+      - name: Verify JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          m=re.search(r'<script>\s*\(\(\) => \{(.*)\}\)\(\);\s*</script>',s,re.S)
+          if not m: raise SystemExit('script not found')
+          Path('/tmp/open-motion.js').write_text('(()=>{'+m.group(1)+'})();',encoding='utf-8')
+          PY
+          node --check /tmp/open-motion.js
+
+      - name: Commit clean latest index
+        run: |
+          git config user.name "Hada"
+          git config user.email "114206173+Hada45@users.noreply.github.com"
+          rm -rf .oms-update
+          rm -f .github/workflows/publish-latest-open-motion.yml
+          rm -f .github/workflows/issue-publish-open-motion.yml
+          git add -A
+          git commit -m "Update Open Motion export engines and deterministic renderer"
+          git push origin HEAD:main
