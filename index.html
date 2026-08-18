@@ -2971,7 +2971,23 @@ class MediaManager{
     })
   }
 
-  pause(){this.sync(model.time,false)}
+  restorePlaybackAudio(){
+    if(!this.audioCtx||!this.exportDest)return;
+    for(const l of model.layers){
+      if(!l.audioNode)continue;
+      try{
+        l.audioNode.disconnect();
+        l.audioNode.connect(this.audioCtx.destination);
+      }catch(e){}
+    }
+    try{this.exportDest.stream.getTracks().forEach(t=>t.stop())}catch(e){}
+    this.exportDest=null;
+    try{this.audioCtx.resume().catch(()=>{})}catch(e){}
+  }
+  pause(){
+    this.sync(model.time,false);
+    this.restorePlaybackAudio();
+  }
   releaseTransientCaches(){
     for(const l of model.layers){
       if(l.type!=='video')continue;
@@ -8727,6 +8743,7 @@ class Exporter{
       }catch(e){
         this.running=false;
         model.time=old.time;model.selected=old.selected;model.cameraView=old.cameraView;renderer.exporting=old.rendererExporting;
+        media.pause();
         renderer.render();timeline.rebuild();
         if(old.playing)clock.start();
         toast('Encoder video tidak tersedia pada perangkat ini');
