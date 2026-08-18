@@ -4,7 +4,7 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened]
     paths:
-      - '.desktop-fab-fix-trigger-pr'
+      - '.desktop-fab-fix-trigger'
 
 permissions:
   contents: write
