@@ -1,0 +1,68 @@
+name: Patch media relink V3.57 push
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.relink-v357-run'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Patch relink UI and detection
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          marker='oms-relink-v357'
+          if marker not in s:
+              patch=r'''
+<script id="oms-relink-v357">
+/* V3.57 — robust relink detection + Inspector access */
+(function(){
+  'use strict';
+  if(window.__OMS_RELINK_V357__)return;
+  window.__OMS_RELINK_V357__=true;
+  const isMedia=l=>!!l&&['image','video','audio'].includes(l.type);
+  const selectedMedia=()=>{try{return model.selectedLayer?.()||model.layers.find(x=>x.id===model.selected)||null}catch(e){return null}};
+  const registrySource=l=>{try{return l?.assetId&&mediaAssets?.sources?.get(l.assetId)}catch(e){return null}};
+  function runtimeUnavailable(l){
+    if(!isMedia(l))return false;
+    const src=l.dataUrl||registrySource(l);if(!src)return true;
+    if(l.type==='image')return !!(l.img&&l.img.complete&&!l.img.naturalWidth);
+    if(l.type==='video'){const v=l.video;if(!v||v.error)return true;if(typeof HTMLMediaElement!=='undefined'&&v.networkState===HTMLMediaElement.NETWORK_NO_SOURCE)return true;return false}
+    if(l.type==='audio'){const a=l.audio||l.video;if(a?.error)return true;if(a&&typeof HTMLMediaElement!=='undefined'&&a.networkState===HTMLMediaElement.NETWORK_NO_SOURCE)return true}
+    return false;
+  }
+  const input=document.createElement('input');input.type='file';input.hidden=true;input.id='omsMediaRelinkInputV357';document.body.appendChild(input);let target=null;
+  function startRelink(layer){if(!isMedia(layer))return;target=layer;input.accept=layer.type==='image'?'image/*':layer.type==='video'?'video/*':'audio/*';input.value='';input.click()}
+  input.addEventListener('change',async()=>{const file=input.files?.[0],layer=target;target=null;if(!file||!layer)return;const actual=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;if(actual!==layer.type){try{toast(`Pilih file ${layer.type} yang sesuai`)}catch(e){}return}try{const dataUrl=await fileDataURL(file);try{history.push()}catch(e){}try{model.disposeLayerRuntime(layer)}catch(e){}layer.dataUrl=dataUrl;layer.assetId ||= uid('asset');mediaAssets.sources.set(layer.assetId,dataUrl);if(mediaAssets.blobs)mediaAssets.blobs.set(layer.assetId,file);try{persistentStore.knownAssets.delete(layer.assetId)}catch(e){}model.hydrateLayer(layer);try{await media.probe(layer)}catch(e){}try{ui.rebuildAll()}catch(e){}try{bus.emit('model:changed')}catch(e){}try{await autosave.flush(true)}catch(e){}try{toast('Media berhasil ditautkan ulang')}catch(e){}}catch(err){console.error(err);try{toast('Gagal menautkan ulang media')}catch(e){}}});
+  window.relinkSelectedMedia=()=>startRelink(selectedMedia());
+  function ensureInspectorButton(layer){const grid=document.querySelector('.drawer:not(.hidden) .inspectorGrid')||document.querySelector('.inspectorGrid');let btn=document.getElementById('omsInspectorRelinkBtn');if(!grid||!isMedia(layer)){if(btn)btn.remove();return}if(!btn){btn=document.createElement('button');btn.type='button';btn.id='omsInspectorRelinkBtn';Object.assign(btn.style,{width:'100%',minHeight:'42px',margin:'0 0 10px',border:'1px solid rgba(115,226,189,.55)',borderRadius:'10px',background:'#20283a',color:'#73e2bd',fontWeight:'700',fontSize:'12px'});btn.onclick=()=>startRelink(selectedMedia())}const parent=grid.parentNode;if(parent&&btn.parentNode!==parent)parent.insertBefore(btn,grid);btn.textContent=runtimeUnavailable(layer)?'↻ Tautkan ulang media — sumber tidak tersedia':'↻ Ganti / tautkan ulang media'}
+  function refresh(){const layer=selectedMedia();const previewBtn=document.getElementById('omsRelinkMediaBtn');if(previewBtn){previewBtn.onclick=()=>startRelink(selectedMedia());previewBtn.style.display=isMedia(layer)&&runtimeUnavailable(layer)?'block':'none'}ensureInspectorButton(layer)}
+  setInterval(refresh,300);try{bus.on('model:restored',()=>setTimeout(refresh,30));bus.on('model:changed',()=>setTimeout(refresh,30))}catch(e){}setTimeout(refresh,100);
+})();
+</script>
+'''
+              s=s.replace('</body>',patch+'\n</body>',1)
+              p.write_text(s,encoding='utf-8')
+          PY
+      - name: Cleanup temporary patch files and commit
+        run: |
+          rm -f .relink-v357-run
+          rm -f .github/workflows/patch-relink-v357.yml .github/workflows/patch-relink-v357-sync.yml .github/workflows/patch-relink-v357-push.yml
+          git config user.name "OpenAI"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Make media relink visible and accessible"
+          git push origin main
