@@ -1,15 +1,16 @@
 name: Fix desktop Home FAB alignment
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+    paths:
+      - '.desktop-fab-fix-trigger-main'
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.event.pull_request.title == 'Trigger desktop FAB alignment fix'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +40,9 @@ jobs:
               s = s.replace('</style>', css + '\n</style>', 1)
               p.write_text(s, encoding='utf-8')
           PY
-      - name: Commit fix and remove temporary workflow
+      - name: Commit fix and clean trigger files
         run: |
-          rm -f .github/workflows/fix-desktop-home-fab.yml
+          rm -f .github/workflows/fix-desktop-home-fab.yml .desktop-fab-fix-trigger-main
           git config user.name "OpenAI"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
