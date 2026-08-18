@@ -1,0 +1,259 @@
+name: Open Motion deterministic offline export
+
+on:
+  push:
+    paths:
+      - '.github/workflows/deterministic-export.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Replace realtime capture with deterministic frame exporter
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          needle="""  async video(){
+              if(this.running)return;
+              if(!renderer.canvas.captureStream||!window.MediaRecorder){
+                toast('MediaRecorder tidak didukung browser ini');return;
+              }
+          """
+          if needle not in s:
+              raise SystemExit('Exporter video() anchor not found')
+          new="""  exportDuration(){
+              const layerEnd=model.layers.reduce(
+                (mx,l)=>Math.max(mx,(+l.start||0)+Math.max(0,+l.duration||0)),
+                0
+              );
+              const keyEnd=model.layers.reduce(
+                (mx,l)=>Math.max(mx,...Object.values(l.kf||{}).flat().map(k)=>+k.t||0),
+                0
+              );
+              return Math.max(.05,+model.project.duration||0,layerEnd,keyEnd);
+            }
+            async offlineEncoderModule(){
+              if(this._offlineEncoder)return this._offlineEncoder;
+              this._offlineEncoder=import('https://cdn.jsdelivr.net/npm/mediabunny@1.52.2/+esm');
+              return this._offlineEncoder;
+            }
+            async waitMediaEvent(el,type,timeout=1400){
+              if(!el)return;
+              await new Promise(resolve=>{
+                let done=false;
+                const finish=()=>{if(done)return;done=true;clearTimeout(timer);el.removeEventListener(type,finish);resolve()};
+                const timer=setTimeout(finish,timeout);
+                el.addEventListener(type,finish,{once:true});
+              });
+            }
+            async prepareOfflineVideoFrame(t){
+              const jobs=[];
+              for(const l of model.layers){
+                if(l.type!=='video'||!l.video||l.hidden)continue;
+                const v=l.video,map=mediaClipMap(l,t);
+                if(!map.active){try{v.pause()}catch(e){};continue}
+                jobs.push((async()=>{
+                  try{
+                    v.pause();v.muted=true;
+                    if(v.readyState<1)await this.waitMediaEvent(v,'loadedmetadata',1800);
+                    const maxTime=Math.max(0,(Number.isFinite(v.duration)?v.duration:map.sourceDuration||0)-.001);
+                    const target=clamp(map.mediaTime,0,maxTime);
+                    if(Math.abs((+v.currentTime||0)-target)>.0015){
+                      const seeked=this.waitMediaEvent(v,'seeked',1800);
+                      try{v.currentTime=target}catch(e){}
+                      await seeked;
+                    }else if(v.readyState<2){
+                      await this.waitMediaEvent(v,'loadeddata',1200);
+                    }
+                    l.cacheVideoFrame?.();
+                  }catch(err){
+                    console.warn('Offline video frame seek gagal:',l.name,err);
+                    l.cacheVideoFrame?.();
+                  }
+                })());
+              }
+              if(jobs.length)await Promise.all(jobs);
+            }
+            async buildOfflineAudioBuffer(exportDuration){
+              const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+              const AC=window.AudioContext||window.webkitAudioContext;
+              const layers=model.layers.filter(l=>
+                !l.hidden&&['video','audio'].includes(l.type)&&l.dataUrl&&(+l.duration||0)>0&&(l.volume??1)>0
+              );
+              if(!OAC||!AC||!layers.length)return null;
+              let sampleRate=48000;
+              const maxAudioBytes=192*1024*1024;
+              if(exportDuration*sampleRate*2*4>maxAudioBytes)sampleRate=32000;
+              const frames=Math.max(1,Math.ceil(exportDuration*sampleRate));
+              const offline=new OAC(2,frames,sampleRate);
+              media.waveCtx ||= new AC();
+              const decoded=new Map();
+              let scheduled=0;
+              for(const l of layers){
+                try{
+                  const key=l.assetId||l.dataUrl;
+                  let buffer=decoded.get(key);
+                  if(!buffer){
+                    const bytes=await media.dataUrlArrayBuffer(l.dataUrl);
+                    buffer=await media.waveCtx.decodeAudioData(bytes);
+                    decoded.set(key,buffer);
+                  }
+                  const map=mediaClipMap(l,+l.start||0);
+                  if(map.contentDuration<=1e-6)continue;
+                  const contentStart=(+l.start||0)+map.extendIn;
+                  const skipProject=Math.max(0,-contentStart);
+                  const when=Math.max(0,contentStart);
+                  const sourceOffset=map.sourceIn+skipProject*map.speed;
+                  const maxProjectFromSource=Math.max(0,(map.sourceOut-sourceOffset)/map.speed);
+                  const playDuration=Math.min(
+                    Math.max(0,map.contentDuration-skipProject),
+                    Math.max(0,exportDuration-when),
+                    maxProjectFromSource
+                  );
+                  if(playDuration<=1e-6||sourceOffset>=buffer.duration)continue;
+                  const source=offline.createBufferSource();
+                  const gain=offline.createGain();
+                  source.buffer=buffer;
+                  source.playbackRate.value=map.speed;
+                  gain.gain.value=clamp(l.volume??1,0,1);
+                  source.connect(gain);gain.connect(offline.destination);
+                  source.start(when,clamp(sourceOffset,0,Math.max(0,buffer.duration-.0001)));
+                  source.stop(Math.min(exportDuration,when+playDuration));
+                  scheduled++;
+                }catch(err){
+                  console.warn('Audio offline dilewati:',l.name,err);
+                }
+              }
+              if(!scheduled)return null;
+              return await offline.startRendering();
+            }
+            async video(){
+              if(this.running)return;
+              try{
+                await this.videoOffline();
+              }catch(err){
+                console.error('Offline export gagal, beralih ke kompatibilitas realtime:',err);
+                this.running=false;
+                $('#exportProgress').style.width='0';
+                toast('Encoder frame-by-frame gagal; memakai mode kompatibilitas');
+                return this.videoRealtimeFallback();
+              }
+            }
+            async videoOffline(){
+              if(this.running)return;
+              if(!window.VideoEncoder||!window.VideoFrame)throw Error('WebCodecs tidak tersedia');
+              this.running=true;
+              const fps=Math.max(1,+$('#exportFps').value||model.project.fps||30);
+              const bitrate=Math.max(250000,+$('#qualityRange').value*1_000_000||8_000_000);
+              const exportSize=selectedExportDimensions();
+              const selected=selectedExportCodec();
+              const exportDuration=this.exportDuration();
+              const old={time:model.time,selected:model.selected,playing:model.playing,cameraView:model.cameraView,rendererExporting:renderer.exporting};
+              clock.stop();renderer.endInteraction();media.pause();model.selected=null;model.time=0;model.cameraView=true;renderer.exporting=true;
+              const out=document.createElement('canvas');
+              out.width=Math.max(2,exportSize.width);
+              out.height=Math.max(2,exportSize.height);
+              const oc=out.getContext('2d',{alpha:false,desynchronized:false});
+              try{
+                const mb=await this.offlineEncoderModule();
+                const {Output,BufferTarget,CanvasSource,AudioBufferSource,Mp4OutputFormat,WebMOutputFormat,canEncodeVideo,getFirstEncodableVideoCodec,getFirstEncodableAudioCodec}=mb;
+                const webm=selected.id==='vp9-webm'||selected.id==='vp8-webm';
+                const format=webm?new WebMOutputFormat():new Mp4OutputFormat({fastStart:'in-memory'});
+                const target=new BufferTarget();
+                const output=new Output({format,target});
+                const preferredVideo=selected.id==='hevc-mp4'?'hevc':selected.id==='vp9-webm'?'vp9':selected.id==='vp8-webm'?'vp8':'avc';
+                let videoCodec=preferredVideo;
+                const preferredOkay=format.getSupportedVideoCodecs().includes(videoCodec)&&await canEncodeVideo(videoCodec,{width:out.width,height:out.height,bitrate});
+                if(!preferredOkay){
+                  videoCodec=await getFirstEncodableVideoCodec(format.getSupportedVideoCodecs(),{width:out.width,height:out.height,bitrate});
+                }
+                if(!videoCodec)throw Error('Tidak ada codec WebCodecs yang cocok');
+                const videoSource=new CanvasSource(out,{codec:videoCodec,bitrate,keyFrameInterval:2,hardwareAcceleration:'prefer-hardware'});
+                output.addVideoTrack(videoSource,{frameRate:fps});
+                const audioBuffer=await this.buildOfflineAudioBuffer(exportDuration);
+                let audioSource=null;
+                if(audioBuffer){
+                  try{
+                    const audioCodec=await getFirstEncodableAudioCodec(format.getSupportedAudioCodecs(),{numberOfChannels:audioBuffer.numberOfChannels,sampleRate:audioBuffer.sampleRate,bitrate:192000});
+                    if(audioCodec){
+                      audioSource=new AudioBufferSource({codec:audioCodec,bitrate:192000});
+                      output.addAudioTrack(audioSource);
+                    }
+                  }catch(err){console.warn('Audio encoder offline tidak tersedia:',err)}
+                }
+                await output.start();
+                const audioPromise=audioSource&&audioBuffer?audioSource.add(audioBuffer).then(()=>audioSource.close()):Promise.resolve();
+                const frameDuration=1/fps;
+                const totalFrames=Math.max(1,Math.ceil(exportDuration*fps));
+                for(let i=0;i<totalFrames;i++){
+                  const t=i/fps;
+                  model.time=Math.min(t,exportDuration);
+                  await this.prepareOfflineVideoFrame(model.time);
+                  renderer.render();
+                  oc.setTransform(1,0,0,1,0,0);
+                  oc.globalAlpha=1;
+                  oc.globalCompositeOperation='source-over';
+                  oc.filter='none';
+                  oc.clearRect(0,0,out.width,out.height);
+                  oc.drawImage(renderer.canvas,0,0,out.width,out.height);
+                  const duration=Math.max(1e-6,Math.min(frameDuration,exportDuration-t));
+                  const keyFrame=i===0||(i%Math.max(1,Math.round(fps*2))===0);
+                  await videoSource.add(t,duration,keyFrame?{keyFrame:true}:undefined);
+                  $('#exportProgress').style.width=((i+1)/totalFrames*100)+'%';
+                  if((i&3)===3)await new Promise(r=>setTimeout(r,0));
+                }
+                videoSource.close();
+                await audioPromise;
+                await output.finalize();
+                if(!target.buffer)throw Error('Encoder tidak menghasilkan buffer');
+                const mime=webm?'video/webm':'video/mp4';
+                const ext=webm?'webm':'mp4';
+                download(new Blob([target.buffer],{type:mime}),safe(model.project.name)+'.'+ext);
+                toast(`Ekspor frame-by-frame selesai • ${fps} FPS`);
+              }finally{
+                model.time=old.time;model.selected=old.selected;model.cameraView=old.cameraView;renderer.exporting=old.rendererExporting;
+                this.running=false;
+                $('#exportProgress').style.width='0';
+                media.pause();
+                renderer.render();timeline.rebuild();
+                if(old.playing)clock.start();
+              }
+            }
+            async videoRealtimeFallback(){
+              if(this.running)return;
+              if(!renderer.canvas.captureStream||!window.MediaRecorder){
+                toast('MediaRecorder tidak didukung browser ini');return;
+              }
+          """
+          s=s.replace(needle,new,1)
+          p.write_text(s,encoding='utf-8')
+
+      - name: Verify JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          m=re.search(r'<script>(.*)</script>',s,re.S)
+          if not m: raise SystemExit('script not found')
+          Path('/tmp/open-motion.js').write_text(m.group(1),encoding='utf-8')
+          PY
+          node --check /tmp/open-motion.js
+
+      - name: Commit deterministic exporter
+        run: |
+          git config user.name "Hada"
+          git config user.email "114206173+Hada45@users.noreply.github.com"
+          git add index.html
+          git commit -m "Render exports frame by frame without dropped frames"
+          git push origin HEAD:main
