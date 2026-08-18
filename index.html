@@ -1936,6 +1936,86 @@ input[type=range]{accent-color:var(--accent)}
   .experimentalNoticeFooter{padding-left:16px;padding-right:16px}
 }
 
+/* V3.48 — responsive True 3D / Inspector width containment */
+.drawerBody.propPanel{
+  min-width:0;
+  width:100%;
+  max-width:100%;
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+.drawerBody.propPanel > *{
+  min-width:0;
+  max-width:100%;
+}
+.drawerBody.propPanel .true3dCard{
+  grid-template-columns:34px minmax(0,1fr);
+  min-width:0;
+  width:100%;
+  max-width:100%;
+}
+.drawerBody.propPanel .true3dCard > div{
+  min-width:0;
+  max-width:100%;
+}
+.drawerBody.propPanel .true3dCard small,
+.drawerBody.propPanel .miniNote{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.drawerBody.propPanel .switchRow{
+  min-width:0;
+  width:100%;
+  max-width:100%;
+}
+.drawerBody.propPanel .switchRow > span{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.drawerBody.propPanel .propRow{
+  grid-template-columns:minmax(0,88px) minmax(0,1fr) minmax(0,34px);
+  min-width:0;
+  width:100%;
+  max-width:100%;
+}
+.drawerBody.propPanel .propRow > *{
+  min-width:0;
+  max-width:100%;
+}
+.drawerBody.propPanel .propRow input,
+.drawerBody.propPanel .propRow select{
+  box-sizing:border-box;
+  min-width:0;
+  width:100%;
+  max-width:100%;
+}
+#cameraOrbitTarget{
+  min-width:0;
+  width:100%;
+  max-width:100%;
+  text-overflow:ellipsis;
+}
+@media(max-width:520px){
+  .drawerBody.propPanel{
+    padding-left:9px;
+    padding-right:9px;
+  }
+  .drawerBody.propPanel .propRow{
+    grid-template-columns:minmax(0,76px) minmax(0,1fr) minmax(0,42px);
+    gap:6px;
+  }
+  .drawerBody.propPanel .propRow label{
+    min-width:0;
+    white-space:normal;
+    font-size:9px;
+  }
+  .drawerBody.propPanel .projectionPill{
+    min-width:0;
+    justify-self:end;
+    white-space:nowrap;
+  }
+}
+
 </style>
 </head>
 <body>
