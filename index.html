@@ -7565,8 +7565,11 @@ class UIController{
     }
   }
   async loadProjectList(){
-    const root=$('#projectList');if(!root)return;root.innerHTML='';
+    const root=$('#projectList');if(!root)return;
+    const requestId=(this._projectListRequestId=(this._projectListRequestId||0)+1);
     let metas=[];try{metas=await persistentStore.listProjects()}catch(e){console.warn(e)}if(!Array.isArray(metas))metas=[];
+    if(requestId!==this._projectListRequestId)return;
+    root.innerHTML='';
     const count=$('#projectCountBadge');if(count)count.textContent=String(metas.length);
     const sort=$('#projectSort')?.value||'newest';metas.sort((a,b)=>sort==='oldest'?(+a.updated||0)-(+b.updated||0):sort==='name'?String(a.name||'').localeCompare(String(b.name||''),homeLocale()):(b.updated||0)-(a.updated||0));
     if(!metas.length){root.innerHTML=`<div class="homeEmpty"><div class="emptyIcon" aria-hidden="true"></div><div class="emptyCopy"><b>${homeTr('noProjects')}</b><p>${homeTr('noProjectsDesc')}</p></div></div>`;return}
