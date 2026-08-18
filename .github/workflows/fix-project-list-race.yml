@@ -1,0 +1,40 @@
+name: One-time fix duplicate project cards
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-project-list-race.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch homepage project list rendering
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old1 = """  async loadProjectList(){\n    const root=$('#projectList');if(!root)return;root.innerHTML='';\n    let metas=[];try{metas=await persistentStore.listProjects()}catch(e){console.warn(e)}if(!Array.isArray(metas))metas=[];"""
+          new1 = """  async loadProjectList(){\n    const root=$('#projectList');if(!root)return;\n    const requestId=(this._projectListRequestId=(this._projectListRequestId||0)+1);\n    let metas=[];try{metas=await persistentStore.listProjects()}catch(e){console.warn(e)}if(!Array.isArray(metas))metas=[];\n    if(requestId!==this._projectListRequestId)return;\n    root.innerHTML='';"""
+          if old1 not in s:
+              raise SystemExit('Target loadProjectList block not found; refusing unsafe patch')
+          s = s.replace(old1, new1, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit fix and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "OpenAI"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git rm .github/workflows/fix-project-list-race.yml
+          git commit -m "Fix duplicate project cards on homepage"
+          git push
