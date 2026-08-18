@@ -1,15 +1,15 @@
 name: Fix desktop Home FAB alignment
 
 on:
-  issues:
-    types: [opened]
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.event.issue.title == 'Fix Open Motion desktop FAB alignment'
+    if: github.event.pull_request.title == 'Trigger desktop FAB alignment fix'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
