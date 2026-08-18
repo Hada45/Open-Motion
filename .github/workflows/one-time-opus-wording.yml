@@ -1,0 +1,36 @@
+name: One-time Opus wording update
+
+on:
+  push:
+    paths:
+      - '.github/workflows/one-time-opus-wording.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update wording and remove temporary workflow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old = 'In the future, there are plans for a <strong>native application, including an Android APK</strong>, after <strong>Opus Framework</strong> is released and mature enough to use.'
+          new = 'In the future, there are plans for a <strong>native application, including an Android APK</strong>, once <strong>Opus Framework</strong> is publicly released and Android support becomes available.'
+          if old not in s:
+              raise SystemExit('Expected English Opus wording was not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          Path('.github/workflows/one-time-opus-wording.yml').unlink()
+          PY
+      - name: Commit update
+        run: |
+          git config user.name "OpenAI"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html .github/workflows/one-time-opus-wording.yml
+          git commit -m "Refine English Opus roadmap wording"
+          git push
