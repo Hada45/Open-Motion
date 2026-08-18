@@ -1,0 +1,75 @@
+name: Align Home FAB exactly
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/align-home-fab-exact.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Align new project button to workspace heading
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          marker='V3.55 — exact Home FAB alignment to workspace heading'
+          if marker not in s:
+              script=r'''
+<script>
+/* V3.55 — exact Home FAB alignment to workspace heading */
+(function(){
+  function alignHomeFabToWorkspace(){
+    const home=document.querySelector('.simpleHome');
+    const target=home?.querySelector('.sectionKicker') || home?.querySelector('.sectionRow');
+    const fab=home?.querySelector('#newProjectFab');
+    if(!home||!target||!fab)return;
+    const homeRect=home.getBoundingClientRect();
+    const targetRect=target.getBoundingClientRect();
+    const left=Math.max(0,targetRect.left-homeRect.left);
+    fab.style.setProperty('left',left+'px','important');
+    fab.style.setProperty('right','auto','important');
+  }
+  window.alignHomeFabToWorkspace=alignHomeFabToWorkspace;
+  const realign=()=>requestAnimationFrame(()=>requestAnimationFrame(alignHomeFabToWorkspace));
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',realign,{once:true});
+  }else{
+    realign();
+  }
+  window.addEventListener('load',realign,{once:true});
+  window.addEventListener('resize',realign,{passive:true});
+  window.addEventListener('orientationchange',()=>setTimeout(realign,80),{passive:true});
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize',realign,{passive:true});
+  }
+})();
+</script>
+'''
+              if '</body>' not in s:
+                  raise SystemExit('No </body> tag found')
+              s=s.replace('</body>',script+'\n</body>',1)
+              p.write_text(s,encoding='utf-8')
+          PY
+      - name: Remove temporary workflow and commit
+        run: |
+          rm -f .github/workflows/align-home-fab-exact.yml
+          git config user.name "OpenAI"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "Align new project button exactly with workspace heading"
+          git push origin main
