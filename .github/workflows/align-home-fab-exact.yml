@@ -1,8 +1,9 @@
 name: Align Home FAB exactly
 
 on:
-  pull_request:
+  pull_request_target:
     branches: [main]
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: write
@@ -13,7 +14,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
           fetch-depth: 0
       - name: Align new project button to workspace heading
         run: |
@@ -65,4 +67,4 @@ jobs:
             exit 0
           fi
           git commit -m "Align new project button exactly with workspace heading"
-          git push origin HEAD:${{ github.head_ref }}
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
