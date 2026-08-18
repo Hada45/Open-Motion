@@ -1,16 +1,15 @@
 name: Align Home FAB exactly
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.align-home-fab-trigger'
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: github.event.issue.title == 'Open Motion exact FAB alignment trigger'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
