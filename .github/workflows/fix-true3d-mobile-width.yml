@@ -1,10 +1,8 @@
 name: Fix True 3D mobile width
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/fix-true3d-mobile-width.yml'
 
 permissions:
   contents: write
@@ -15,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - name: Patch responsive inspector layout
         run: |
@@ -111,9 +109,9 @@ jobs:
               text = text.replace('</style>', css + '\n</style>', 1)
               path.write_text(text, encoding='utf-8')
           PY
-      - name: Remove one-time workflow and commit
+      - name: Remove temporary workflow and trigger, then commit
         run: |
-          rm -f .github/workflows/fix-true3d-mobile-width.yml
+          rm -f .github/workflows/fix-true3d-mobile-width.yml .true3d-layout-trigger
           git config user.name "OpenAI"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -122,4 +120,4 @@ jobs:
             exit 0
           fi
           git commit -m "Fix True 3D camera panel width on mobile"
-          git push origin main
+          git push origin HEAD:${{ github.head_ref }}
