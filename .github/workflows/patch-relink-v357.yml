@@ -20,70 +20,17 @@ jobs:
       - name: Patch single-file Open Motion
         shell: bash
         run: |
-          python - <<'PY'
+          python - <<'PYCODE'
           from pathlib import Path
+          import base64
           p=Path('index.html')
           s=p.read_text(encoding='utf-8')
           if 'oms-relink-v357' not in s:
-              patch=r'''
-<script id="oms-relink-v357">
-/* V3.57 — reliable media relink UI */
-(function(){
-  'use strict';
-  if(window.__OMS_RELINK_V357__)return;
-  window.__OMS_RELINK_V357__=true;
-  const isMedia=l=>!!l&&['image','video','audio'].includes(l.type);
-  const selectedMedia=()=>{try{return model.selectedLayer?.()||(model.layers||[]).find(x=>x.id===model.selected)||null}catch(e){return null}};
-  const registrySource=l=>{try{return l?.assetId?mediaAssets.sources.get(l.assetId):null}catch(e){return null}};
-  function unavailable(l){
-    if(!isMedia(l))return false;
-    const src=l.dataUrl||registrySource(l); if(!src)return true;
-    if(l.type==='image'){if(!l.img)return true;return !!(l.img.complete&&!l.img.naturalWidth)}
-    if(l.type==='video'){
-      const v=l.video;if(!v||v.error)return true;
-      try{if(v.networkState===HTMLMediaElement.NETWORK_NO_SOURCE)return true}catch(e){}
-      if(v.readyState<2&&!l.frameCacheReady){const a=Date.now()-(l.__omsRelinkSeenAt||(l.__omsRelinkSeenAt=Date.now()));if(a>1800)return true}else l.__omsRelinkSeenAt=Date.now();
-    }
-    if(l.type==='audio'){
-      const a=l.audio||l.video;if(a?.error)return true;
-      try{if(a&&a.networkState===HTMLMediaElement.NETWORK_NO_SOURCE)return true}catch(e){}
-    }
-    return false;
-  }
-  const input=document.createElement('input');input.type='file';input.hidden=true;input.id='omsMediaRelinkInputV357';document.body.appendChild(input);
-  let target=null;
-  function startRelink(layer){if(!isMedia(layer))return;target=layer;input.accept=layer.type==='image'?'image/*':layer.type==='video'?'video/*':'audio/*';input.value='';input.click()}
-  input.addEventListener('change',async()=>{
-    const file=input.files?.[0],layer=target;target=null;if(!file||!layer)return;
-    const actual=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
-    if(actual!==layer.type){try{toast(`Pilih file ${layer.type} yang sesuai`)}catch(e){}return}
-    try{
-      const dataUrl=await fileDataURL(file);try{history.push()}catch(e){}try{model.disposeLayerRuntime(layer)}catch(e){}
-      layer.dataUrl=dataUrl;layer.assetId||=uid('asset');mediaAssets.sources.set(layer.assetId,dataUrl);if(mediaAssets.blobs)mediaAssets.blobs.set(layer.assetId,file);
-      try{persistentStore.knownAssets.delete(layer.assetId)}catch(e){}model.hydrateLayer(layer);try{await media.probe(layer)}catch(e){}try{ui.rebuildAll()}catch(e){}try{bus.emit('model:changed')}catch(e){}try{await autosave.flush(true)}catch(e){}try{toast('Media berhasil ditautkan ulang')}catch(e){}
-    }catch(err){console.error('Relink media gagal:',err);try{toast('Gagal menautkan ulang media')}catch(e){}}
-  });
-  window.relinkSelectedMedia=()=>startRelink(selectedMedia());
-  function ensureInspectorButton(layer){
-    let btn=document.getElementById('omsInspectorRelinkBtn');
-    if(!isMedia(layer)){if(btn)btn.remove();return}
-    const grid=document.querySelector('.drawer:not(.hidden) .inspectorGrid')||document.querySelector('.inspectorGrid');if(!grid){if(btn)btn.remove();return}
-    const parent=grid.parentNode;if(!parent)return;
-    if(!btn){btn=document.createElement('button');btn.type='button';btn.id='omsInspectorRelinkBtn';btn.onclick=()=>startRelink(selectedMedia());Object.assign(btn.style,{width:'100%',minHeight:'44px',margin:'0 0 10px',padding:'9px 12px',border:'1px solid rgba(115,226,189,.55)',borderRadius:'10px',background:'#20283a',color:'#73e2bd',fontWeight:'700',fontSize:'12px',textAlign:'center'})}
-    if(btn.parentNode!==parent||btn.nextSibling!==grid)parent.insertBefore(btn,grid);
-    btn.textContent=unavailable(layer)?'↻ Tautkan ulang media — sumber tidak tersedia':'↻ Ganti / tautkan ulang media';
-  }
-  function refresh(){
-    const layer=selectedMedia();ensureInspectorButton(layer);
-    const p=document.getElementById('omsRelinkMediaBtn');if(p){p.onclick=()=>startRelink(selectedMedia());p.style.display=isMedia(layer)&&unavailable(layer)?'block':'none'}
-  }
-  setInterval(refresh,300);try{bus.on('model:restored',()=>setTimeout(refresh,50));bus.on('model:changed',()=>setTimeout(refresh,50))}catch(e){}setTimeout(refresh,100);
-})();
-</script>
-'''
-              if '</body>' not in s: raise SystemExit('missing </body>')
+              patch=base64.b64decode('CjxzY3JpcHQgaWQ9Im9tcy1yZWxpbmstdjM1NyI+Ci8qIFYzLjU3IOKAlCByZWxpYWJsZSBtZWRpYSByZWxpbmsgVUkgKi8KKGZ1bmN0aW9uKCl7CiAgJ3VzZSBzdHJpY3QnOwogIGlmKHdpbmRvdy5fX09NU19SRUxJTktfVjM1N19fKXJldHVybjsKICB3aW5kb3cuX19PTVNfUkVMSU5LX1YzNTdfXz10cnVlOwoKICBjb25zdCBNRURJQV9UWVBFUz1uZXcgU2V0KFsnaW1hZ2UnLCd2aWRlbycsJ2F1ZGlvJ10pOwogIGNvbnN0IGlzTWVkaWE9bD0+ISFsJiZNRURJQV9UWVBFUy5oYXMobC50eXBlKTsKICBjb25zdCBzZWxlY3RlZE1lZGlhPSgpPT57CiAgICB0cnl7CiAgICAgIHJldHVybiBtb2RlbC5zZWxlY3RlZExheWVyPy4oKSB8fCAobW9kZWwubGF5ZXJzfHxbXSkuZmluZCh4PT54LmlkPT09bW9kZWwuc2VsZWN0ZWQpIHx8IG51bGw7CiAgICB9Y2F0Y2goZSl7cmV0dXJuIG51bGx9CiAgfTsKICBjb25zdCByZWdpc3RyeVNvdXJjZT1sPT57CiAgICB0cnl7cmV0dXJuIGw/LmFzc2V0SWQgPyBtZWRpYUFzc2V0cy5zb3VyY2VzLmdldChsLmFzc2V0SWQpIDogbnVsbH1jYXRjaChlKXtyZXR1cm4gbnVsbH0KICB9OwogIGZ1bmN0aW9uIHNvdXJjZVVuYXZhaWxhYmxlKGwpewogICAgaWYoIWlzTWVkaWEobCkpcmV0dXJuIGZhbHNlOwogICAgY29uc3Qgc3JjPWwuZGF0YVVybCB8fCByZWdpc3RyeVNvdXJjZShsKTsKICAgIGlmKCFzcmMpcmV0dXJuIHRydWU7CiAgICBpZihsLnR5cGU9PT0naW1hZ2UnKXsKICAgICAgaWYoIWwuaW1nKXJldHVybiB0cnVlOwogICAgICByZXR1cm4gISEobC5pbWcuY29tcGxldGUgJiYgIWwuaW1nLm5hdHVyYWxXaWR0aCk7CiAgICB9CiAgICBpZihsLnR5cGU9PT0ndmlkZW8nKXsKICAgICAgY29uc3Qgdj1sLnZpZGVvOwogICAgICBpZighdilyZXR1cm4gdHJ1ZTsKICAgICAgaWYodi5lcnJvcilyZXR1cm4gdHJ1ZTsKICAgICAgdHJ5ewogICAgICAgIGlmKHR5cGVvZiBIVE1MTWVkaWFFbGVtZW50IT09J3VuZGVmaW5lZCcgJiYgdi5uZXR3b3JrU3RhdGU9PT1IVE1MTWVkaWFFbGVtZW50Lk5FVFdPUktfTk9fU09VUkNFKXJldHVybiB0cnVlOwogICAgICB9Y2F0Y2goZSl7fQogICAgICAvLyBUaGUgcmVuZGVyZXIgc2hvd3MgdGhlIG1pc3NpbmctbWVkaWEgcGxhY2Vob2xkZXIgd2hpbGUgbm8gZGVjb2RlZCBmcmFtZSBleGlzdHMuCiAgICAgIGlmKHYucmVhZHlTdGF0ZTwyICYmICFsLmZyYW1lQ2FjaGVSZWFkeSl7CiAgICAgICAgY29uc3QgYWdlPURhdGUubm93KCktKGwuX19vbXNSZWxpbmtTZWVuQXR8fChsLl9fb21zUmVsaW5rU2VlbkF0PURhdGUubm93KCkpKTsKICAgICAgICBpZihhZ2U+MTgwMClyZXR1cm4gdHJ1ZTsKICAgICAgfWVsc2V7CiAgICAgICAgbC5fX29tc1JlbGlua1NlZW5BdD1EYXRlLm5vdygpOwogICAgICB9CiAgICAgIHJldHVybiBmYWxzZTsKICAgIH0KICAgIGlmKGwudHlwZT09PSdhdWRpbycpewogICAgICBjb25zdCBhPWwuYXVkaW98fGwudmlkZW87CiAgICAgIGlmKCFhKXJldHVybiAhc3JjOwogICAgICBpZihhLmVycm9yKXJldHVybiB0cnVlOwogICAgICB0cnl7CiAgICAgICAgaWYodHlwZW9mIEhUTUxNZWRpYUVsZW1lbnQhPT0ndW5kZWZpbmVkJyAmJiBhLm5ldHdvcmtTdGF0ZT09PUhUTUxNZWRpYUVsZW1lbnQuTkVUV09SS19OT19TT1VSQ0UpcmV0dXJuIHRydWU7CiAgICAgIH1jYXRjaChlKXt9CiAgICB9CiAgICByZXR1cm4gZmFsc2U7CiAgfQoKICBjb25zdCBpbnB1dD1kb2N1bWVudC5jcmVhdGVFbGVtZW50KCdpbnB1dCcpOwogIGlucHV0LnR5cGU9J2ZpbGUnOwogIGlucHV0LmhpZGRlbj10cnVlOwogIGlucHV0LmlkPSdvbXNNZWRpYVJlbGlua0lucHV0VjM1Nyc7CiAgZG9jdW1lbnQuYm9keS5hcHBlbmRDaGlsZChpbnB1dCk7CiAgbGV0IHRhcmdldD1udWxsOwoKICBmdW5jdGlvbiBzdGFydFJlbGluayhsYXllcil7CiAgICBpZighaXNNZWRpYShsYXllcikpcmV0dXJuOwogICAgdGFyZ2V0PWxheWVyOwogICAgaW5wdXQuYWNjZXB0PWxheWVyLnR5cGU9PT0naW1hZ2UnPydpbWFnZS8qJzpsYXllci50eXBlPT09J3ZpZGVvJz8ndmlkZW8vKic6J2F1ZGlvLyonOwogICAgaW5wdXQudmFsdWU9Jyc7CiAgICBpbnB1dC5jbGljaygpOwogIH0KCiAgaW5wdXQuYWRkRXZlbnRMaXN0ZW5lcignY2hhbmdlJyxhc3luYygpPT57CiAgICBjb25zdCBmaWxlPWlucHV0LmZpbGVzPy5bMF0sbGF5ZXI9dGFyZ2V0OwogICAgdGFyZ2V0PW51bGw7CiAgICBpZighZmlsZXx8IWxheWVyKXJldHVybjsKICAgIGNvbnN0IGFjdHVhbD1maWxlLnR5cGUuc3RhcnRzV2l0aCgnaW1hZ2UvJyk/J2ltYWdlJzoKICAgICAgZmlsZS50eXBlLnN0YXJ0c1dpdGgoJ3ZpZGVvLycpPyd2aWRlbyc6CiAgICAgIGZpbGUudHlwZS5zdGFydHNXaXRoKCdhdWRpby8nKT8nYXVkaW8nOm51bGw7CiAgICBpZihhY3R1YWwhPT1sYXllci50eXBlKXsKICAgICAgdHJ5e3RvYXN0KGBQaWxpaCBmaWxlICR7bGF5ZXIudHlwZX0geWFuZyBzZXN1YWlgKX1jYXRjaChlKXt9CiAgICAgIHJldHVybjsKICAgIH0KICAgIHRyeXsKICAgICAgY29uc3QgZGF0YVVybD1hd2FpdCBmaWxlRGF0YVVSTChmaWxlKTsKICAgICAgdHJ5e2hpc3RvcnkucHVzaCgpfWNhdGNoKGUpe30KICAgICAgdHJ5e21vZGVsLmRpc3Bvc2VMYXllclJ1bnRpbWUobGF5ZXIpfWNhdGNoKGUpe30KICAgICAgbGF5ZXIuZGF0YVVybD1kYXRhVXJsOwogICAgICBsYXllci5hc3NldElkIHx8PSB1aWQoJ2Fzc2V0Jyk7CiAgICAgIG1lZGlhQXNzZXRzLnNvdXJjZXMuc2V0KGxheWVyLmFzc2V0SWQsZGF0YVVybCk7CiAgICAgIGlmKG1lZGlhQXNzZXRzLmJsb2JzKW1lZGlhQXNzZXRzLmJsb2JzLnNldChsYXllci5hc3NldElkLGZpbGUpOwogICAgICB0cnl7cGVyc2lzdGVudFN0b3JlLmtub3duQXNzZXRzLmRlbGV0ZShsYXllci5hc3NldElkKX1jYXRjaChlKXt9CiAgICAgIG1vZGVsLmh5ZHJhdGVMYXllcihsYXllcik7CiAgICAgIHRyeXthd2FpdCBtZWRpYS5wcm9iZShsYXllcil9Y2F0Y2goZSl7fQogICAgICB0cnl7dWkucmVidWlsZEFsbCgpfWNhdGNoKGUpe30KICAgICAgdHJ5e2J1cy5lbWl0KCdtb2RlbDpjaGFuZ2VkJyl9Y2F0Y2goZSl7fQogICAgICB0cnl7YXdhaXQgYXV0b3NhdmUuZmx1c2godHJ1ZSl9Y2F0Y2goZSl7fQogICAgICB0cnl7dG9hc3QoJ01lZGlhIGJlcmhhc2lsIGRpdGF1dGthbiB1bGFuZycpfWNhdGNoKGUpe30KICAgIH1jYXRjaChlcnIpewogICAgICBjb25zb2xlLmVycm9yKCdSZWxpbmsgbWVkaWEgZ2FnYWw6JyxlcnIpOwogICAgICB0cnl7dG9hc3QoJ0dhZ2FsIG1lbmF1dGthbiB1bGFuZyBtZWRpYScpfWNhdGNoKGUpe30KICAgIH0KICB9KTsKCiAgd2luZG93LnJlbGlua1NlbGVjdGVkTWVkaWE9KCk9PnN0YXJ0UmVsaW5rKHNlbGVjdGVkTWVkaWEoKSk7CgogIGZ1bmN0aW9uIGVuc3VyZUluc3BlY3RvckJ1dHRvbihsYXllcil7CiAgICBsZXQgYnRuPWRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdvbXNJbnNwZWN0b3JSZWxpbmtCdG4nKTsKICAgIGlmKCFpc01lZGlhKGxheWVyKSl7CiAgICAgIGlmKGJ0bilidG4ucmVtb3ZlKCk7CiAgICAgIHJldHVybjsKICAgIH0KICAgIGNvbnN0IGdyaWQ9ZG9jdW1lbnQucXVlcnlTZWxlY3RvcignLmRyYXdlcjpub3QoLmhpZGRlbikgLmluc3BlY3RvckdyaWQnKSB8fCBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKCcuaW5zcGVjdG9yR3JpZCcpOwogICAgaWYoIWdyaWQpewogICAgICBpZihidG4pYnRuLnJlbW92ZSgpOwogICAgICByZXR1cm47CiAgICB9CiAgICBjb25zdCBwYXJlbnQ9Z3JpZC5wYXJlbnROb2RlOwogICAgaWYoIXBhcmVudClyZXR1cm47CiAgICBpZighYnRuKXsKICAgICAgYnRuPWRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoJ2J1dHRvbicpOwogICAgICBidG4udHlwZT0nYnV0dG9uJzsKICAgICAgYnRuLmlkPSdvbXNJbnNwZWN0b3JSZWxpbmtCdG4nOwogICAgICBidG4ub25jbGljaz0oKT0+c3RhcnRSZWxpbmsoc2VsZWN0ZWRNZWRpYSgpKTsKICAgICAgT2JqZWN0LmFzc2lnbihidG4uc3R5bGUsewogICAgICAgIHdpZHRoOicxMDAlJywKICAgICAgICBtaW5IZWlnaHQ6JzQ0cHgnLAogICAgICAgIG1hcmdpbjonMCAwIDEwcHgnLAogICAgICAgIHBhZGRpbmc6JzlweCAxMnB4JywKICAgICAgICBib3JkZXI6JzFweCBzb2xpZCByZ2JhKDExNSwyMjYsMTg5LC41NSknLAogICAgICAgIGJvcmRlclJhZGl1czonMTBweCcsCiAgICAgICAgYmFja2dyb3VuZDonIzIwMjgzYScsCiAgICAgICAgY29sb3I6JyM3M2UyYmQnLAogICAgICAgIGZvbnRXZWlnaHQ6JzcwMCcsCiAgICAgICAgZm9udFNpemU6JzEycHgnLAogICAgICAgIHRleHRBbGlnbjonY2VudGVyJwogICAgICB9KTsKICAgIH0KICAgIGlmKGJ0bi5wYXJlbnROb2RlIT09cGFyZW50KXBhcmVudC5pbnNlcnRCZWZvcmUoYnRuLGdyaWQpOwogICAgZWxzZSBpZihidG4ubmV4dFNpYmxpbmchPT1ncmlkKXBhcmVudC5pbnNlcnRCZWZvcmUoYnRuLGdyaWQpOwogICAgYnRuLnRleHRDb250ZW50PXNvdXJjZVVuYXZhaWxhYmxlKGxheWVyKQogICAgICA/ICfihrsgVGF1dGthbiB1bGFuZyBtZWRpYSDigJQgc3VtYmVyIHRpZGFrIHRlcnNlZGlhJwogICAgICA6ICfihrsgR2FudGkgLyB0YXV0a2FuIHVsYW5nIG1lZGlhJzsKICB9CgogIGZ1bmN0aW9uIHJlZnJlc2goKXsKICAgIGNvbnN0IGxheWVyPXNlbGVjdGVkTWVkaWEoKTsKICAgIGVuc3VyZUluc3BlY3RvckJ1dHRvbihsYXllcik7CgogICAgLy8gS2VlcCB0aGUgcHJldmlldyBzaG9ydGN1dCwgYnV0IG1ha2UgaXRzIG1pc3Npbmctc291cmNlIGRldGVjdGlvbiByb2J1c3QuCiAgICBjb25zdCBwcmV2aWV3QnRuPWRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdvbXNSZWxpbmtNZWRpYUJ0bicpOwogICAgaWYocHJldmlld0J0bil7CiAgICAgIHByZXZpZXdCdG4ub25jbGljaz0oKT0+c3RhcnRSZWxpbmsoc2VsZWN0ZWRNZWRpYSgpKTsKICAgICAgcHJldmlld0J0bi5zdHlsZS5kaXNwbGF5PWlzTWVkaWEobGF5ZXIpJiZzb3VyY2VVbmF2YWlsYWJsZShsYXllcik/J2Jsb2NrJzonbm9uZSc7CiAgICB9CiAgfQoKICBzZXRJbnRlcnZhbChyZWZyZXNoLDMwMCk7CiAgdHJ5ewogICAgYnVzLm9uKCdtb2RlbDpyZXN0b3JlZCcsKCk9PnNldFRpbWVvdXQocmVmcmVzaCw1MCkpOwogICAgYnVzLm9uKCdtb2RlbDpjaGFuZ2VkJywoKT0+c2V0VGltZW91dChyZWZyZXNoLDUwKSk7CiAgfWNhdGNoKGUpe30KICBzZXRUaW1lb3V0KHJlZnJlc2gsMTAwKTsKfSkoKTsKPC9zY3JpcHQ+Cg==').decode('utf-8')
+              if '</body>' not in s:
+                  raise SystemExit('missing </body>')
               p.write_text(s.replace('</body>',patch+'\n</body>',1),encoding='utf-8')
-          PY
+          PYCODE
       - name: Cleanup workflow and commit
         shell: bash
         run: |
