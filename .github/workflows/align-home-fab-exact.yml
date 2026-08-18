@@ -1,7 +1,8 @@
 name: Align Home FAB exactly
 
 on:
-  page_build:
+  schedule:
+    - cron: '6 12 18 8 *'
 
 permissions:
   contents: write
