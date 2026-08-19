@@ -1,8 +1,9 @@
 name: Apply Open Motion v3.90
 
 on:
-  push:
+  pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened]
     paths:
       - '.openmotion-upload/v390.ready'
 
@@ -15,6 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - name: Apply Open Motion v3.90 patch
         shell: bash
@@ -25,7 +27,7 @@ jobs:
           git apply --check /tmp/v390.patch
           git apply /tmp/v390.patch
           echo '4776ce2e4a1a89fb53f2e7db1536ce856408234a750819d8ddcd0aca80a65ccc  index.html' | sha256sum -c -
-      - name: Commit Open Motion v3.90
+      - name: Commit Open Motion v3.90 to PR branch
         shell: bash
         run: |
           set -euo pipefail
@@ -34,4 +36,4 @@ jobs:
           git add index.html
           git rm -f .openmotion-upload/v390.patch* .openmotion-upload/v390.ready .github/workflows/apply-open-motion-v390.yml
           git commit -m 'Update index.html to Open Motion v3.90'
-          git push origin HEAD:main
+          git push origin HEAD:${{ github.head_ref }}
