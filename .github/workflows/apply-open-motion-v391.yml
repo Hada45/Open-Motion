@@ -1,0 +1,38 @@
+name: Apply Open Motion v3.91
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.openmotion-upload/v391.ready'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Apply Open Motion v3.91 localization patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object index.html)" = "72714f71e24fd8b45ab849154d56537ee61d110c"
+          git apply --check .openmotion-upload/v391.patch
+          git apply .openmotion-upload/v391.patch
+          echo '88788014b6b7fa8ce83c601ea1ee921cb504be203cc915bad31f30ddb82d9466  index.html' | sha256sum -c -
+      - name: Commit Open Motion v3.91 to PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git rm -f .openmotion-upload/v391.patch .openmotion-upload/v391.ready .github/workflows/apply-open-motion-v391.yml
+          git commit -m 'Update localization to system language auto-detection'
+          git push origin HEAD:${{ github.head_ref }}
