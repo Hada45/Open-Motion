@@ -1,0 +1,35 @@
+name: Apply Open Motion v3.90
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.openmotion-upload/v390.ready'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rebuild index.html
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .openmotion-upload/v390.part* | base64 -d | gzip -dc > index.html.new
+          echo '4776ce2e4a1a89fb53f2e7db1536ce856408234a750819d8ddcd0aca80a65ccc  index.html.new' | sha256sum -c -
+          mv index.html.new index.html
+      - name: Commit Open Motion v3.90
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git rm -f .openmotion-upload/v390.part* .openmotion-upload/v390.ready .github/workflows/apply-open-motion-v390.yml
+          git commit -m 'Update index.html to Open Motion v3.90'
+          git push origin HEAD:main
