@@ -2272,6 +2272,475 @@ input[type=range]{accent-color:var(--accent)}
 }
 
 </style>
+
+<style id="oms-editor-split-v393">
+/* =========================================================
+   V3.93 — Preview / Timeline vertical split controller
+   ========================================================= */
+.editorSplitSlot{
+  min-width:38px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  align-self:stretch;
+}
+.previewTools .editorSplitHandle{
+  width:34px;
+  height:28px;
+  min-width:34px;
+  padding:0;
+  border:0;
+  border-radius:9px;
+  background:transparent;
+  color:#8994aa;
+  display:grid;
+  place-items:center;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  cursor:ns-resize;
+}
+.previewTools .editorSplitHandle:hover,
+.previewTools .editorSplitHandle:focus-visible,
+.previewTools .editorSplitHandle.dragging{
+  color:var(--accent);
+  background:#202739;
+  outline:none;
+}
+.editorSplitGrip{
+  width:18px;
+  height:14px;
+  position:relative;
+  display:block;
+}
+.editorSplitGrip:before,
+.editorSplitGrip:after{
+  content:"";
+  position:absolute;
+  left:3px;
+  right:3px;
+  height:1.5px;
+  border-radius:999px;
+  background:currentColor;
+  box-shadow:0 4px 0 currentColor;
+}
+.editorSplitGrip:before{top:2px}
+.editorSplitGrip:after{bottom:2px;box-shadow:none}
+.editorSplitHandle.dragging .editorSplitGrip{transform:scaleY(1.08)}
+.editorMain.editorSplitDragging,
+.editorMain.editorSplitDragging *{cursor:ns-resize!important}
+
+/* V3.94 — split must follow the finger directly. The old 160 ms grid-row
+   transition made manual dragging feel delayed and could leave a tall canvas
+   using the pre-transition viewport size after a drawer opened. */
+.editorMain.fitCompositionLayout,
+.editorMain.fitCompositionLayout.editorSplitDragging{
+  transition:none!important;
+}
+
+/* The split control is a mobile/tablet vertical-layout affordance only. */
+@media (min-width:900px){
+  .editorSplitSlot{display:none!important}
+}
+</style>
+
+
+<style id="oms-portrait-side-controls-v397">
+/* =========================================================
+   V3.98 — Portrait Side Controls + Timeline Grid Fix
+   For 9:16-or-taller compositions on mobile/tablet, the two horizontal
+   editor toolbars move into the otherwise unused left/right canvas gutters.
+   This returns their vertical space to the composition preview and timeline.
+   ========================================================= */
+.portraitSideRail{
+  position:absolute;
+  z-index:24;
+  width:46px;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+}
+.portraitLeftRail{left:3px;top:7px;bottom:7px}
+.portraitRightRail{right:3px;top:54px;bottom:7px}
+.editorMain.portraitSideControls .portraitSideRail{display:flex}
+
+/* Reserve real gutters. applyCompositionFitZoom() already subtracts viewport
+   padding, so the canvas is guaranteed not to run underneath either rail. */
+.editorMain.portraitSideControls .viewport{
+  padding-left:52px;
+  padding-right:52px;
+}
+.editorMain.portraitSideControls .previewArea{
+  grid-template-rows:minmax(0,1fr)!important;
+}
+.editorMain.portraitSideControls .timelineArea{
+  /* V3.98: transport is physically moved out of timelineArea. With the old
+     3-row grid, timelineScroll became the first auto-placed child and landed
+     in the collapsed 0px transport row. Use one real row and pin the scroll
+     viewport to it explicitly so ruler/tracks can never collapse. */
+  grid-template-rows:minmax(0,1fr)!important;
+}
+.editorMain.portraitSideControls .timelineScroll{
+  grid-row:1!important;
+  min-height:0!important;
+  height:100%!important;
+}
+.editorMain.portraitSideControls .timelineZoomBadge{top:6px!important}
+
+/* Once the transport row is gone, timeline overlays start at the ruler. */
+.editorMain.portraitSideControls .playhead,
+.editorMain.portraitSideControls .keyframeDragGuide,
+.editorMain.portraitSideControls .layerTrimDragGuide{
+  top:0!important;
+  bottom:0!important;
+}
+.editorMain.portraitSideControls .liveAudioMeter{top:0!important}
+
+/* The original nodes are moved, not cloned, so all existing event listeners,
+   ids, keyframe logic and split-handle pointer ownership remain intact. */
+.portraitSideRail .previewTools,
+.portraitSideRail .transport{
+  pointer-events:auto;
+  position:static!important;
+  width:44px;
+  height:auto!important;
+  min-height:0!important;
+  max-height:100%;
+  margin:0;
+  padding:4px 3px!important;
+  border:1px solid rgba(62,70,94,.72)!important;
+  border-radius:12px;
+  background:rgba(18,22,32,.90)!important;
+  box-shadow:0 5px 18px rgba(0,0,0,.22);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+.portraitLeftRail .previewTools{
+  display:flex!important;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:1px;
+  border-top:1px solid rgba(62,70,94,.72)!important;
+}
+.portraitSideRail .previewTools button,
+.portraitSideRail .transport button{
+  width:36px!important;
+  min-width:36px!important;
+  height:32px!important;
+  flex:0 0 32px;
+  padding:0!important;
+}
+.portraitSideRail .editorSplitSlot{
+  min-width:36px;
+  width:36px;
+  height:30px;
+  flex:0 0 30px!important;
+  align-self:center;
+}
+.portraitSideRail .editorSplitHandle{
+  width:36px!important;
+  height:28px!important;
+}
+
+/* Keep the existing time readout, but turn it into a compact vertical badge. */
+.portraitLeftRail .previewTools .tc{
+  min-width:0!important;
+  width:30px;
+  height:56px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  writing-mode:vertical-rl;
+  transform:rotate(180deg);
+  font-size:7px;
+  letter-spacing:.25px;
+  line-height:1;
+  overflow:hidden;
+  flex:0 0 56px;
+}
+
+/* The horizontal zoom slider becomes a compact vertical slider. */
+.portraitLeftRail .zoomCtl{
+  width:36px;
+  height:94px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  align-items:center;
+  gap:0;
+  flex:0 0 94px;
+}
+.portraitLeftRail .zoomCtl span{font-size:13px;line-height:14px}
+.portraitLeftRail .zoomCtl input{
+  width:66px!important;
+  height:18px;
+  margin:22px -15px;
+  transform:rotate(-90deg);
+  transform-origin:center;
+}
+
+/* Reflow the clean transport groups vertically in the right rail. */
+.portraitRightRail .transportBalanced{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:1px!important;
+  border-bottom:1px solid rgba(62,70,94,.72)!important;
+}
+.portraitRightRail .transportBalanced .transportLeft,
+.portraitRightRail .transportBalanced .transportCenter,
+.portraitRightRail .transportBalanced .transportRight{
+  width:36px;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:1px!important;
+}
+
+/* Side mode is intentionally mobile/tablet only. */
+@media (min-width:900px){
+  .portraitSideRail{display:none!important}
+  .editorMain.portraitSideControls .viewport{padding-left:0;padding-right:0}
+}
+
+/* Very small phones still get touch-safe controls without consuming too much
+   horizontal gutter. */
+@media (max-width:380px){
+  .portraitSideRail{width:40px}
+  .portraitLeftRail{left:1px}.portraitRightRail{right:1px}
+  .editorMain.portraitSideControls .viewport{padding-left:44px;padding-right:44px}
+  .portraitSideRail .previewTools,.portraitSideRail .transport{width:39px;padding-left:1px!important;padding-right:1px!important}
+  .portraitSideRail .previewTools button,.portraitSideRail .transport button{width:33px!important;min-width:33px!important}
+}
+</style>
+
+<style id="oms-collapsible-editor-top-v400">
+/* =========================================================
+   V4.00 — Collapsible editor top bar.
+   The project/navigation bar can be hidden to reclaim vertical space.
+   Export remains pinned in the upper-right corner, and the existing floating
+   + button temporarily becomes the restore affordance while the bar is hidden.
+   ========================================================= */
+.editorTopCollapseBtn{font-size:22px;line-height:1}
+
+.editor.topBarCollapsed{
+  grid-template-rows:0 minmax(0,1fr)!important;
+}
+.editor.topBarCollapsed .editorTop{
+  height:0!important;
+  min-height:0!important;
+  padding:0!important;
+  gap:0!important;
+  border:0!important;
+  background:transparent!important;
+  overflow:visible!important;
+  position:relative;
+  z-index:90;
+  pointer-events:none;
+}
+.editor.topBarCollapsed #backHome,
+.editor.topBarCollapsed #editorTitle,
+.editor.topBarCollapsed #saveProject,
+.editor.topBarCollapsed #settingsBtn,
+.editor.topBarCollapsed #collapseEditorTop{
+  display:none!important;
+}
+.editor.topBarCollapsed .editorTop .topActions{
+  position:absolute!important;
+  top:8px;
+  right:8px;
+  width:38px;
+  height:38px;
+  display:block!important;
+  pointer-events:none;
+  z-index:92;
+}
+.editor.topBarCollapsed #openExport{
+  display:grid!important;
+  place-items:center;
+  position:absolute!important;
+  inset:0!important;
+  width:38px!important;
+  height:38px!important;
+  border:1px solid rgba(66,76,100,.72)!important;
+  border-radius:10px!important;
+  background:rgba(17,21,30,.88)!important;
+  box-shadow:0 5px 18px rgba(0,0,0,.24);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  pointer-events:auto!important;
+  z-index:93;
+}
+/* While the top bar is hidden, + is guaranteed to stay above drawers because
+   it is also the only restore control requested by the UI. */
+.editor.topBarCollapsed #plusBtn{
+  z-index:80!important;
+  transform:none!important;
+  background:#17221f!important;
+  border-color:var(--accent)!important;
+  color:var(--accent)!important;
+}
+.editor.topBarCollapsed #plusBtn::after{
+  content:"";
+  position:absolute;
+  inset:-7px;
+  border-radius:50%;
+  border:1px solid rgba(115,226,189,.16);
+  pointer-events:none;
+}
+@media (min-width:900px){
+  .editor.topBarCollapsed .editorTop .topActions{top:10px;right:12px}
+}
+</style>
+
+
+<style id="oms-collapsible-editor-top-v401-fix">
+/* =========================================================
+   V4.01 — persistent collapsed-header + floating button fix.
+   Drawers must never implicitly restore the editor header. The floating +
+   stays above any open drawer; while the header is collapsed it remains the
+   dedicated restore affordance requested by the portrait workflow.
+   ========================================================= */
+.editor.drawerOverlayOpen #plusBtn{
+  position:fixed!important;
+  right:12px!important;
+  top:var(--oms-floating-plus-top,auto)!important;
+  bottom:auto!important;
+  z-index:120!important;
+}
+.editor.topBarCollapsed #plusBtn{
+  z-index:120!important;
+}
+.editor.topBarCollapsed:not(.drawerOverlayOpen) #plusBtn{
+  position:fixed!important;
+  right:12px!important;
+  top:auto!important;
+  bottom:12px!important;
+}
+@media (min-width:900px){
+  .editor.drawerOverlayOpen #plusBtn{right:20px!important}
+}
+</style>
+
+<style id="oms-collapsible-editor-top-v402-dedicated-restore">
+/* =========================================================
+   V4.02 — dedicated top-bar restore button.
+   The green floating + is once again exclusively Add Layer. When the editor
+   header is collapsed, a separate + appears beside the pinned Export button.
+   ========================================================= */
+.restoreEditorTopBtn{display:none!important}
+.editor.topBarCollapsed .editorTop .topActions{
+  width:82px!important;
+  height:38px!important;
+  display:block!important;
+}
+.editor.topBarCollapsed #restoreEditorTop{
+  display:grid!important;
+  place-items:center;
+  position:absolute!important;
+  left:0!important;
+  top:0!important;
+  width:38px!important;
+  height:38px!important;
+  border:1px solid rgba(66,76,100,.72)!important;
+  border-radius:10px!important;
+  background:rgba(17,21,30,.88)!important;
+  box-shadow:0 5px 18px rgba(0,0,0,.24);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  pointer-events:auto!important;
+  z-index:94;
+  font-size:24px!important;
+  line-height:1!important;
+}
+.editor.topBarCollapsed #openExport{
+  left:auto!important;
+  right:0!important;
+  top:0!important;
+  bottom:auto!important;
+  inset:auto 0 auto auto!important;
+}
+/* Floating + stays the normal layer button even while the header is hidden. */
+.editor.topBarCollapsed #plusBtn{
+  background:#17221f!important;
+  border-color:var(--accent)!important;
+  color:var(--accent)!important;
+}
+.editor.topBarCollapsed #plusBtn::after{display:none!important}
+@media (min-width:900px){
+  .editor.topBarCollapsed .editorTop .topActions{width:82px!important}
+}
+</style>
+
+
+
+<style id="oms-v403-compact-top-controls-badge-reset-plus">
+/* =========================================================
+   V4.03 — compact collapsed-header controls + transient mode badge.
+   - The green Add Layer + returns to its original timeline position and can
+     be covered by drawers/Inspector again.
+   - Collapsed-header restore + and Export are 30% smaller (38px -> 27px).
+   - 2D COMPOSITE sits to the left of those controls while they are pinned.
+   ========================================================= */
+.editor #plusBtn,
+.editor.topBarCollapsed #plusBtn,
+.editor.drawerOverlayOpen #plusBtn,
+.editor.topBarCollapsed.drawerOverlayOpen #plusBtn,
+.editor.topBarCollapsed:not(.drawerOverlayOpen) #plusBtn{
+  position:absolute!important;
+  right:10px!important;
+  top:auto!important;
+  bottom:12px!important;
+  z-index:20!important;
+  transform:none!important;
+}
+
+.editor.topBarCollapsed .editorTop .topActions{
+  top:8px!important;
+  right:8px!important;
+  width:58px!important;
+  height:27px!important;
+}
+.editor.topBarCollapsed #restoreEditorTop{
+  left:0!important;
+  top:0!important;
+  width:27px!important;
+  height:27px!important;
+  border-radius:8px!important;
+  font-size:17px!important;
+  line-height:1!important;
+}
+.editor.topBarCollapsed #openExport{
+  right:0!important;
+  top:0!important;
+  width:27px!important;
+  height:27px!important;
+  border-radius:8px!important;
+  font-size:14px!important;
+  line-height:1!important;
+}
+.editor.topBarCollapsed #modeBadge{
+  top:8px!important;
+  right:74px!important;
+  max-width:calc(100% - 154px);
+  white-space:nowrap;
+}
+
+@media (min-width:900px){
+  .editor #plusBtn,
+  .editor.topBarCollapsed #plusBtn,
+  .editor.drawerOverlayOpen #plusBtn,
+  .editor.topBarCollapsed.drawerOverlayOpen #plusBtn,
+  .editor.topBarCollapsed:not(.drawerOverlayOpen) #plusBtn{right:20px!important}
+  .editor.topBarCollapsed .editorTop .topActions{top:10px!important;right:12px!important;width:58px!important;height:27px!important}
+  .editor.topBarCollapsed #modeBadge{top:10px!important;right:82px!important}
+}
+</style>
 </head>
 <body>
 <div class="app">
@@ -2370,7 +2839,7 @@ input[type=range]{accent-color:var(--accent)}
     <header class="editorTop">
       <button id="backHome" class="topIcon">←</button>
       <div id="editorTitle" class="editorTitle">Tanpa judul<small>1080 × 1920 • 30 fps</small></div>
-      <div class="topActions"><button id="saveProject" class="topIcon" title="Simpan">⤓</button><button id="settingsBtn" class="topIcon">⚙</button><button id="openExport" class="topIcon">↗</button></div>
+      <div class="topActions"><button id="saveProject" class="topIcon" title="Simpan">⤓</button><button id="settingsBtn" class="topIcon">⚙</button><button id="collapseEditorTop" class="topIcon editorTopCollapseBtn" type="button" title="Sembunyikan bilah atas" aria-label="Sembunyikan bilah atas">−</button><button id="restoreEditorTop" class="topIcon restoreEditorTopBtn" type="button" title="Tampilkan bilah atas" aria-label="Tampilkan bilah atas">＋</button><button id="openExport" class="topIcon" title="Export" aria-label="Export">↗</button></div>
     </header>
     <main class="editorMain">
       <section class="previewArea">
@@ -2385,7 +2854,7 @@ input[type=range]{accent-color:var(--accent)}
         <div class="previewTools">
           <button id="undoBtn">↶</button><button id="redoBtn">↷</button><button id="fitBtn" title="Sesuaikan Area Komposisi">⌗</button>
           <button id="toggle3d" title="Ruang 3D">◇</button><button id="cameraView" title="Lihat melalui kamera">⌾</button>
-          <div class="grow"></div><div class="tc" id="previewTime">00:00:00</div>
+          <div class="grow editorSplitSlot"><button id="editorSplitHandle" class="editorSplitHandle" type="button" aria-label="Geser batas preview dan timeline" title="Tahan lalu geser vertikal untuk mengatur tinggi timeline"><span class="editorSplitGrip" aria-hidden="true"></span></button></div><div class="tc" id="previewTime">00:00:00</div>
           <div class="zoomCtl"><span>−</span><input id="zoom" type="range" min="10" max="300" value="70"><span>＋</span></div>
         </div>
       </section>
@@ -2643,6 +3112,20 @@ class MediaAssetRegistry{
     if(!this.isMedia(layer))return layer;
     if(layer.dataUrl)this.captureLayer(layer);
     else if(layer.assetId&&this.sources.has(layer.assetId))layer.dataUrl=this.sources.get(layer.assetId);
+    // V4.07 — history/media continuity fallback. A history snapshot intentionally
+    // omits media bytes, so recover from a still-live object URL or native Blob
+    // before treating the layer as missing. This also covers cases where a
+    // transient registry source string was cleared while the Blob survived.
+    if(!layer.dataUrl&&layer.assetId){
+      const liveUrl=this.objectUrls?.get?.(layer.assetId);
+      if(liveUrl){layer.dataUrl=liveUrl;this.sources.set(layer.assetId,liveUrl)}
+      else{
+        const blob=this.blobs?.get?.(layer.assetId);
+        if(blob instanceof Blob&&typeof this.attachBlob==='function'){
+          try{layer.dataUrl=this.attachBlob(layer.assetId,blob)||''}catch(e){}
+        }
+      }
+    }
     const waveform=layer.assetId&&this.waveforms.get(layer.assetId);
     if(waveform&&!Array.isArray(layer.audioWave)){layer.audioWave=waveform.wave;layer.audioWaveDuration=waveform.duration}
     return layer
@@ -2855,15 +3338,55 @@ class ProjectModel{
   snapshot({includeMedia=true}={}){return JSON.stringify(this.serialize({includeMedia}))}
   restore(str){
     const previousProjectId=this.project?.id,d=typeof str==='string'?JSON.parse(str):str;
-    mediaAssets.captureLayers(this.layers);
-    this.disposeAllRuntime();
+    const previousLayers=Array.isArray(this.layers)?this.layers:[];
+    const incomingLayers=Array.isArray(d.layers)?d.layers:[];
+    mediaAssets.captureLayers(previousLayers);
+
+    // V4.07 — preserve live media runtime across Undo/Redo when the restored
+    // snapshot still points at the same layer + asset. Recreating <video>/<audio>
+    // for every history step causes a visible blank frame on Android and can race
+    // a decoder teardown, occasionally leaving the layer looking permanently
+    // disconnected. Reusing the same layer object keeps its decoder, frame cache,
+    // AudioNode and MediaManager WeakMap state alive while serializable properties
+    // are rolled backward/forward around it.
+    const incomingById=new Map(incomingLayers.map(l=>[l?.id,l]));
+    const reusableMedia=new Map();
+    const runtimeKeys=new Set([
+      'dataUrl','img','video','audio','audioNode','frameCanvas','frameCtx','frameRequestId',
+      'frameCacheReady','frameCacheTime','cacheVideoFrame','_offlineDecodeLock',
+      '_offlineDecodeEpoch','_offlineCachedTarget','_offlinePresentedMediaTime','_disposed',
+      'waveformPending','waveformError'
+    ]);
+    for(const old of previousLayers){
+      const next=incomingById.get(old?.id);
+      const sameAsset=!!next&&mediaAssets.isMedia(old)&&mediaAssets.isMedia(next)&&old.type===next.type&&
+        !!old.assetId&&old.assetId===next.assetId;
+      if(sameAsset){reusableMedia.set(old.id,old);continue}
+      this.disposeLayerRuntime(old)
+    }
     this.project=d.project;
     if(this.project&&!this.project.playheadMode)this.project.playheadMode='center';
     if(this.project&&!Number.isFinite(this.project.timelinePx))this.project.timelinePx=55;
     if(this.project&&typeof this.project.audioVisualizer!=='boolean')this.project.audioVisualizer=true;
     const migrateTransformSpaceDefaults=!!this.project&&(+this.project.transformSpaceDefaultsVersion||0)<2;
     if(this.project){this.project.sceneVersion=4;this.project.renderer='webgl';this.project.colorSpace||='srgb';this.project.transformSpaceDefaultsVersion=2}
-    this.layers=d.layers||[];
+    const reusedIds=new Set();
+    this.layers=incomingLayers.map(next=>{
+      const old=reusableMedia.get(next?.id);
+      if(!old)return next;
+      const runtime={};
+      for(const key of runtimeKeys)if(Object.prototype.hasOwnProperty.call(old,key))runtime[key]=old[key];
+      const liveSource=old.dataUrl||mediaAssets.sources.get(old.assetId)||mediaAssets.objectUrls?.get?.(old.assetId)||'';
+      // Remove stale serializable properties so Undo can truly delete/reset a
+      // property while keeping only runtime-only fields alive.
+      for(const key of Object.keys(old))if(!runtimeKeys.has(key))delete old[key];
+      Object.assign(old,next);
+      if(!old.dataUrl&&liveSource)old.dataUrl=liveSource;
+      Object.assign(old,runtime);
+      old._disposed=false;
+      reusedIds.add(old.id);
+      return old
+    });
     this.layers.forEach(l=>{
       mediaAssets.resolveLayer(l);
       // Projects saved before per-layer 3D existed used the scene-wide flag.
@@ -2931,7 +3454,10 @@ class ProjectModel{
     this.layers.filter(l=>l.type==='camera').forEach(l=>{if(!ids.has(l.orbitTargetId)){l.orbitEnabled=false;l.orbitTargetId=null}});
     this.selected=d.selected||null;this.time=d.time||0;this.mode3d=!!d.mode3d;this.cameraView=d.cameraView!==false;this.snap=d.snap!==false;
     if(!this.editorCamera||previousProjectId!==this.project?.id)this.resetEditorCamera();
-    this.hydrateAll();bus.emit('model:restored')
+    // Only hydrate layers whose runtime was not preserved. Re-hydrating reused
+    // media would create a second decoder and defeat the continuity fix above.
+    this.layers.forEach(l=>{if(!reusedIds.has(l.id))this.hydrateLayer(l);else mediaAssets.resolveLayer(l)});
+    bus.emit('model:restored')
   }
   hydrateAll(){this.layers.forEach(l=>this.hydrateLayer(l))}
   hydrateLayer(l){
@@ -6694,6 +7220,7 @@ class OMSAutoSave{
 }
 const autosave=new OMSAutoSave(persistentStore);
 
+let portraitSideControls=null;
 class UIController{
   constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true}
   cameraModeBadgeText(){
@@ -6718,17 +7245,11 @@ class UIController{
     },duration+30);
   }
   shouldShowCameraModeNotice(){
-    return model.scene3DActive()&&performance.now()<this._cameraNoticeUntil
+    return performance.now()<this._cameraNoticeUntil
   }
   refreshCameraModeBadgeVisibility(){
     const badge=$('#modeBadge');
     if(!badge)return;
-    if(!model.scene3DActive()){
-      badge.style.opacity='1';
-      badge.style.transform='translateY(0)';
-      badge.style.pointerEvents='none';
-      return;
-    }
     const visible=this.shouldShowCameraModeNotice();
     badge.style.opacity=visible?'1':'0';
     badge.style.transform=visible?'translateY(0)':'translateY(-6px)';
@@ -6737,7 +7258,7 @@ class UIController{
   updateCameraViewState(){
     if(!model.project)return;
     const scene3d=model.scene3DActive(),signature=`${scene3d}:${model.cameraView}`;
-    if(this._cameraViewSignature!==signature){const badge=$('#modeBadge');if(badge)badge.innerHTML=scene3d?this.cameraModeBadgeText():`<b>2D</b> COMPOSITE`;const button=$('#cameraView');if(button){button.classList.toggle('active',scene3d&&model.cameraView);button.disabled=!scene3d;button.title=scene3d?(model.cameraView?'Cubit preview untuk Free Perspective':'Kembali ke Camera Perspective'):'Tidak ada layer 3D aktif';button.setAttribute('aria-label',button.title)}if(scene3d)this.showCameraModeNotice();this._cameraViewSignature=signature}
+    if(this._cameraViewSignature!==signature){const badge=$('#modeBadge');if(badge)badge.innerHTML=scene3d?this.cameraModeBadgeText():`<b>2D</b> COMPOSITE`;const button=$('#cameraView');if(button){button.classList.toggle('active',scene3d&&model.cameraView);button.disabled=!scene3d;button.title=scene3d?(model.cameraView?'Cubit preview untuk Free Perspective':'Kembali ke Camera Perspective'):'Tidak ada layer 3D aktif';button.setAttribute('aria-label',button.title)}this.showCameraModeNotice();this._cameraViewSignature=signature}
     this.refreshCameraModeBadgeVisibility();
     $('#toggle3d')?.classList.toggle('active',scene3d);
     $('#canvasWrap')?.classList.toggle('editorCameraActive',scene3d&&!model.cameraView)
@@ -6773,19 +7294,24 @@ class UIController{
     const pw=Math.max(1,+model.project.width||1);
     const ph=Math.max(1,+model.project.height||1);
 
-    // Margin kecil saja: komposisi dibuat sebesar mungkin tetapi tidak crop.
-    const availW=Math.max(40,vp.clientWidth-8);
-    const availH=Math.max(40,vp.clientHeight-8);
+    /* V3.94 — use the viewport's ACTUAL rendered box, not a stale preview
+       target. This matters when drawers or the manual split change height. */
+    const rect=vp.getBoundingClientRect();
+    const cs=getComputedStyle(vp);
+    const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+    const padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
+    const safety=4;
+    const availW=Math.max(12,rect.width-padX-safety);
+    const availH=Math.max(12,rect.height-padY-safety);
 
-    const z=clamp(
-      Math.min(availW/pw,availH/ph),
-      .08,
-      3
-    );
+    // Never impose a minimum zoom large enough to crop a tall composition.
+    const fitZoom=Math.min(availW/pw,availH/ph);
+    const z=Math.min(3,Math.max(.005,fitZoom));
 
     model.zoom=z;
-    wrap.style.width=(pw*z)+'px';
-    wrap.style.height=(ph*z)+'px';
+    // Floor dimensions so sub-pixel rounding cannot overflow by 1 px.
+    wrap.style.width=Math.max(1,Math.floor(pw*z))+'px';
+    wrap.style.height=Math.max(1,Math.floor(ph*z))+'px';
 
     const zoom=$('#zoom');
     if(zoom)zoom.value=Math.round(z*100);
@@ -6820,16 +7346,30 @@ class UIController{
     const ph=Math.max(1,+model.project.height||1);
     const aspectH=ph/pw;
 
-    const toolsH=tools?.offsetHeight||40;
+    const sideControls=main.classList.contains('portraitSideControls');
+    const toolsH=sideControls?0:(tools?.offsetHeight||40);
 
     // Sisakan timeline yang tetap nyaman untuk ruler + beberapa layer.
     const minTimeline=clamp(mainH*.29,220,310);
     const maxPreview=Math.max(230,mainH-minTimeline);
 
-    // Tinggi preview ideal bila komposisi menggunakan hampir seluruh lebar.
-    const desiredCanvasW=Math.max(120,previewW-12);
+    /* V4.06 — use the REAL viewport content width for portrait side-controls.
+       The previous calculation used preview.clientWidth, which still included
+       the 52px left/right rail gutters. That made the restored preview taller
+       than the 9:16 canvas could actually fill after an Inspector was closed,
+       leaving a visible empty strip above/below the composition. */
+    const vp=$('#viewport');
+    let desiredCanvasW=Math.max(120,previewW-12);
+    let viewportPadY=0;
+    if(vp){
+      const vr=vp.getBoundingClientRect();
+      const vcs=getComputedStyle(vp);
+      const vpx=(parseFloat(vcs.paddingLeft)||0)+(parseFloat(vcs.paddingRight)||0);
+      viewportPadY=(parseFloat(vcs.paddingTop)||0)+(parseFloat(vcs.paddingBottom)||0);
+      desiredCanvasW=Math.max(120,vr.width-vpx-4);
+    }
     const desiredCanvasH=desiredCanvasW*aspectH;
-    const desiredPreview=desiredCanvasH+toolsH+12;
+    const desiredPreview=desiredCanvasH+toolsH+viewportPadY+4;
 
     const previewH=clamp(
       desiredPreview,
@@ -9252,6 +9792,504 @@ class UIController{
 
 const ui=new UIController();
 
+/* =========================================================
+   V3.94 — adaptive preview/timeline split + live canvas refit
+   - Drag the centered grip in the preview toolbar vertically.
+   - Canvas refits continuously while the timeline moves.
+   - Opening Inspector/Add/Settings automatically reserves enough room above
+     the drawer for 2–3 timeline layers whenever the screen allows it.
+   - Automatic drawer accommodation is temporary; closing the drawer restores
+     the user's base split unless the user manually changed it.
+   ========================================================= */
+class EditorSplitController{
+  constructor(ui){
+    this.ui=ui;
+    this.pointerId=null;
+    this.dragging=false;
+    this.dragRAF=0;
+    this.fitRAF=0;
+    this.resizeFitRAF=0;
+    this.pendingHeight=null;
+    this.viewportResizeObserver=null;
+    this.preDrawerHeight=null;
+    this.drawerWasOpen=false;
+    this.manualDuringDrawer=false;
+    this.lastDrawerTop=null;
+    this.install();
+  }
+  /* V4.05 — portrait side-controls are touch/mobile only. Desktop-class
+     environments keep the original horizontal preview + playback toolbars
+     even when a 9:16 (or taller) composition is open or the window is narrow. */
+  mobile(){
+    const narrow=window.matchMedia('(max-width:899px)').matches;
+    const coarse=window.matchMedia('(pointer:coarse)').matches;
+    const fine=window.matchMedia('(pointer:fine)').matches;
+    const hover=window.matchMedia('(hover:hover)').matches;
+    return narrow && coarse && !(fine&&hover);
+  }
+  main(){return document.querySelector('.editorMain')}
+  preview(){return document.querySelector('.previewArea')}
+  drawer(){return document.getElementById('drawer')}
+  handle(){return document.getElementById('editorSplitHandle')}
+  timelineArea(){return document.querySelector('.timelineArea')}
+  isDrawerOpen(){const d=this.drawer();return !!d&&!d.classList.contains('hidden')}
+  projectRatio(){
+    const v=Number(model.project?.editorPreviewRatio);
+    return Number.isFinite(v)&&v>.12&&v<.88?v:null;
+  }
+  rememberRatio(px){
+    const main=this.main();
+    if(!main||!model.project)return;
+    const ratio=clamp(px/Math.max(1,main.clientHeight),.16,.78);
+    model.project.editorPreviewRatio=ratio;
+  }
+  defaultBaseHeight(){
+    const main=this.main(),preview=this.preview();
+    if(!main||!preview)return 0;
+    const ratio=this.projectRatio();
+    if(ratio!=null)return ratio*main.clientHeight;
+    if(this.preDrawerHeight!=null)return this.preDrawerHeight;
+    return preview.getBoundingClientRect().height||main.clientHeight*.54;
+  }
+  limits(){
+    const main=this.main();
+    const h=Math.max(1,main?.clientHeight||1);
+    const minPreview=clamp(h*.22,150,260);
+    const minTimeline=clamp(h*.24,190,300);
+    return{minPreview,maxPreview:Math.max(minPreview,h-minTimeline),mainH:h};
+  }
+  /* V3.95 — tall portrait compositions (9:16 or taller) prioritize the
+     canvas when a drawer/Inspector is open. Project dimensions can be rounded
+     (for example 608×1080), so use a small tolerance around exact 9:16. */
+  tallPortraitComposition(){
+    const pw=Math.max(1,+model.project?.width||1);
+    const ph=Math.max(1,+model.project?.height||1);
+    return ph/pw >= (16/9)*0.99;
+  }
+  visibleLayerTarget(){
+    const count=Math.max(0,model.layers?.length||0);
+    if(count<=1)return count||1;
+    if(this.tallPortraitComposition())return 1;
+    const h=this.main()?.clientHeight||0;
+    return count>=3&&h>=560?3:2;
+  }
+  requiredTimelineAboveDrawer(){
+    /* V3.96 — use the ACTUAL rendered timeline metrics. For 9:16-or-taller
+       compositions the automatic drawer layout must expose exactly one full
+       track: no extra breathing room, because that gap reveals the next layer. */
+    const area=this.timelineArea();
+    const sideControls=this.main()?.classList.contains('portraitSideControls');
+    const transportH=sideControls?0:(area?.querySelector('.transport')?.getBoundingClientRect().height||38);
+    const rulerH=document.getElementById('ruler')?.getBoundingClientRect().height||22;
+    const firstTrack=document.querySelector('#tracks .track');
+    const trackH=firstTrack?.getBoundingClientRect().height||29;
+    const breathing=this.tallPortraitComposition()?0:12;
+    return Math.ceil(transportH+rulerH+this.visibleLayerTarget()*trackH+breathing);
+  }
+  maxPreviewWithDrawer(){
+    const main=this.main(),drawer=this.drawer();
+    if(!main||!drawer||!this.isDrawerOpen())return Infinity;
+    const mr=main.getBoundingClientRect();
+    const dr=drawer.getBoundingClientRect();
+    return dr.top-mr.top-this.requiredTimelineAboveDrawer();
+  }
+  clampHeight(px,{drawerSafe=true}={}){
+    const {minPreview,maxPreview}=this.limits();
+    let max=maxPreview;
+    if(drawerSafe&&this.mobile()&&this.isDrawerOpen()){
+      const safe=this.maxPreviewWithDrawer();
+      if(Number.isFinite(safe))max=Math.min(max,Math.max(minPreview,safe));
+    }
+    return clamp(px,minPreview,Math.max(minPreview,max));
+  }
+  fitCanvasNow({render=false}={}){
+    try{this.ui.applyCompositionFitZoom()}catch(e){}
+    try{timeline.updateDrawerOverlap()}catch(e){}
+    if(render){try{renderer.render()}catch(e){}}
+  }
+  scheduleFit({render=true}={}){
+    cancelAnimationFrame(this.fitRAF);
+    this.fitRAF=requestAnimationFrame(()=>this.fitCanvasNow({render}));
+  }
+  applyHeight(px,{drawerSafe=true,fit=true,render=true}={}){
+    if(!this.mobile())return;
+    const main=this.main();
+    if(!main)return;
+    const h=this.clampHeight(px,{drawerSafe});
+    const minTimeline=Math.max(0,Math.round(main.clientHeight-h));
+    main.classList.add('fitCompositionLayout');
+    main.style.gridTemplateRows=Math.round(h)+'px minmax('+minTimeline+'px,1fr)';
+
+    /* During a manual drag, force layout once and only resize the visual
+       composition. Avoiding a full renderer.render() on every pointer sample
+       makes the splitter track the finger much more closely on Android. */
+    if(fit){
+      if(this.dragging)this.fitCanvasNow({render:false});
+      else this.scheduleFit({render});
+    }
+    return h;
+  }
+  applyBase({fit=true}={}){
+    if(!this.mobile())return;
+    const h=this.defaultBaseHeight();
+    if(h>0)this.applyHeight(h,{drawerSafe:false,fit});
+  }
+  captureBeforeDrawer(){
+    if(!this.mobile())return;
+    const preview=this.preview();
+    if(!preview)return;
+    this.preDrawerHeight=this.projectRatio()!=null
+      ?this.projectRatio()*Math.max(1,this.main()?.clientHeight||1)
+      :preview.getBoundingClientRect().height;
+    this.manualDuringDrawer=false;
+  }
+  ensureLayerGroupVisible(){
+    if(!this.mobile()||!this.isDrawerOpen())return;
+    const sc=document.getElementById('timelineScroll');
+    const rows=[...document.querySelectorAll('#tracks .track')];
+    const drawer=this.drawer();
+    if(!sc||!rows.length||!drawer)return;
+    const wanted=Math.min(this.visibleLayerTarget(),rows.length);
+    let idx=Math.max(0,rows.findIndex(r=>r.dataset.layerId===model.selected));
+    if(idx<0)idx=0;
+    let start=Math.max(0,Math.min(idx-1,rows.length-wanted));
+    const sr=sc.getBoundingClientRect();
+    const target=rows[start];
+    if(!target)return;
+    const tr=target.getBoundingClientRect();
+    const rulerSpace=22;
+    const next=Math.max(0,sc.scrollTop+(tr.top-(sr.top+rulerSpace)));
+    sc.scrollTop=next;
+  }
+  autoForDrawer(iter=0){
+    if(!this.mobile()||!this.isDrawerOpen())return;
+    const main=this.main(),drawer=this.drawer();
+    if(!main||!drawer)return;
+    const base=this.preDrawerHeight??this.defaultBaseHeight();
+    const safeMax=this.maxPreviewWithDrawer();
+    let target=base;
+    if(Number.isFinite(safeMax)){
+      /* In automatic mode, 9:16-or-taller projects expand the preview all the
+         way to the safe drawer boundary, leaving exactly one timeline layer
+         visible. A user-saved manual split remains authoritative. */
+      const tallAuto=this.tallPortraitComposition()&&this.projectRatio()==null&&!this.manualDuringDrawer;
+      target=tallAuto?safeMax:Math.min(target,safeMax);
+    }
+    this.applyHeight(target,{drawerSafe:true,fit:true,render:iter>=3});
+
+    // Drawer dimensions can depend on viewport/timeline height. Re-evaluate a
+    // few frames so nested Inspector pages and Add Hub settle correctly.
+    if(iter<3){
+      requestAnimationFrame(()=>this.autoForDrawer(iter+1));
+    }else{
+      // One final synchronous fit guarantees tall (9:16, 4:5, etc.) canvases
+      // use the final viewport height rather than an earlier intermediate size.
+      this.fitCanvasNow({render:true});
+      this.ensureLayerGroupVisible();
+      try{timeline.updateDrawerOverlap()}catch(e){}
+    }
+  }
+  onDrawerOpened(wasHidden){
+    if(!this.mobile())return;
+    if(wasHidden)this.captureBeforeDrawer();
+    requestAnimationFrame(()=>this.autoForDrawer(0));
+  }
+  onDrawerClosed(){
+    if(!this.mobile())return;
+    const hadManualRatio=this.projectRatio()!=null;
+    const portraitAuto=!hadManualRatio&&!this.manualDuringDrawer&&this.main()?.classList.contains('portraitSideControls');
+
+    if(portraitAuto){
+      /* V4.06 — after a drawer closes, recompute the automatic portrait split
+         from the current viewport/gutter geometry instead of restoring a stale
+         pre-drawer pixel height. This removes the small canvas gap that could
+         remain after opening then closing Inspector. */
+      this.preDrawerHeight=null;
+      this.manualDuringDrawer=false;
+      requestAnimationFrame(()=>{
+        this.ui.fit();
+        requestAnimationFrame(()=>{
+          this.fitCanvasNow({render:false});
+          requestAnimationFrame(()=>this.fitCanvasNow({render:true}));
+        });
+      });
+      return;
+    }
+
+    if(!this.manualDuringDrawer&&this.preDrawerHeight!=null){
+      const restore=hadManualRatio
+        ?this.projectRatio()*Math.max(1,this.main()?.clientHeight||1)
+        :this.preDrawerHeight;
+      requestAnimationFrame(()=>this.applyHeight(restore,{drawerSafe:false,fit:true}));
+    }else if(hadManualRatio){
+      requestAnimationFrame(()=>this.applyBase({fit:true}));
+    }
+    this.preDrawerHeight=null;
+    this.manualDuringDrawer=false;
+  }
+  afterFit(){
+    if(!this.mobile())return;
+    requestAnimationFrame(()=>{
+      if(this.isDrawerOpen())this.autoForDrawer(0);
+      else if(this.projectRatio()!=null)this.applyBase({fit:true});
+    });
+  }
+  pointerDown(e){
+    if(!this.mobile()||this.pointerId!=null)return;
+    e.preventDefault();e.stopPropagation();
+    this.pointerId=e.pointerId;
+    this.dragging=true;
+    const h=this.handle();
+    h?.classList.add('dragging');
+    this.main()?.classList.add('editorSplitDragging');
+    try{h?.setPointerCapture(e.pointerId)}catch(err){}
+    if(this.isDrawerOpen()&&this.preDrawerHeight==null)this.captureBeforeDrawer();
+    this.pointerMove(e);
+  }
+  pointerMove(e){
+    if(e.pointerId!==this.pointerId||!this.dragging)return;
+    e.preventDefault();e.stopPropagation();
+    const samples=e.getCoalescedEvents?.();
+    const p=samples?.length?samples[samples.length-1]:e;
+    const main=this.main();if(!main)return;
+    const mr=main.getBoundingClientRect();
+    this.pendingHeight=p.clientY-mr.top;
+    if(this.dragRAF)return;
+    this.dragRAF=requestAnimationFrame(()=>{
+      this.dragRAF=0;
+      if(this.pendingHeight==null)return;
+      const applied=this.applyHeight(this.pendingHeight,{drawerSafe:true,fit:true,render:false});
+      if(applied!=null){
+        this.rememberRatio(applied);
+        if(this.isDrawerOpen()){
+          this.manualDuringDrawer=true;
+          this.preDrawerHeight=applied;
+        }
+      }
+    });
+  }
+  pointerEnd(e){
+    if(e.pointerId!==this.pointerId)return;
+    e.preventDefault();e.stopPropagation();
+    const h=this.handle();
+    try{h?.releasePointerCapture(e.pointerId)}catch(err){}
+    h?.classList.remove('dragging');
+    this.main()?.classList.remove('editorSplitDragging');
+    this.pointerId=null;this.dragging=false;this.pendingHeight=null;
+    if(this.isDrawerOpen())requestAnimationFrame(()=>this.autoForDrawer(0));
+    else{
+      this.applyBase({fit:false});
+      this.scheduleFit({render:true});
+    }
+    try{bus.emit('model:changed')}catch(err){}
+  }
+  install(){
+    const h=this.handle();
+    if(h){
+      h.addEventListener('pointerdown',e=>this.pointerDown(e),{passive:false});
+      h.addEventListener('pointermove',e=>this.pointerMove(e),{passive:false});
+      h.addEventListener('pointerup',e=>this.pointerEnd(e),{passive:false});
+      h.addEventListener('pointercancel',e=>this.pointerEnd(e),{passive:false});
+      h.addEventListener('dblclick',e=>{
+        e.preventDefault();
+        if(model.project)delete model.project.editorPreviewRatio;
+        this.preDrawerHeight=null;
+        this.manualDuringDrawer=false;
+        this.ui.fit();
+      });
+    }
+
+    // Hook every drawer entry point. Nested inspector pages also pass through
+    // drawerShell, so the visible-layer guarantee remains active inside them.
+    const originalDrawerShell=this.ui.drawerShell.bind(this.ui);
+    this.ui.drawerShell=(title,html)=>{
+      const wasHidden=this.drawer()?.classList.contains('hidden')!==false;
+      const out=originalDrawerShell(title,html);
+      this.onDrawerOpened(wasHidden);
+      return out;
+    };
+    const originalOpenTool=this.ui.openTool.bind(this.ui);
+    this.ui.openTool=(tool)=>{
+      const wasHidden=this.drawer()?.classList.contains('hidden')!==false;
+      if(wasHidden)this.captureBeforeDrawer();
+      const out=originalOpenTool(tool);
+      this.onDrawerOpened(false);
+      return out;
+    };
+    const originalCloseDrawer=this.ui.closeDrawer.bind(this.ui);
+    this.ui.closeDrawer=()=>{
+      const wasOpen=this.isDrawerOpen();
+      const out=originalCloseDrawer();
+      if(wasOpen)this.onDrawerClosed();
+      return out;
+    };
+    const originalFit=this.ui.fit.bind(this.ui);
+    this.ui.fit=()=>{
+      const out=originalFit();
+      this.afterFit();
+      return out;
+    };
+    const originalShowEditor=this.ui.showEditor.bind(this.ui);
+    this.ui.showEditor=()=>{
+      const out=originalShowEditor();
+      if(out!==false)setTimeout(()=>this.afterFit(),50);
+      return out;
+    };
+
+    // Keep canvas fit tied to the real viewport box. This also catches
+    // address-bar changes, drawer content settling and any other layout change
+    // that does not emit a window resize event.
+    if('ResizeObserver' in window){
+      const vp=document.getElementById('viewport');
+      if(vp){
+        this.viewportResizeObserver=new ResizeObserver(()=>{
+          cancelAnimationFrame(this.resizeFitRAF);
+          this.resizeFitRAF=requestAnimationFrame(()=>this.fitCanvasNow({render:false}));
+        });
+        this.viewportResizeObserver.observe(vp);
+      }
+    }
+
+    window.addEventListener('resize',()=>setTimeout(()=>this.afterFit(),80),{passive:true});
+  }
+}
+const editorSplit=new EditorSplitController(ui);
+
+
+/* =========================================================
+   V4.05 — desktop keeps horizontal toolbar for 9:16.
+   V3.99 — selectable 9:16 portrait layout + timeline grid fix
+   ========================================================= */
+class PortraitSideControlsController{
+  constructor(ui,split){
+    this.ui=ui;
+    this.split=split;
+    this.active=false;
+    this.leftRail=null;
+    this.rightRail=null;
+    this.previewAnchor=null;
+    this.transportAnchor=null;
+    this.resizeRAF=0;
+    this.install();
+  }
+  main(){return document.querySelector('.editorMain')}
+  viewport(){return document.getElementById('viewport')}
+  previewTools(){return document.querySelector('.previewTools')}
+  transport(){return document.querySelector('.transport')}
+  previewArea(){return document.querySelector('.previewArea')}
+  timelineArea(){return document.querySelector('.timelineArea')}
+  mobile(){return !window.matchMedia('(min-width:900px)').matches}
+  layoutPreference(){
+    try{return localStorage.getItem('oms_portrait_layout')==='classic'?'classic':'side'}catch(e){return'side'}
+  }
+  setLayoutPreference(value){
+    const next=value==='classic'?'classic':'side';
+    try{localStorage.setItem('oms_portrait_layout',next)}catch(e){}
+    return next;
+  }
+  tallPortrait(){
+    const pw=Math.max(1,+model.project?.width||1);
+    const ph=Math.max(1,+model.project?.height||1);
+    return ph/pw >= (16/9)*0.99;
+  }
+  shouldEnable(){
+    if(this.layoutPreference()!=='side')return false;
+    if(!model.project||!this.mobile()||!this.tallPortrait())return false;
+    const vp=this.viewport();
+    // 320 CSS px still leaves a useful center column after two touch rails.
+    return (vp?.clientWidth||window.innerWidth||0)>=320;
+  }
+  ensureRails(){
+    const vp=this.viewport();
+    if(!vp)return false;
+    if(!this.leftRail){
+      this.leftRail=document.createElement('div');
+      this.leftRail.className='portraitSideRail portraitLeftRail';
+      this.leftRail.setAttribute('aria-label','Kontrol preview portrait');
+    }
+    if(!this.rightRail){
+      this.rightRail=document.createElement('div');
+      this.rightRail.className='portraitSideRail portraitRightRail';
+      this.rightRail.setAttribute('aria-label','Kontrol playback portrait');
+    }
+    if(this.leftRail.parentNode!==vp)vp.appendChild(this.leftRail);
+    if(this.rightRail.parentNode!==vp)vp.appendChild(this.rightRail);
+    return true;
+  }
+  rememberHomes(){
+    const tools=this.previewTools(),transport=this.transport();
+    if(tools&&!this.previewAnchor){
+      this.previewAnchor=document.createComment('oms-preview-tools-home-v397');
+      tools.parentNode?.insertBefore(this.previewAnchor,tools);
+    }
+    if(transport&&!this.transportAnchor){
+      this.transportAnchor=document.createComment('oms-transport-home-v397');
+      transport.parentNode?.insertBefore(this.transportAnchor,transport);
+    }
+  }
+  activate(){
+    if(this.active)return false;
+    const main=this.main(),tools=this.previewTools(),transport=this.transport();
+    if(!main||!tools||!transport||!this.ensureRails())return false;
+    this.rememberHomes();
+    this.leftRail.appendChild(tools);
+    this.rightRail.appendChild(transport);
+    main.classList.add('portraitSideControls');
+    this.active=true;
+    return true;
+  }
+  restoreAfter(anchor,node){
+    const parent=anchor?.parentNode;
+    if(!parent||!node)return;
+    parent.insertBefore(node,anchor.nextSibling);
+  }
+  deactivate(){
+    if(!this.active)return false;
+    const main=this.main();
+    const tools=this.previewTools(),transport=this.transport();
+    this.restoreAfter(this.previewAnchor,tools);
+    this.restoreAfter(this.transportAnchor,transport);
+    main?.classList.remove('portraitSideControls');
+    this.active=false;
+    return true;
+  }
+  sync({refit=true}={}){
+    const changed=this.shouldEnable()?this.activate():this.deactivate();
+    if(changed&&refit){
+      requestAnimationFrame(()=>{
+        try{this.ui.applyCompositionFitZoom()}catch(e){}
+        if(this.split?.isDrawerOpen?.())this.split.autoForDrawer(0);
+        else this.split?.scheduleFit?.({render:true});
+      });
+    }
+    return changed;
+  }
+  install(){
+    // editorSplit already wraps ui.fit. Wrap that final function so side mode
+    // is resolved BEFORE every composition-fit calculation.
+    const previousFit=this.ui.fit.bind(this.ui);
+    this.ui.fit=()=>{
+      this.sync({refit:false});
+      const out=previousFit();
+      requestAnimationFrame(()=>this.sync({refit:false}));
+      return out;
+    };
+
+    window.addEventListener('resize',()=>{
+      cancelAnimationFrame(this.resizeRAF);
+      this.resizeRAF=requestAnimationFrame(()=>{
+        const changed=this.sync({refit:false});
+        if(changed)this.ui.fit();
+        else this.ui.applyCompositionFitZoom();
+      });
+    },{passive:true});
+
+    // Resolve the initial project state once the current script finishes.
+    requestAnimationFrame(()=>this.sync({refit:false}));
+  }
+}
+portraitSideControls=new PortraitSideControlsController(ui,editorSplit);
+
 class ViewportNavigator{
   constructor(model,renderer,ui,canvas){
     this.model=model;this.renderer=renderer;this.ui=ui;this.canvas=canvas;this.pointers=new Map();this.gesture=null;this.prePinch=null;
@@ -10669,6 +11707,59 @@ const closeNewProjectModal=()=>{
   homeFab.style.pointerEvents='auto';
 };
 
+/* =========================================================
+   V4.00 — editor top-bar visibility controller.
+   - The minus button hides the project/navigation header.
+   - Export stays visible as a pinned upper-right control.
+   - V4.02 adds a dedicated + beside Export to restore the header.
+   - The green floating + always keeps its normal Add Layer behavior.
+   ========================================================= */
+const editorTopVisibility={
+  collapsed:false,
+  editor(){return $('#editor')},
+  plus(){return $('#plusBtn')},
+  reflow(){
+    requestAnimationFrame(()=>{
+      portraitSideControls?.sync?.({refit:false});
+      ui.fit();
+      timeline.rebuild();
+      if(editorSplit?.isDrawerOpen?.())editorSplit.autoForDrawer(0);
+      else editorSplit?.scheduleFit?.({render:true});
+      requestAnimationFrame(()=>renderer.render());
+    });
+  },
+  set(collapsed,{reflow=true}={}){
+    const ed=this.editor();
+    if(!ed)return;
+    this.collapsed=!!collapsed;
+    ed.classList.toggle('topBarCollapsed',this.collapsed);
+    const btn=$('#collapseEditorTop');
+    if(btn){
+      btn.setAttribute('aria-pressed',String(this.collapsed));
+      btn.title=this.collapsed?'Tampilkan bilah atas':'Sembunyikan bilah atas';
+    }
+    const restore=$('#restoreEditorTop');
+    if(restore){
+      restore.setAttribute('aria-hidden',String(!this.collapsed));
+      restore.tabIndex=this.collapsed?0:-1;
+    }
+    // The green floating + always keeps its original Add Layer / close-drawer role.
+    const plus=this.plus();
+    if(plus){
+      plus.classList.remove('restoreTopBar');
+      plus.title='Tambah layer';
+      plus.setAttribute('aria-label','Tambah layer');
+      if(!this.collapsed&&!$('#drawer')?.classList.contains('hidden')&&$('#drawer')?.classList.contains('addDrawer'))plus.classList.add('open');
+    }
+    if(reflow)this.reflow();
+  },
+  hide(){this.set(true)},
+  show(options){this.set(false,options)},
+  toggle(){this.set(!this.collapsed)}
+};
+$('#collapseEditorTop').onclick=()=>editorTopVisibility.hide();
+$('#restoreEditorTop').onclick=()=>editorTopVisibility.show();
+
 $('#closeNew').onclick=closeNewProjectModal;
 
 $$('#aspectGrid .aspect').forEach(b=>b.onclick=()=>{
@@ -10678,7 +11769,7 @@ $$('#aspectGrid .aspect').forEach(b=>b.onclick=()=>{
 });
 
 $('#createProject').onclick=createProject;
-$('#backHome').onclick=async()=>{await autosave.flush();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}ui.showHome()};$('#saveProject').onclick=()=>ui.saveLocal(true);$('#undoBtn').onclick=()=>history.undo();$('#redoBtn').onclick=()=>history.redo();$('#fitBtn').onclick=()=>ui.fit();$('#zoom').oninput=e=>ui.setZoom(+e.target.value/100);
+$('#backHome').onclick=async()=>{await autosave.flush();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}editorTopVisibility.show({reflow:false});ui.showHome()};$('#saveProject').onclick=()=>ui.saveLocal(true);$('#undoBtn').onclick=()=>history.undo();$('#redoBtn').onclick=()=>history.redo();$('#fitBtn').onclick=()=>ui.fit();$('#zoom').oninput=e=>ui.setZoom(+e.target.value/100);
 $('#toggle3d').onclick=()=>{model.mode3d=!model.mode3d;if(model.mode3d&&!model.hasActive3DLayer())toast('Aktifkan Ruang 3D pada layer atau tampilkan layer kamera');ui.syncProject();renderer.render()};
 $('#cameraView').onclick=()=>{if(model.cameraView){viewportNav.enterFromMainCamera();renderer.render()}else viewportNav.setCameraView(true)};
 $('#snapToggle').onclick=()=>{model.snap=!model.snap;ui.syncProject()};
@@ -10715,7 +11806,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#languageModal'
 $('#projectSort').onchange=()=>ui.loadProjectList();
 applyHomeLanguage();
 $('#projectInput').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const text=await f.text(),isXML=/\.xml$/i.test(f.name)||/^\s*</.test(text),raw=isXML?XMLBridge.parse(text,f.name):JSON.parse(text),payload=!isXML&&['open-motion-v3','open-motion-v4'].includes(raw.format)?{project:raw.project,layers:raw.layers,selected:raw.selected,time:raw.time,mode3d:raw.mode3d,cameraView:raw.cameraView,snap:raw.snap}:raw;if(!payload.project||!Array.isArray(payload.layers))throw Error('schema');model.restore(payload);history.clear();ui.authorizeEditorOpen();ui.showEditor();toast(isXML?'XML dimigrasikan ke scene 3D':'Paket proyek dibuka')}catch(err){console.error(err);toast('File proyek/XML tidak valid')}e.target.value=''};
-$('#settingsBtn').onclick=()=>{if(!model.project)return;const d=ui.drawerShell('Project & Environment',`<div class="drawerBody propPanel"><div class="true3dCard"><i>4</i><div><b>Open Motion Scene 4</b><small>WebGL • matriks 4×4 • XML interchange • satu file HTML</small></div></div><div class="propRow"><label>Nama</label><input id="projectNameEdit" value="${esc(model.project.name)}"><span></span></div><div class="colorRow"><input id="bgEdit" type="color" value="${model.project.bg}"><input value="Background" disabled></div><div class="switchRow"><span>Grid Dunia 3D</span><input id="gridEdit" type="checkbox" ${model.project.grid?'checked':''}></div><div class="propRow"><label>Playhead</label><select id="playheadModeSelect"><option value="center">Tetap di Tengah</option><option value="moving">Bergerak (Mode Lama)</option></select><span></span></div><div class="miniNote" id="playheadModeHelp">Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.</div><div class="miniNote">Editor Camera hanya mengubah sudut pandang kerja. PNG dan video selalu dirender melalui Main Camera tanpa grid atau gizmo editor.</div></div>`);ui.drawerMode='settings';$('#projectNameEdit').onchange=e=>{history.push();model.project.name=e.target.value;ui.syncProject()};$('#bgEdit').oninput=e=>{model.project.bg=e.target.value;renderer.render()};$('#gridEdit').onchange=e=>{model.project.grid=e.target.checked;renderer.render()};const ph=$('#playheadModeSelect');ph.value=model.project.playheadMode||'center';const updateHelp=()=>{$('#playheadModeHelp').textContent=ph.value==='center'?'Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.':'Bergerak (Mode Lama): timeline tetap pada posisi scroll dan playhead bergerak mengikuti waktu.'};updateHelp();ph.onchange=e=>{history.push();model.project.playheadMode=e.target.value;const sc=$('#timelineScroll');if(model.project.playheadMode==='moving')sc.scrollLeft=0;timeline.rebuild();renderer.render();updateHelp()}};
+$('#settingsBtn').onclick=()=>{if(!model.project)return;const d=ui.drawerShell('Project & Environment',`<div class="drawerBody propPanel"><div class="true3dCard"><i>4</i><div><b>Open Motion Scene 4</b><small>WebGL • matriks 4×4 • XML interchange • satu file HTML</small></div></div><div class="propRow"><label>Nama</label><input id="projectNameEdit" value="${esc(model.project.name)}"><span></span></div><div class="colorRow"><input id="bgEdit" type="color" value="${model.project.bg}"><input value="Background" disabled></div><div class="switchRow"><span>Grid Dunia 3D</span><input id="gridEdit" type="checkbox" ${model.project.grid?'checked':''}></div><div class="propRow"><label>Playhead</label><select id="playheadModeSelect"><option value="center">Tetap di Tengah</option><option value="moving">Bergerak (Mode Lama)</option></select><span></span></div><div class="miniNote" id="playheadModeHelp">Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.</div><div class="propRow"><label>Layout 9:16</label><select id="portraitLayoutSelect"><option value="side">Samping (Baru)</option><option value="classic">Horizontal (Klasik)</option></select><span></span></div><div class="miniNote" id="portraitLayoutHelp">Khusus komposisi 9:16 atau lebih tinggi pada mobile. Pilihan ini disimpan di perangkat.</div><div class="miniNote">Editor Camera hanya mengubah sudut pandang kerja. PNG dan video selalu dirender melalui Main Camera tanpa grid atau gizmo editor.</div></div>`);ui.drawerMode='settings';$('#projectNameEdit').onchange=e=>{history.push();model.project.name=e.target.value;ui.syncProject()};$('#bgEdit').oninput=e=>{model.project.bg=e.target.value;renderer.render()};$('#gridEdit').onchange=e=>{model.project.grid=e.target.checked;renderer.render()};const ph=$('#playheadModeSelect');ph.value=model.project.playheadMode||'center';const updateHelp=()=>{$('#playheadModeHelp').textContent=ph.value==='center'?'Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.':'Bergerak (Mode Lama): timeline tetap pada posisi scroll dan playhead bergerak mengikuti waktu.'};updateHelp();ph.onchange=e=>{history.push();model.project.playheadMode=e.target.value;const sc=$('#timelineScroll');if(model.project.playheadMode==='moving')sc.scrollLeft=0;timeline.rebuild();renderer.render();updateHelp()};const portraitSel=$('#portraitLayoutSelect');if(portraitSel){portraitSel.value=portraitSideControls?.layoutPreference?.()||'side';portraitSel.onchange=e=>{portraitSideControls?.setLayoutPreference?.(e.target.value);const changed=portraitSideControls?.sync?.({refit:false});requestAnimationFrame(()=>{ui.fit();timeline.rebuild();if(editorSplit?.isDrawerOpen?.())editorSplit.autoForDrawer(0);else editorSplit?.scheduleFit?.({render:true});if(changed)renderer.render()})}}};
 
 document.addEventListener('keydown',e=>{const tag=document.activeElement?.tagName;if(['INPUT','SELECT','TEXTAREA'].includes(tag))return;if(e.code==='Space'){e.preventDefault();clock.toggle()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?history.redo():history.undo()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();ui.saveLocal()}if(e.key==='Delete'&&model.selected){history.push();model.removeLayer(model.selected);ui.rebuildAll()}});
 window.addEventListener('resize',()=>{
@@ -10965,7 +12056,11 @@ scheduleWholeAppLanguage();
   mediaAssets.attachBlob=function(id,blob){
     if(!id||!(blob instanceof Blob))return null;
     const prev=this.objectUrls.get(id);
-    if(prev){try{URL.revokeObjectURL(prev)}catch(e){}}
+    // V4.07 — asset ids are immutable media identities. If an object URL for
+    // this id is already alive, keep using it instead of revoking it during an
+    // IndexedDB re-hydration. Revoking here can invalidate a decoder that is
+    // still attached to the same media layer during Undo/Redo.
+    if(prev){this.blobs.set(id,blob);this.sources.set(id,prev);return prev}
     const url=URL.createObjectURL(blob);
     this.blobs.set(id,blob);this.objectUrls.set(id,url);this.sources.set(id,url);
     return url;
@@ -11129,10 +12224,35 @@ scheduleWholeAppLanguage();
   // V3.58: shortcut relink hanya berada di grid Inspector, tepat setelah Ruang 3D.
   // Fungsi no-op dipertahankan agar hook restore versi sebelumnya tetap kompatibel.
   function refreshRelinkButton(){}
-  bus.on('model:restored',()=>setTimeout(()=>{
+  bus.on('model:restored',()=>setTimeout(async()=>{
     refreshRelinkButton();
-    const n=(model.layers||[]).filter(l=>isMedia(l)&&!l.dataUrl&&!mediaAssets.sources.get(l.assetId)).length;
-    if(n)safeToast(`${n} media proyek belum tersedia. Pilih layer lalu gunakan “Tautkan ulang media”.`);
+    // V4.07 — history snapshots contain assetId but deliberately omit media
+    // bytes. If RAM registry recovery missed an asset, try IndexedDB silently
+    // before presenting the layer as disconnected. This makes Undo/Redo robust
+    // even after memory pressure clears the transient source map.
+    let missing=(model.layers||[]).filter(l=>isMedia(l)&&!l.dataUrl&&!mediaAssets.sources.get(l.assetId));
+    if(missing.length){
+      try{
+        const lookup={project:{...(model.project||{})},layers:missing.map(l=>({id:l.id,assetId:l.assetId,type:l.type,name:l.name||''}))};
+        await persistentStore.hydrateAssets(lookup);
+        let recovered=0;
+        for(const layer of missing){
+          const hadRuntime=!!(layer.img||layer.video||layer.audio);
+          mediaAssets.resolveLayer(layer);
+          if(layer.dataUrl&&!hadRuntime){
+            try{model.hydrateLayer(layer)}catch(e){}
+            try{await media.probe(layer)}catch(e){}
+            recovered++
+          }
+        }
+        if(recovered){
+          try{ui.rebuildAll()}catch(e){}
+          try{renderer.render()}catch(e){}
+        }
+      }catch(e){console.warn('Pemulihan media setelah restore history gagal:',e)}
+      missing=(model.layers||[]).filter(l=>isMedia(l)&&!l.dataUrl&&!mediaAssets.sources.get(l.assetId));
+    }
+    if(missing.length)safeToast(`${missing.length} media proyek belum tersedia. Pilih layer lalu gunakan “Tautkan ulang media”.`);
     persistentStore.requestDurableStorage();
   },0));
 
@@ -11488,6 +12608,90 @@ scheduleWholeAppLanguage();
 })();
 
 
+/* =========================================================
+   V4.01 — keep collapsed top bar independent from drawers.
+   Also keep the floating + physically reachable above every open drawer.
+   ========================================================= */
+(function installTopBarDrawerPersistenceV401(){
+  if(window.__OMS_TOPBAR_DRAWER_FIX_V401__)return;
+  window.__OMS_TOPBAR_DRAWER_FIX_V401__=true;
+
+  const editorEl=()=>document.getElementById('editor');
+  const drawerEl=()=>document.getElementById('drawer');
+  const plusEl=()=>document.getElementById('plusBtn');
+  const drawerOpen=()=>{const d=drawerEl();return !!d&&!d.classList.contains('hidden')};
+
+  editorTopVisibility.syncFloatingButton=function(){
+    const ed=editorEl(),d=drawerEl(),plus=plusEl();
+    if(!ed||!plus)return;
+    const open=drawerOpen();
+    ed.classList.toggle('drawerOverlayOpen',open);
+    if(open&&d){
+      const dr=d.getBoundingClientRect();
+      const size=Math.max(42,plus.getBoundingClientRect().height||42);
+      const gap=10;
+      const maxTop=Math.max(8,(window.innerHeight||document.documentElement.clientHeight||0)-size-8);
+      const top=Math.max(8,Math.min(maxTop,dr.top-size-gap));
+      ed.style.setProperty('--oms-floating-plus-top',Math.round(top)+'px');
+    }else{
+      ed.style.removeProperty('--oms-floating-plus-top');
+    }
+  };
+
+  // Extend the original visibility setter rather than replacing its behavior.
+  // hide()/show()/toggle() already call this.set(), so they automatically use
+  // the V4.01 placement logic after this wrapper is installed.
+  const originalTopSet=editorTopVisibility.set.bind(editorTopVisibility);
+  editorTopVisibility.set=function(collapsed,options={}){
+    const out=originalTopSet(collapsed,options);
+    requestAnimationFrame(()=>this.syncFloatingButton());
+    return out;
+  };
+
+  const keepCollapsedAfter=(fn,ctx)=>function(...args){
+    const ed=editorEl();
+    const wasCollapsed=!!editorTopVisibility.collapsed||!!ed?.classList.contains('topBarCollapsed');
+    const out=fn.apply(ctx,args);
+    // Some drawer entry paths rebuild/reflow sizeable parts of the editor.
+    // Reassert the state after that work so a drawer can never resurrect the
+    // project header as a side effect.
+    if(wasCollapsed)editorTopVisibility.set(true,{reflow:false});
+    requestAnimationFrame(()=>editorTopVisibility.syncFloatingButton());
+    return out;
+  };
+
+  // Wrap the FINAL UI methods (after the localization/adaptive-layout wrappers),
+  // making this the outermost guard for Inspector and Add Hub entry points.
+  if(ui&&typeof ui.drawerShell==='function')ui.drawerShell=keepCollapsedAfter(ui.drawerShell,ui);
+  if(ui&&typeof ui.openTool==='function')ui.openTool=keepCollapsedAfter(ui.openTool,ui);
+
+  if(ui&&typeof ui.closeDrawer==='function'){
+    const close=ui.closeDrawer.bind(ui);
+    ui.closeDrawer=function(...args){
+      const out=close(...args);
+      requestAnimationFrame(()=>editorTopVisibility.syncFloatingButton());
+      return out;
+    };
+  }
+
+  // Keep + above drawers whose height changes when navigating to nested
+  // Inspector pages, opening the keyboard, or rotating the phone.
+  const d=drawerEl();
+  if(d&&'ResizeObserver' in window){
+    const ro=new ResizeObserver(()=>editorTopVisibility.syncFloatingButton());
+    ro.observe(d);
+    window.__OMS_TOPBAR_DRAWER_FIX_V401_RO__=ro;
+  }
+  if(d&&'MutationObserver' in window){
+    const mo=new MutationObserver(()=>requestAnimationFrame(()=>editorTopVisibility.syncFloatingButton()));
+    mo.observe(d,{attributes:true,attributeFilter:['class','style']});
+    window.__OMS_TOPBAR_DRAWER_FIX_V401_MO__=mo;
+  }
+  window.addEventListener('resize',()=>requestAnimationFrame(()=>editorTopVisibility.syncFloatingButton()),{passive:true});
+  editorTopVisibility.syncFloatingButton();
+})();
+
+
 (async()=>{
   // Always start at Home after opening or refreshing Open Motion.
   // Saved projects and editing progress remain persisted; the user chooses
@@ -11523,5 +12727,83 @@ scheduleWholeAppLanguage();
 
 
 
+
+<!-- V3.95 — tall 9:16+ compositions reserve one timeline layer in automatic drawer mode to maximize canvas size. -->
+<!-- V3.96 — tall portrait auto-layout removes the extra timeline breathing gap so only one full layer is visible. -->
+
+<!--
+OPEN MOTION — LONG-TERM PLUGIN ROADMAP (V3.92 NOTE ONLY)
+
+Goal:
+  In the long term, Open Motion may support a plugin ecosystem that can also
+  interoperate with selected concepts and effects originating from Adobe After Effects.
+
+Architecture direction:
+  1. Open Motion Plugin SDK as the primary and native extension model.
+  2. Plugin backends may include:
+     - CPU effects
+     - GPU/shader effects
+     - WebAssembly effects for the web build
+     - Native plugins for future Android/Desktop builds
+  3. External compatibility adapters can be added on top of the Open Motion API.
+
+After Effects compatibility plan:
+  - Do NOT assume universal direct support for .aex binaries.
+  - Prefer adapters/converters for source-available effects and portable algorithms.
+  - Prioritize import/translation of practical subsets such as expressions, presets,
+    LUTs, shaders, parameter mappings, and other portable effect descriptions.
+  - A deeper AE compatibility layer may be researched for future native builds,
+    but only for plugin categories where the required host APIs can be reproduced
+    safely, legally, and with acceptable performance.
+
+Important design rule:
+  Open Motion should not depend on Adobe's runtime or make AE compatibility a hard
+  requirement for its own plugin system. The Open Motion Plugin SDK must remain the
+  stable core; AE support, if implemented, should stay modular and optional.
+
+Status:
+  Long-term roadmap only. No runtime implementation is enabled by this note.
+-->
+<!-- V3.97 — portrait side controls move preview + transport toolbars into the 9:16 canvas gutters on mobile. -->
+
+<!-- V3.99 — Layout 9:16 can be switched between Side (new) and Horizontal (classic) in Project & Environment settings. The preference is stored locally on the device. -->
+
+<!-- V4.00 — collapsible editor top bar; export stays pinned, floating + restores the header. -->
+<!-- V4.01 — hidden top bar persists across Inspector/drawers; floating + stays above open panels. -->
+<!-- V4.02 — dedicated + beside Export restores the top bar; green floating + is Add Layer only. -->
+<!-- V4.03 — green Add Layer + returns to timeline bottom/behind drawers; collapsed restore + and Export are 30% smaller; 2D COMPOSITE is transient and offset left of pinned controls. -->
+<!-- V4.06 — portrait side-controls use true viewport content width; closing Inspector recomputes automatic split to eliminate residual canvas gaps. -->
+
+<style id="oms-v404-centered-restore-plus">
+/* =========================================================
+   V4.04 — optically centered restore + icon.
+   The Unicode full-width plus had font-dependent baseline metrics, so the
+   collapsed-header restore button now draws its + from two centered bars.
+   ========================================================= */
+.editor.topBarCollapsed #restoreEditorTop{
+  font-size:0!important;
+  line-height:0!important;
+}
+.editor.topBarCollapsed #restoreEditorTop::before,
+.editor.topBarCollapsed #restoreEditorTop::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:12px;
+  height:1.6px;
+  background:currentColor;
+  border-radius:2px;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+.editor.topBarCollapsed #restoreEditorTop::after{
+  transform:translate(-50%,-50%) rotate(90deg);
+}
+</style>
+<!-- V4.04 — restore + is drawn with centered CSS bars for exact optical centering. -->
+
+<!-- V4.07 — Undo/Redo media continuity: preserve unchanged media runtimes,
+     recover asset bytes from RAM/Blob/IndexedDB, and avoid revoking live Blob URLs. -->
 </body>
 </html>
