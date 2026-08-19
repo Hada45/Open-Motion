@@ -10486,8 +10486,51 @@ const HOME_I18N={
  pt:{import:'IMPORTAR',workspace:'ESPAÇO LOCAL',projects:'Seus Projetos',sort:'Ordenar projetos',newest:'Mais recentes',oldest:'Mais antigos',name:'Nome',newProject:'NOVO PROJETO',language:'Idioma',languageDesc:'Escolha o idioma da interface do Open Motion.',languageFoot:'A escolha fica guardada neste dispositivo e pode ser alterada a qualquer momento na página inicial.',noProjects:'Ainda não há projetos',noProjectsDesc:'Toque em Novo Projeto para começar uma composição.',unsaved:'Não guardado',today:'Hoje',openProject:'Abrir projeto {name}',untitled:'Sem nome'},
  ta:{import:'இறக்குமதி',workspace:'உள்ளூர் பணியிடம்',projects:'உங்கள் திட்டங்கள்',sort:'திட்டங்களை வரிசைப்படுத்து',newest:'புதியவை',oldest:'பழையவை',name:'பெயர்',newProject:'புதிய திட்டம்',language:'மொழி',languageDesc:'Open Motion இடைமுக மொழியைத் தேர்ந்தெடுக்கவும்.',languageFoot:'தேர்வு இந்த சாதனத்தில் சேமிக்கப்படும்; முகப்பிலிருந்து எப்போது வேண்டுமானாலும் மாற்றலாம்.',noProjects:'இன்னும் திட்டங்கள் இல்லை',noProjectsDesc:'தொடங்க புதிய திட்டம் என்பதைத் தட்டவும்.',unsaved:'சேமிக்கப்படவில்லை',today:'இன்று',openProject:'{name} திட்டத்தைத் திற',untitled:'பெயரிடப்படாதது'}
 };
-let homeLanguage=(()=>{try{return localStorage.getItem('oms_language')||'id'}catch(e){return'id'}})();
-if(!HOME_I18N[homeLanguage])homeLanguage='id';
+/* V3.91 — automatic system-language detection.
+   A language explicitly chosen by the user remains authoritative. If no manual
+   choice exists yet, detect the browser/OS language on every launch. */
+function detectSystemHomeLanguage(){
+  const aliases={
+    id:'id',in:'id',
+    en:'en',
+    zh:'zh',
+    ja:'ja',
+    ms:'ms',
+    th:'th',
+    vi:'vi',
+    fil:'fil',tl:'fil',
+    my:'my',
+    km:'km',
+    lo:'lo',
+    tet:'tet',
+    pt:'pt',
+    ta:'ta'
+  };
+  let systemLanguages=[];
+  try{
+    if(Array.isArray(navigator.languages))systemLanguages.push(...navigator.languages);
+    if(navigator.language)systemLanguages.push(navigator.language);
+  }catch(e){}
+  for(const raw of systemLanguages){
+    const tag=String(raw||'').trim().toLowerCase().replace(/_/g,'-');
+    if(!tag)continue;
+    if(HOME_I18N[tag])return tag;
+    const base=tag.split('-')[0];
+    const mapped=aliases[base];
+    if(mapped&&HOME_I18N[mapped])return mapped;
+  }
+  // Unsupported system languages use the international English pack rather
+  // than silently assuming Indonesian.
+  return 'en';
+}
+let homeLanguage=(()=>{
+  try{
+    const manual=localStorage.getItem('oms_language');
+    if(manual&&HOME_I18N[manual])return manual;
+  }catch(e){}
+  return detectSystemHomeLanguage();
+})();
+if(!HOME_I18N[homeLanguage])homeLanguage=detectSystemHomeLanguage();
 function homeTr(key){return HOME_I18N[homeLanguage]?.[key]??HOME_I18N.id[key]??key}
 function homeLocale(){return HOME_LANGUAGES.find(x=>x.id===homeLanguage)?.locale||'id-ID'}
 function renderLanguageList(){
