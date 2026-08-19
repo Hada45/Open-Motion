@@ -1,0 +1,49 @@
+name: Apply Open Motion v4.07
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.openmotion-upload/v407.ready'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply verified Open Motion v4.07 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '88788014b6b7fa8ce83c601ea1ee921cb504be203cc915bad31f30ddb82d9466  index.html' | sha256sum -c -
+          cat .openmotion-upload/v407.patch0* | base64 -d | gzip -dc > /tmp/v407.patch
+          echo '09b69ae7812450280c82d1646c6ac0153bff9e7875ab6123a623c3eb9845f28e  /tmp/v407.patch' | sha256sum -c -
+          git apply --check /tmp/v407.patch
+          git apply /tmp/v407.patch
+          echo '4e2ba46e08e362efd0bfbbb2705a30b90681978d674f0e9a9c95d8fc595a2c40  index.html' | sha256sum -c -
+          python - <<'PY'
+          from pathlib import Path
+          import re, subprocess, tempfile, sys
+          html=Path('index.html').read_text(encoding='utf-8')
+          scripts=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', html, flags=re.S|re.I)
+          for i,src in enumerate(scripts):
+              p=Path(f'/tmp/v407_script_{i}.js')
+              p.write_text(src,encoding='utf-8')
+              subprocess.run(['node','--check',str(p)],check=True)
+          print(f'Checked {len(scripts)} inline scripts')
+          PY
+      - name: Commit Open Motion v4.07
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git rm -f .openmotion-upload/v407.patch.b64 .openmotion-upload/v407.patch0* .openmotion-upload/v407.ready .github/workflows/apply-open-motion-v407.yml
+          git commit -m 'Update index.html to Open Motion v4.07'
+          git push origin HEAD:main
