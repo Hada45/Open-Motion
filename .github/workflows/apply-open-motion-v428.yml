@@ -2,8 +2,9 @@ name: Apply Open Motion v4.28
 
 on:
   push:
+    branches: [main]
     paths:
-      - '.open_motion_v428/READY'
+      - '.open_motion_v428/v428.ready'
 
 permissions:
   contents: write
@@ -16,26 +17,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply verified V4.28 patch
+      - name: Apply verified Open Motion v4.28 patch
         shell: bash
         run: |
           set -euo pipefail
           cat .open_motion_v428/xzpart00 .open_motion_v428/xzpart01 > /tmp/v428.patch.xz.b64
           base64 -d /tmp/v428.patch.xz.b64 > /tmp/v428.patch.xz
           xz -dc /tmp/v428.patch.xz > /tmp/v428.patch
-          echo "a56f0a3c05580ce279d38ce88f873428cc59e94e4abfe4edbdfcb3358e6e0beb  /tmp/v428.patch" | sha256sum -c -
+          echo 'a56f0a3c05580ce279d38ce88f873428cc59e94e4abfe4edbdfcb3358e6e0beb  /tmp/v428.patch' | sha256sum -c -
           git apply --check /tmp/v428.patch
           git apply /tmp/v428.patch
-          echo "dea95019fa59863a71a4ccfa95e4b7cffaa3e0c2b67d355fea995337400b7677  index.html" | sha256sum -c -
+          echo 'dea95019fa59863a71a4ccfa95e4b7cffaa3e0c2b67d355fea995337400b7677  index.html' | sha256sum -c -
+          python - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          html=Path('index.html').read_text(encoding='utf-8')
+          scripts=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', html, flags=re.S|re.I)
+          for i,src in enumerate(scripts):
+              p=Path(f'/tmp/v428_script_{i}.js')
+              p.write_text(src,encoding='utf-8')
+              subprocess.run(['node','--check',str(p)],check=True)
+          print(f'Checked {len(scripts)} inline scripts')
+          PY
 
       - name: Commit Open Motion v4.28
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm -rf .open_motion_v428
-          rm -f .github/workflows/apply-open-motion-v428.yml
-          git add -A
-          git commit -m "Update index.html to Open Motion v4.28"
-          git push origin main
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git rm -rf .open_motion_v428 .github/workflows/apply-open-motion-v428.yml
+          git commit -m 'Update index.html to Open Motion v4.28'
+          git push origin HEAD:main
