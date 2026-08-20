@@ -1,16 +1,15 @@
 name: Apply Open Motion v4.28
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.open_motion_v428/v428.ready'
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.event.issue.title == 'Apply Open Motion v4.28'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
