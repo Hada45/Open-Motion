@@ -1,7 +1,7 @@
 name: Apply Open Motion v4.28
 
 on:
-  issues:
+  pull_request:
     types: [opened]
 
 permissions:
@@ -9,11 +9,12 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.issue.title == 'Apply Open Motion v4.28'
+    if: github.event.pull_request.title == 'Apply Open Motion v4.28'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Apply verified Open Motion v4.28 patch
