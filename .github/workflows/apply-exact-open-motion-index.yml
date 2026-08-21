@@ -5,17 +5,21 @@ on:
     branches: [main]
     paths:
       - '.oms-stage/READY'
+  pull_request:
+    types: [opened]
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.event_name == 'push' || github.event.pull_request.title == 'Apply exact Open Motion baseline'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
       - name: Assemble exact index.html
         shell: bash
@@ -38,4 +42,4 @@ jobs:
             exit 0
           fi
           git commit -m 'Restore index.html to exact SVG play-center baseline'
-          git push
+          git push origin main
