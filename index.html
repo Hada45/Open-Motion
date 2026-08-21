@@ -143,7 +143,7 @@ input[type=range]{accent-color:var(--accent)}
 .positionAxisValue{appearance:none;width:100%;font:inherit;cursor:pointer;transition:border-color .12s,background .12s,box-shadow .12s,opacity .12s;touch-action:none;user-select:none}.positionAxisValue:not(.active){opacity:.68}.positionAxisValue.active{border-color:var(--accent);background:#1d3033;box-shadow:inset 0 -2px 0 var(--accent)}.positionAxisValue.active small{color:#a9f7e5}.positionAxisValue:focus-visible{outline:2px solid #fff;outline-offset:1px}
 .positionAxisNumber{display:block;width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--accent);font:inherit;font-size:13px;font-variant-numeric:tabular-nums;text-align:center;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .rotationAxisValue{appearance:none;width:100%;font:inherit;cursor:pointer;transition:border-color .12s,background .12s,box-shadow .12s}.rotationAxisValue.active{border-color:var(--accent);background:#1d3033;box-shadow:inset 0 -2px 0 var(--accent)}.rotationAxisValue.active small{color:#a9f7e5}.rotationAxisValue:focus-visible{outline:2px solid #fff;outline-offset:1px}
-.cameraRotationInline{flex:0 0 auto}.cameraRotationField{position:relative;padding-right:24px;border-color:#3b455e;background:#202638;cursor:pointer;transition:border-color .12s,background .12s,opacity .12s;touch-action:none;user-select:none}.cameraRotationField:not(.padActive){opacity:.72}.cameraRotationField.padActive{border-color:var(--accent);background:#1d3033}.cameraRotationField.padActive small{color:#a9f7e5}.cameraRotationField.keyed{box-shadow:inset 0 -2px 0 #ff6da9}.cameraRotationNumber{display:flex;align-items:center;justify-content:center;min-width:0;color:var(--accent);font-size:13px;font-variant-numeric:tabular-nums}.cameraRotationNumber [data-camera-rotation-inline]{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--accent);font:inherit;text-align:center;padding:0;pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.cameraRotationDegree{margin-left:-1px;pointer-events:none}.cameraRotationKey{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:20px;height:28px;border:0;border-left:1px solid #394259;background:transparent;color:#7f8aa2;padding:0;font-size:12px}.cameraRotationKey.on{color:#ff6da9}.cameraRotationField:focus-within{border-color:var(--accent);background:#1d3033}
+.cameraRotationInline{flex:0 0 auto}.cameraRotationField{position:relative;border-color:#3b455e;background:#202638;cursor:pointer;transition:border-color .12s,background .12s,opacity .12s;touch-action:none;user-select:none}.cameraRotationField:not(.padActive){opacity:.72}.cameraRotationField.padActive{border-color:var(--accent);background:#1d3033}.cameraRotationField.padActive small{color:#a9f7e5}.cameraRotationNumber{display:flex;align-items:center;justify-content:center;min-width:0;color:var(--accent);font-size:13px;font-variant-numeric:tabular-nums}.cameraRotationNumber [data-camera-rotation-inline]{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--accent);font:inherit;text-align:center;padding:0;pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.cameraRotationDegree{margin-left:-1px;pointer-events:none}.cameraRotationField:focus-within{border-color:var(--accent);background:#1d3033}
 .positionAxisValue.numericEditing,.cameraRotationField.numericEditing{border-color:#fff;box-shadow:inset 0 -2px 0 var(--accent),0 0 0 1px rgba(255,255,255,.35)}
 .positionAxisValue.pressPending,.cameraRotationField.pressPending{filter:brightness(1.12)}
 [data-positionaxis],[data-positionaxis] *:not(button),[data-camera-rotation-axis],[data-camera-rotation-axis] *:not(button),[data-transform-inline-number]{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
@@ -189,7 +189,7 @@ input[type=range]{accent-color:var(--accent)}
 .drawer.transformDrawer .transformValue{padding:3px 4px;border-radius:5px}
 .drawer.transformDrawer .transformValue b,.drawer.transformDrawer .positionAxisNumber{font-size:10px;line-height:1.05}
 .drawer.transformDrawer .transformValue small{font-size:5.5px;margin-top:1px}
-.drawer.transformDrawer .cameraRotationField{padding-right:20px}.drawer.transformDrawer .cameraRotationNumber{font-size:10px;line-height:1.05}.drawer.transformDrawer .cameraRotationKey{width:18px;height:24px;font-size:10px}
+.drawer.transformDrawer .cameraRotationNumber{font-size:10px;line-height:1.05}
 .drawer.transformDrawer .transformPad,
 .drawer.transformDrawer .rotationPad,
 .drawer.transformDrawer .scalePad{flex:1 1 0;min-height:0;height:auto;border-radius:7px}
@@ -751,6 +751,56 @@ input[type=range]{accent-color:var(--accent)}
 .kf{
   transform-origin:center;
   transition:transform .12s ease,box-shadow .12s ease,filter .12s ease,opacity .12s ease,border-color .12s ease;
+}
+.track{
+  height:var(--kf-track-height,29px);
+  transition:height .12s ease;
+}
+.track.keyframeLanesExpanded .trackLane{
+  --kf-lane-height:23px;
+}
+.track.keyframeLanesExpanded .clip{
+  height:calc(100% - 6px);
+  background-image:repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--kf-lane-height) - 1px),
+    rgba(11,15,25,.22) calc(var(--kf-lane-height) - 1px),
+    rgba(255,255,255,.14) var(--kf-lane-height)
+  );
+}
+.kf{
+  top:var(--kf-top,8px);
+  background:var(--kf-color,#ff6b9d);
+  border-color:color-mix(in srgb,var(--kf-color,#ff6b9d) 45%,white);
+}
+.kf.playheadHit{
+  box-shadow:0 0 0 1px rgba(255,255,255,.78),0 0 9px color-mix(in srgb,var(--kf-color,#ff6b9d) 72%,transparent);
+}
+.kfParameterVisual:not(:disabled):not([aria-disabled="true"]):not(.lensLocked){
+  --kf-control-soft:color-mix(in srgb,var(--kf-color,#ff6b9d) 13%,#20263a);
+}
+/* Show each parameter's identity on its readout text, not on the control
+   surface.  This preserves the original mint active-axis highlight. */
+.kfParameterVisual:not(:disabled):not([aria-disabled="true"]):not(.lensLocked) > b,
+.kfParameterVisual:not(:disabled):not([aria-disabled="true"]):not(.lensLocked) > small,
+.positionAxisValue.kfParameterVisual:not(:disabled):not([aria-disabled="true"]):not(.lensLocked) .positionAxisNumber,
+.cameraRotationField.kfParameterVisual:not(:disabled):not([aria-disabled="true"]):not(.lensLocked) .cameraRotationNumber,
+.cameraRotationField.kfParameterVisual:not(:disabled):not([aria-disabled="true"]):not(.lensLocked) [data-transform-inline-number]{
+  color:var(--kf-color,#ff6b9d)!important;
+}
+/* Keyframe glyphs keep the matching parameter color while their button
+   backgrounds/borders remain Open Motion's original Inspector styling. */
+.diamond.kfParameterVisual:not(:disabled):not([aria-disabled="true"]):not(.lensLocked){
+  color:var(--kf-color,#ff6b9d)!important;
+}
+.kfParameterGroupVisual:not(:disabled):not([aria-disabled="true"]){
+  --kf-primary:#ff6da9;
+}
+.kfParameterVisual:disabled,
+.kfParameterVisual[aria-disabled="true"],
+.kfParameterVisual.lensLocked{
+  --kf-color:#667085!important;
 }
 .kf.transformKeyFocused{
   opacity:1;
@@ -3279,8 +3329,60 @@ class AnimationEngine{
   allTimes(layers){return [...new Set(layers.flatMap(l=>Object.values(l.kf||{}).flat().map(k=>k.t)))].sort((a,b)=>a-b)}
 }
 
+// Phase 2 service boundary: owns the established V4.26 duration rules.
+// Invariants: hidden/control layers never extend canonical content; empty or
+// control-only projects retain their declared editor duration; reconciliation
+// preserves the legacy millisecond rounding, playhead clamp, and event order.
+class ProjectDurationPolicy{
+  constructor(model){this.model=model}
+  isControlLayer(layer){return !!layer&&['camera','null'].includes(layer.type)}
+  isOutputLayer(layer){return !!layer&&!layer.hidden&&!this.isControlLayer(layer)&&Math.max(0,+layer.duration||0)>0}
+  contentEnd(layers=this.model?.layers||[]){
+    if(!this.model?.project)return null;
+    let found=false,end=0;
+    for(const layer of layers||[]){
+      if(!this.isOutputLayer(layer))continue;
+      const start=Math.max(0,+layer.start||0);
+      const duration=Math.max(0,+layer.duration||0);
+      found=true;
+      end=Math.max(end,start+duration)
+    }
+    return found?end:null
+  }
+  effectiveEditorDuration(project=this.model?.project,layers=this.model?.layers||[]){
+    const contentEnd=this.contentEnd(layers);
+    if(!Number.isFinite(contentEnd))return Math.max(0,+project?.duration||0);
+    const fps=Math.max(1,+project?.fps||30);
+    const minimum=Math.max(.05,1/fps);
+    return Math.max(minimum,Math.ceil(Math.max(0,contentEnd-1e-7)*1000)/1000)
+  }
+  effectiveExportDuration(project=this.model?.project,layers=this.model?.layers||[]){
+    const contentEnd=this.contentEnd(layers);
+    if(Number.isFinite(contentEnd))return Math.max(.05,contentEnd);
+    return Math.max(.05,+project?.duration||0)
+  }
+  reconcile(reason='legacy'){
+    const model=this.model;
+    if(!model?.project)return false;
+    const contentEnd=this.contentEnd(model.layers);
+    // An empty/control-only composition keeps its existing project duration so
+    // the editor still has a usable timeline.
+    if(!Number.isFinite(contentEnd))return false;
+    const needed=this.effectiveEditorDuration(model.project,model.layers);
+    if(Math.abs(needed-(+model.project.duration||0))<=.0001)return false;
+    model.project.duration=needed;
+    model.project.updated=Date.now();
+    if(model.time>needed){
+      model.time=needed;
+      try{media?.sync?.(model.time,false,false)}catch(e){}
+    }
+    bus.emit('project:duration',needed);
+    return true
+  }
+}
+
 class ProjectModel{
-  constructor(){this.anim=new AnimationEngine();this.reset()}
+  constructor(){this.durationPolicy=new ProjectDurationPolicy(this);this.anim=new AnimationEngine();this.reset()}
   reset(){
     if(Array.isArray(this.layers)&&this.layers.length){
       mediaAssets.captureLayers(this.layers);
@@ -3389,47 +3491,11 @@ class ProjectModel{
   // visible content, but by themselves they must not create a blank export tail.
   // Hidden layers also do not extend the current export/timeline duration.
   projectContentEnd(){
-    if(!this.project)return null;
-    let found=false,end=0;
-    for(const l of this.layers||[]){
-      if(!l||l.hidden||['camera','null'].includes(l.type))continue;
-      const start=Math.max(0,+l.start||0);
-      const duration=Math.max(0,+l.duration||0);
-      if(duration<=0)continue;
-      found=true;
-      end=Math.max(end,start+duration);
-    }
-    return found?end:null
+    return this.durationPolicy.contentEnd(this.layers)
   }
 
-  syncProjectDurationToContent(){
-    if(!this.project)return false;
-    const contentEnd=this.projectContentEnd();
-    // An empty/control-only composition keeps its existing project duration so
-    // the editor still has a usable timeline.
-    if(!Number.isFinite(contentEnd))return false;
-
-    const fps=Math.max(1,+this.project.fps||30);
-    const minimum=Math.max(.05,1/fps);
-    // Millisecond precision matches the legacy grow-only duration path while
-    // avoiding tiny floating-point tails after frame-snapped trims.
-    const needed=Math.max(
-      minimum,
-      Math.ceil(Math.max(0,contentEnd-1e-7)*1000)/1000
-    );
-
-    if(Math.abs(needed-(+this.project.duration||0))<=.0001)return false;
-
-    this.project.duration=needed;
-    this.project.updated=Date.now();
-
-    if(this.time>needed){
-      this.time=needed;
-      try{media?.sync?.(this.time,false,false)}catch(e){}
-    }
-
-    bus.emit('project:duration',needed);
-    return true
+  syncProjectDurationToContent(reason='legacy'){
+    return this.durationPolicy.reconcile(reason)
   }
 
   cleanLayer(l,{includeMedia=true}={}){
@@ -3772,6 +3838,90 @@ function omsSetPreviewQuality(value){
   return next
 }
 
+// Owns the paused HTMLVideo seek listener/RAF lifecycle. MediaManager keeps the
+// existing public facade, while replacement, relink, restore, and disposal can
+// now detach the exact listener instead of abandoning an inert WeakMap entry.
+class PausedVideoSeekCoordinator{
+  constructor(){this.states=new Map()}
+  peek(layer){return this.states.get(layer)||null}
+  activeCount(){return this.states.size}
+  stateFor(layer){
+    const video=layer?.video;
+    if(!video)return null;
+    const existing=this.states.get(layer);
+    if(existing?.video===video&&!existing.disposed)return existing;
+    if(existing)this.dispose(layer);
+
+    const state={layer,video,target:null,raf:0,wake:null,disposed:false};
+    state.wake=()=>{
+      if(state.disposed||layer.video!==video||this.states.get(layer)!==state)return;
+      if(Number.isFinite(state.target)){
+        const target=state.target;
+        if(Math.abs((+video.currentTime||0)-target)>.008)this.flush(layer,state);
+        else state.target=null
+      }
+    };
+    video.addEventListener('seeked',state.wake,{passive:true});
+    this.states.set(layer,state);
+    return state
+  }
+  flush(layer,state=this.peek(layer)){
+    if(!state||state.disposed||layer?.video!==state.video||this.states.get(layer)!==state)return false;
+    const video=state.video;
+    if(video.seeking)return true;
+    const target=state.target;
+    if(!Number.isFinite(target))return false;
+    state.target=null;
+    if(Math.abs((+video.currentTime||0)-target)<=.008){
+      if(!layer.frameCacheReady||Math.abs((+layer.frameCacheTime||0)-target)>.012){
+        requestAnimationFrame(()=>{if(!state.disposed&&this.states.get(layer)===state)layer.cacheVideoFrame?.()})
+      }
+      return false
+    }
+    try{video.currentTime=target;return true}catch(e){return false}
+  }
+  queue(layer,target){
+    const state=this.stateFor(layer);
+    if(!state||!Number.isFinite(+target))return false;
+    state.target=+target;
+    if(state.video.seeking)return true;
+    if(!state.raf){
+      state.raf=requestAnimationFrame(()=>{
+        state.raf=0;
+        if(!state.disposed)this.flush(layer,state)
+      })
+    }
+    return true
+  }
+  cancel(layer){
+    const state=this.peek(layer);
+    if(!state||state.disposed)return false;
+    state.target=null;
+    if(state.raf){cancelAnimationFrame(state.raf);state.raf=0}
+    return true
+  }
+  dispose(layer){
+    const state=this.states.get(layer);
+    if(!state)return false;
+    this.states.delete(layer);
+    state.disposed=true;
+    state.target=null;
+    if(state.raf){cancelAnimationFrame(state.raf);state.raf=0}
+    try{state.video.removeEventListener('seeked',state.wake)}catch(e){}
+    return true
+  }
+  disposeById(id){
+    let disposed=false;
+    for(const layer of [...this.states.keys()]){
+      if(layer?.id===id)disposed=this.dispose(layer)||disposed
+    }
+    return disposed
+  }
+  disposeAll(){
+    for(const layer of [...this.states.keys()])this.dispose(layer)
+  }
+}
+
 class MediaManager{
   constructor(model){
     this.model=model;
@@ -3789,7 +3939,7 @@ class MediaManager{
     // events keep assigning video.currentTime while the previous seek is still
     // pending. Keep only the newest desired paused-preview time and let each
     // decoder finish one seek before sending the next.
-    this.pausedSeekStates=new WeakMap();
+    this.pausedSeeks=new PausedVideoSeekCoordinator();
 
     // V4.21 — optional random-access scrub backend. Mediabunny provides the
     // container demuxing while CanvasSink uses the browser's WebCodecs decoder.
@@ -3798,13 +3948,13 @@ class MediaManager{
     this.scrubDecodeStates=new Map();
     this.scrubDecoderModulePromise=null;
 
-    bus.on('layer:disposed',id=>this.disposeScrubDecodeState(id));
-    bus.on('model:reset',()=>this.disposeAllScrubDecodeStates());
+    bus.on('layer:disposed',id=>{this.pausedSeeks.disposeById(id);this.disposeScrubDecodeState(id)});
+    bus.on('model:reset',()=>{this.pausedSeeks.disposeAll();this.disposeAllScrubDecodeStates()});
     bus.on('preview:quality',()=>this.onPreviewQualityChanged());
 
     bus.on('model:restored',()=>{
       this.playStates=new WeakMap();
-      this.pausedSeekStates=new WeakMap();
+      this.pausedSeeks.disposeAll();
       // Runtime-preserved layers may still use the same backend. Any backend
       // whose layer no longer exists is disposed; the rest remain hot.
       const live=new Set((this.model.layers||[]).map(l=>l.id));
@@ -4128,99 +4278,19 @@ class MediaManager{
   }
 
   pausedSeekState(l){
-    const v=l?.video;
-    if(!v)return null;
-
-    let state=this.pausedSeekStates.get(l);
-    if(state?.video===v)return state;
-
-    state={
-      video:v,
-      target:null,
-      raf:0
-    };
-
-    const wake=()=>{
-      // Ignore callbacks from a decoder that has since been replaced/relinked.
-      if(l.video!==v)return;
-      const live=this.pausedSeekStates.get(l);
-      if(live!==state)return;
-
-      // The ordinary video "seeked" handler caches the newly decoded frame.
-      // If the finger moved again while this seek was in flight, immediately
-      // continue toward only the latest requested time.
-      if(Number.isFinite(state.target)){
-        const target=state.target;
-        if(Math.abs((+v.currentTime||0)-target)>.008){
-          this.flushPausedVideoSeek(l,state);
-        }else{
-          state.target=null;
-        }
-      }
-    };
-
-    v.addEventListener('seeked',wake,{passive:true});
-    state.wake=wake;
-    this.pausedSeekStates.set(l,state);
-    return state
+    return this.pausedSeeks.stateFor(l)
   }
 
-  flushPausedVideoSeek(l,state=this.pausedSeekStates.get(l)){
-    if(!state||l?.video!==state.video)return false;
-    const v=state.video;
-
-    // Never cancel an in-flight interactive seek with another currentTime
-    // assignment. The seeked callback above will pick up the newest target.
-    if(v.seeking)return true;
-
-    const target=state.target;
-    if(!Number.isFinite(target))return false;
-    state.target=null;
-
-    // The decoder is already at the requested position. Ensure a stable cached
-    // frame exists, but avoid another no-op seek.
-    if(Math.abs((+v.currentTime||0)-target)<=.008){
-      if(!l.frameCacheReady||Math.abs((+l.frameCacheTime||0)-target)>.012){
-        requestAnimationFrame(()=>l.cacheVideoFrame?.());
-      }
-      return false
-    }
-
-    try{
-      v.currentTime=target;
-      return true
-    }catch(e){
-      return false
-    }
+  flushPausedVideoSeek(l,state=this.pausedSeeks.peek(l)){
+    return this.pausedSeeks.flush(l,state)
   }
 
   queuePausedVideoSeek(l,target){
-    const state=this.pausedSeekState(l);
-    if(!state||!Number.isFinite(+target))return false;
-
-    // Replacing this value is intentional: intermediate pointer samples do not
-    // need to be decoded. The preview should converge to the newest finger
-    // position as quickly as the hardware decoder allows.
-    state.target=+target;
-
-    if(state.video.seeking)return true;
-    if(!state.raf){
-      state.raf=requestAnimationFrame(()=>{
-        state.raf=0;
-        this.flushPausedVideoSeek(l,state)
-      })
-    }
-    return true
+    return this.pausedSeeks.queue(l,target)
   }
 
   cancelPausedVideoSeek(l){
-    const state=this.pausedSeekStates.get(l);
-    if(!state)return;
-    state.target=null;
-    if(state.raf){
-      cancelAnimationFrame(state.raf);
-      state.raf=0
-    }
+    return this.pausedSeeks.cancel(l)
   }
 
   sync(t,playing=false,muted=false){
@@ -4355,20 +4425,28 @@ class MediaManager{
 const media=new MediaManager(model);
 
 
-class InteractionScheduler{
+// Phase 2 service boundary: coalesces editor invalidations without owning the
+// model, UI, timeline, or renderer. Invariants: newest job wins per key, at
+// most one RAF is pending, queued mutations run in insertion order, and the
+// single render request runs only after those mutations.
+class EditorInvalidationScheduler{
   constructor(){
     this.jobs=new Map();
     this.raf=0;
     this.renderRequested=false;
   }
 
-  schedule(key,fn,render=true){
+  request(key,fn=()=>{},{render=true}={}){
     // Only the newest sample for a gesture survives until the next screen
     // refresh. Old pointer samples are intentionally discarded.
     this.jobs.set(key,fn);
     if(render)this.renderRequested=true;
     if(!this.raf)this.raf=requestAnimationFrame(()=>this.flush());
   }
+
+  // Compatibility facade for the V4.28 interaction call sites that have not
+  // been migrated in this phase.
+  schedule(key,fn,render=true){this.request(key,fn,{render})}
 
   requestRender(key='render'){
     this.schedule(key,()=>{},true);
@@ -5317,25 +5395,371 @@ class WebGLRenderer{
 }
 
 const renderer=new WebGLRenderer(model,$('#stage'));
-const interaction=new InteractionScheduler();
+const editorInvalidation=new EditorInvalidationScheduler();
+const interaction=editorInvalidation;
 
 bus.on('video:frame',()=>{
   // While dragging with the DOM/GPU compositor the visible video is an
   // already-rasterized surface; decoder updates must not trigger repaint.
-  if(!model.playing&&!renderer.domInteraction)interaction.requestRender('decoded-video-frame');
+  if(!model.playing&&!renderer.domInteraction)editorInvalidation.requestRender('decoded-video-frame');
 });
 
 // V3.89 — edge auto-scroll includes trim handles + temporary right headroom
 // V3.88 — edge auto-scroll for held keyframe / layer drags
+class TimelineTransientGestureLifecycle{
+  static facadeProperties=[
+    'drag','reorderSession','syncingScroll','scrollRelease','manualScrollActive','scrollSettleTimer','lastScrollLeft',
+    'suppressClickUntil','pinching','pinch','pendingPinchPx','pinchRAF','timelinePointers','emptyPan',
+    'keyframeGesture','keyframeAssistPan','trimGesture','trimAssistPan',
+    'edgeAutoScrollRAF','edgeAutoScrollSession','edgeAutoScrollLastTs',
+    'momentumRAF','momentumAxis','momentumVelocity','momentumLastTime'
+  ];
+  constructor({cancelFrame=id=>cancelAnimationFrame(id),clearTimer=id=>clearTimeout(id)}={}){
+    this.cancelFrame=cancelFrame;this.clearTimer=clearTimer;this.disposed=false;
+    this.drag=null;this.reorderSession=null;this.syncingScroll=false;this.scrollRelease=0;
+    this.manualScrollActive=false;this.scrollSettleTimer=0;this.lastScrollLeft=0;this.suppressClickUntil=0;
+    this.pinching=false;this.pinch=null;this.pendingPinchPx=null;this.pinchRAF=0;
+    this.timelinePointers=new Map();this.emptyPan=null;
+    this.keyframeGesture=null;this.keyframeAssistPan=null;this.trimGesture=null;this.trimAssistPan=null;
+    this.edgeAutoScrollRAF=0;this.edgeAutoScrollSession=null;this.edgeAutoScrollLastTs=0;
+    this.momentumRAF=0;this.momentumAxis=null;this.momentumVelocity=0;this.momentumLastTime=0
+  }
+  bindFacade(owner){
+    for(const property of TimelineTransientGestureLifecycle.facadeProperties){
+      Object.defineProperty(owner,property,{
+        configurable:true,
+        get:()=>this[property],
+        set:value=>{this[property]=value}
+      })
+    }
+    return owner
+  }
+  cancelMomentum(){
+    if(this.momentumRAF)this.cancelFrame(this.momentumRAF);
+    this.momentumRAF=0;this.momentumAxis=null;this.momentumVelocity=0;this.momentumLastTime=0
+  }
+  stopEdgeAutoScroll(session=null){
+    if(session&&this.edgeAutoScrollSession!==session)return false;
+    if(this.edgeAutoScrollRAF)this.cancelFrame(this.edgeAutoScrollRAF);
+    this.edgeAutoScrollRAF=0;this.edgeAutoScrollSession=null;this.edgeAutoScrollLastTs=0;
+    return true
+  }
+  cancelScrollFrameSettle(){
+    if(this.scrollSettleTimer)this.clearTimer(this.scrollSettleTimer);
+    this.scrollSettleTimer=0;this.manualScrollActive=false
+  }
+  reset({restoreInterruptedPinch=false,currentPx=0,clampZoom=value=>value,onRestoreZoom=null,onPinchClass=null,onZoomBadge=null}={}){
+    this.cancelMomentum();
+    this.stopEdgeAutoScroll();
+    this.cancelScrollFrameSettle();
+    if(this.pinchRAF)this.cancelFrame(this.pinchRAF);
+    this.pinchRAF=0;
+
+    let restoredPx=null;
+    if(
+      restoreInterruptedPinch&&this.pinching&&Number.isFinite(this.pinch?.startPx)&&
+      Math.abs(currentPx-this.pinch.startPx)>.01
+    ){
+      restoredPx=clampZoom(this.pinch.startPx);
+      onRestoreZoom?.(restoredPx)
+    }
+
+    this.pinching=false;this.pinch=null;this.pendingPinchPx=null;
+    this.timelinePointers.clear();this.emptyPan=null;
+    this.keyframeGesture=null;this.keyframeAssistPan=null;
+    this.trimGesture=null;this.trimAssistPan=null;
+    onPinchClass?.(false);onZoomBadge?.();
+    return restoredPx
+  }
+  dispose(options={}){
+    if(this.disposed)return false;
+    this.reset(options);this.disposed=true;
+    return true
+  }
+}
+
+class TimelineRulerPolicy{
+  constructor(model,{defaultPx=55,minPx=8,maxPx=360,labelW=98}={}){
+    this.model=model;this.defaultPx=defaultPx;this.minPx=minPx;this.maxPx=maxPx;this.labelW=labelW
+  }
+  project(project=this.model.project){return project||{fps:30,duration:0,playheadMode:'center'}}
+  projectFPS(project=this.model.project){return Math.max(1,Math.round(+this.project(project).fps||30))}
+  frameIndex(time=this.model.time,mode='round',project=this.model.project){
+    const p=this.project(project),fps=this.projectFPS(p),duration=Math.max(0,+p.duration||0),scaled=clamp(+time||0,0,duration)*fps;
+    const index=mode==='floor'?Math.floor(scaled+1e-7):mode==='ceil'?Math.ceil(scaled-1e-7):Math.round(scaled);
+    return clamp(index,0,Math.max(0,Math.floor(duration*fps+1e-7)))
+  }
+  snapTime(time=this.model.time,mode='round',project=this.model.project){
+    return this.frameIndex(time,mode,project)/this.projectFPS(project)
+  }
+  clampZoom(px){return clamp(px,this.minPx,this.maxPx)}
+  pinchZoom(startPx,ratio){return this.clampZoom(startPx*ratio)}
+  wheelZoom(px,deltaY){return this.clampZoom(px*Math.exp(-deltaY*.0025))}
+  rulerFrameStride(px,fps=this.projectFPS()){
+    const framePx=px/fps;
+    if(framePx>=1.35)return 1;
+    for(let stride=2;stride<=fps;stride++){
+      if(fps%stride===0&&framePx*stride>=1.35)return stride
+    }
+    return fps
+  }
+  rulerStep(px){
+    const target=58/Math.max(px,.001);
+    const choices=[1,2,5,10,15,30,60,120,300,600,900,1800,3600];
+    return choices.find(value=>value>=target)??7200
+  }
+  rulerLabel(time){
+    if(time>=60){
+      const min=Math.floor(time/60),sec=Math.round(time%60);
+      return sec?`${min}m${sec}s`:`${min}m`
+    }
+    return Math.round(time)+'s'
+  }
+  viewportWidth(value){return Math.max(240,+value||820)}
+  centerX(viewportWidth){return this.viewportWidth(viewportWidth)/2}
+  isCentered(project=this.model.project){return (this.project(project).playheadMode||'center')==='center'}
+  centerPad(viewportWidth,project=this.model.project){
+    return this.isCentered(project)?Math.max(0,this.centerX(viewportWidth)-this.labelW):0
+  }
+  width(viewportWidth,px,project=this.model.project){
+    const p=this.project(project),viewport=this.viewportWidth(viewportWidth),duration=Math.max(0,+p.duration||0);
+    if(this.isCentered(p)){
+      return Math.max(
+        viewport+duration*px,
+        this.labelW+this.centerPad(viewport,p)+duration*px+this.centerX(viewport)
+      )
+    }
+    return Math.max(viewport,this.labelW+duration*px+80)
+  }
+  timeFromViewport({scrollLeft,xInViewport,px,viewportWidth,project=this.model.project}){
+    const p=this.project(project),origin=this.isCentered(p)?this.centerX(viewportWidth):this.labelW;
+    return this.snapTime(clamp(
+      (scrollLeft+xInViewport-origin)/px,
+      0,
+      Math.max(0,+p.duration||0)
+    ),'round',p)
+  }
+}
+
+class TimelineKeyframeVisualPolicy{
+  constructor({compactHeight=29,laneHeight=23,laneInset=3,markerSize=7}={}){
+    this.compactHeight=compactHeight;
+    this.laneHeight=laneHeight;
+    this.laneInset=laneInset;
+    this.markerSize=markerSize;
+    this.definitions=Object.freeze({
+      'position.x':{label:'X Position',color:'#ff6b7a',order:10},
+      'position.y':{label:'Y Position',color:'#60d394',order:11},
+      'position.z':{label:'Z Position',color:'#5aa9ff',order:12},
+      'rotation.x':{label:'X Rotation',color:'#ff9f43',order:20},
+      'rotation.y':{label:'Y Rotation',color:'#b388ff',order:21},
+      'rotation.z':{label:'Z Rotation',color:'#2ed7d0',order:22},
+      'scale.x':{label:'X Scale',color:'#ff7aa8',order:30},
+      'scale.y':{label:'Y Scale',color:'#b6e35a',order:31},
+      'scale.z':{label:'Z Scale',color:'#7b8cff',order:32},
+      'skew.x':{label:'X Skew',color:'#f6c85f',order:40},
+      'skew.y':{label:'Y Skew',color:'#ec6cff',order:41},
+      opacity:{label:'Opacity',color:'#f2f4ff',order:50},
+      fov:{label:'Field of View',color:'#55d6be',order:60},
+      focalLength:{label:'Focal Length',color:'#ffd166',order:61},
+      digitalZoom:{label:'Digital Zoom',color:'#4cc9f0',order:62},
+      orthoSize:{label:'Ortho Size',color:'#80ed99',order:63},
+      near:{label:'Near Clip',color:'#f896d8',order:64},
+      far:{label:'Far Clip',color:'#cdb4db',order:65},
+      focusDistance:{label:'Focus Distance',color:'#ffafcc',order:66},
+      width:{label:'Width',color:'#48cae4',order:70},
+      height:{label:'Height',color:'#90be6d',order:71},
+      radius:{label:'Radius',color:'#f9c74f',order:72},
+      fontSize:{label:'Font Size',color:'#f9844a',order:73},
+      strokeWidth:{label:'Stroke Width',color:'#43aa8b',order:74},
+      'effects.blur':{label:'Blur',color:'#a8dadc',order:80},
+      'effects.brightness':{label:'Brightness',color:'#ffe66d',order:81},
+      'effects.contrast':{label:'Contrast',color:'#adb5bd',order:82},
+      'effects.saturate':{label:'Saturation',color:'#ff70a6',order:83},
+      'effects.hue':{label:'Hue',color:'#70d6ff',order:84}
+    });
+    this.aliases=Object.freeze({
+      x:'position.x',orbitAzimuth:'position.x',
+      y:'position.y',orbitElevation:'position.y',
+      z:'position.z',orbitDistance:'position.z',
+      rotX:'rotation.x',pitch:'rotation.x',
+      rotY:'rotation.y',yaw:'rotation.y',
+      rotZ:'rotation.z',rotation:'rotation.z',roll:'rotation.z',
+      scaleX:'scale.x',scaleY:'scale.y',scaleZ:'scale.z',
+      skewX:'skew.x',skewY:'skew.y',
+      w:'width',h:'height'
+    })
+  }
+  fps(value){const n=Math.round(+value||30);return Math.max(1,n)}
+  canonicalFrame(time,fps=30){return Math.round((Number(time)||0)*this.fps(fps))}
+  normalizeParameter(prop){
+    const raw=String(prop??'unknown');
+    return this.aliases[raw]||raw
+  }
+  fallbackHue(prop){
+    let hash=2166136261;
+    for(const ch of String(prop||'unknown')){
+      hash^=ch.charCodeAt(0);
+      hash=Math.imul(hash,16777619)
+    }
+    return ((hash>>>0)%300)+20
+  }
+  visualFor(prop){
+    const parameter=String(prop??'unknown'),identity=this.normalizeParameter(parameter);
+    const known=this.definitions[identity];
+    if(known)return{parameter,identity,...known,known:true};
+    const suffix=parameter.split('.').at(-1)||'parameter';
+    return{
+      parameter,identity,
+      label:suffix.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/^./,c=>c.toUpperCase()),
+      color:`hsl(${this.fallbackHue(identity)} 72% 64%)`,
+      order:1000+this.fallbackHue(identity),known:false
+    }
+  }
+  parameterOrder(prop){return this.visualFor(prop).order}
+  stableLaneMap(entries,groups){
+    // A lane belongs to a parameter identity across the whole expanded layer,
+    // not to one individual frame. Parameters that never collide may reuse the
+    // same lane, keeping the row compact while preventing a newly-added
+    // X/Y/Z/rotation keyframe from jumping back to lane 0.
+    const representative=new Map(),neighbors=new Map();
+    const ensure=entry=>{
+      const identity=this.normalizeParameter(entry?.prop);
+      if(!representative.has(identity))representative.set(identity,entry?.prop);
+      if(!neighbors.has(identity))neighbors.set(identity,new Set());
+      return identity
+    };
+    entries.forEach(ensure);
+    for(const group of groups.values()){
+      const identities=[...new Set(group.map(ensure))];
+      for(let i=0;i<identities.length;i++){
+        for(let j=i+1;j<identities.length;j++){
+          neighbors.get(identities[i]).add(identities[j]);
+          neighbors.get(identities[j]).add(identities[i])
+        }
+      }
+    }
+    const identities=[...representative.keys()].sort((a,b)=>{
+      const pa=representative.get(a),pb=representative.get(b);
+      return this.parameterOrder(pa)-this.parameterOrder(pb)||
+        a.localeCompare(b)
+    });
+    const laneByIdentity=new Map();
+    for(const identity of identities){
+      const used=new Set(
+        [...(neighbors.get(identity)||[])].map(other=>laneByIdentity.get(other))
+          .filter(Number.isInteger)
+      );
+      let lane=0;
+      while(used.has(lane))lane++;
+      laneByIdentity.set(identity,lane)
+    }
+    return laneByIdentity
+  }
+  entries(layer,fps=30){
+    const entries=[];
+    for(const [prop,arr] of Object.entries(layer?.kf||{})){
+      if(!Array.isArray(arr))continue;
+      arr.forEach((key,index)=>entries.push({
+        prop,key,index,ordinal:entries.length,
+        frame:this.canonicalFrame(key?.t,fps),lane:0
+      }))
+    }
+    const groups=new Map();
+    for(const entry of entries){
+      if(!groups.has(entry.frame))groups.set(entry.frame,[]);
+      groups.get(entry.frame).push(entry)
+    }
+    let maxStack=entries.length?1:0;
+    for(const group of groups.values())maxStack=Math.max(maxStack,group.length);
+
+    const laneByIdentity=this.stableLaneMap(entries,groups);
+    let maxLane=-1;
+    for(const group of groups.values()){
+      group.sort((a,b)=>
+        this.parameterOrder(a.prop)-this.parameterOrder(b.prop)||
+        a.prop.localeCompare(b.prop)||
+        String(a.key?.id||'').localeCompare(String(b.key?.id||''))||
+        a.index-b.index||a.ordinal-b.ordinal
+      );
+      // Preferred lanes for distinct properties are reserved first. Only a
+      // duplicate of the same property on the exact same frame may spill into
+      // a temporary extra lane, because two markers cannot occupy one point.
+      const reserved=new Set(
+        [...new Set(group.map(entry=>this.normalizeParameter(entry.prop)))]
+          .map(identity=>laneByIdentity.get(identity))
+          .filter(Number.isInteger)
+      );
+      const used=new Set(),seenIdentity=new Set();
+      for(const entry of group){
+        const identity=this.normalizeParameter(entry.prop);
+        let lane=laneByIdentity.get(identity)??0;
+        if(seenIdentity.has(identity)||used.has(lane)){
+          lane=0;
+          while(used.has(lane)||reserved.has(lane))lane++
+        }else{
+          seenIdentity.add(identity)
+        }
+        entry.lane=lane;
+        used.add(lane);
+        maxLane=Math.max(maxLane,lane)
+      }
+    }
+    const stableLaneCount=entries.length?Math.max(1,maxLane+1):0;
+    return{entries,groups,maxStack,stableLaneCount,laneByIdentity}
+  }
+  layout(layer,fps=30,{selectedLayerId=null,rowLayerId=layer?.id,inspectorOpen=false}={}){
+    const collision=this.entries(layer,fps);
+    const expanded=!!(
+      inspectorOpen&&rowLayerId&&rowLayerId===selectedLayerId&&collision.maxStack>=2
+    );
+    const laneCount=expanded?Math.max(collision.maxStack,collision.stableLaneCount||1):1;
+    return{
+      ...collision,expanded,laneCount,
+      rowHeight:this.rowHeight(laneCount),
+      entries:collision.entries.map(entry=>({...entry,lane:expanded?entry.lane:0}))
+    }
+  }
+  rowHeight(laneCount=1){
+    const count=Math.max(1,Math.floor(+laneCount||1));
+    return count<2?this.compactHeight:this.laneInset*2+count*this.laneHeight
+  }
+  markerTop(lane=0,expanded=false){
+    if(!expanded)return 8;
+    return this.laneInset+Math.max(0,Math.floor(+lane||0))*this.laneHeight+
+      (this.laneHeight-this.markerSize)/2
+  }
+  hitTest(layout,{frame,y}={}){
+    const candidates=(layout?.entries||[]).filter(entry=>entry.frame===frame);
+    if(!candidates.length)return null;
+    if(!layout.expanded)return candidates.at(-1)||null;
+    const lane=Math.floor(((Number(y)||0)-this.laneInset)/this.laneHeight);
+    return candidates.find(entry=>entry.lane===lane)||null
+  }
+  groupVisual(props=[]){
+    const visuals=[...new Set((props||[]).filter(Boolean))].map(prop=>this.visualFor(prop));
+    const fallback=this.visualFor('unknown');
+    const colors=visuals.length?visuals.map(item=>item.color):[fallback.color];
+    return{visuals,colors,primary:colors[0]}
+  }
+}
+
 class TimelineController{
   constructor(model){
     this.model=model;
+    this.keyframeVisualPolicy=new TimelineKeyframeVisualPolicy();
+    this._keyframeLaneSignature='';
+    this.transientGestures=new TimelineTransientGestureLifecycle();
+    this.transientGestures.bindFacade(this);
     this.px=55;
     this.defaultPx=55;
     this.minPx=8;
     this.maxPx=360;
     this.drag=null;
     this.labelW=98;
+    this.rulerPolicy=new TimelineRulerPolicy(model,{
+      defaultPx:this.defaultPx,minPx:this.minPx,maxPx:this.maxPx,labelW:this.labelW
+    });
     this.syncingScroll=false;
     this.scrollRelease=0;
     this.manualScrollActive=false;
@@ -5444,41 +5868,27 @@ class TimelineController{
   resetTransientTimelineGesture({restoreInterruptedPinch=false}={}){
     // This method only clears transient interaction ownership. It never changes
     // keyframes, trims, layer order, or project time.
-    this.cancelTimelineMomentum();
-    this.stopEdgeAutoScroll();
-    this.cancelScrollFrameSettle();
+    return this.transientGestures.reset({
+      restoreInterruptedPinch,
+      currentPx:this.px,
+      clampZoom:value=>this.rulerPolicy.clampZoom(value),
+      onRestoreZoom:restorePx=>{
+        // An interrupted pinch is not a completed user command. Revert to the
+        // zoom that existed when the two-finger gesture began.
+        this.px=restorePx;
+        if(model.project)model.project.timelinePx=restorePx;
+        try{this.rebuild()}catch(e){}
+      },
+      onPinchClass:()=>$('.timelineArea')?.classList.remove('timeline-pinching'),
+      onZoomBadge:()=>this.updateZoomBadge()
+    })
+  }
 
-    if(this.pinchRAF){
-      cancelAnimationFrame(this.pinchRAF);
-      this.pinchRAF=0
-    }
-
-    if(
-      restoreInterruptedPinch &&
-      this.pinching &&
-      Number.isFinite(this.pinch?.startPx) &&
-      Math.abs(this.px-this.pinch.startPx)>.01
-    ){
-      // An interrupted pinch is not a completed user command. Revert to the
-      // zoom that existed when the two-finger gesture began so a lost pointer
-      // cannot permanently save an accidental extreme zoom.
-      const restorePx=clamp(this.pinch.startPx,this.minPx,this.maxPx);
-      this.px=restorePx;
-      if(model.project)model.project.timelinePx=restorePx;
-      try{this.rebuild()}catch(e){}
-    }
-
-    this.pinching=false;
-    this.pinch=null;
-    this.pendingPinchPx=null;
-    this.timelinePointers.clear();
-    this.emptyPan=null;
-    this.keyframeGesture=null;
-    this.keyframeAssistPan=null;
-    this.trimGesture=null;
-    this.trimAssistPan=null;
-    $('.timelineArea')?.classList.remove('timeline-pinching');
-    this.updateZoomBadge()
+  disposeTransientTimelineGesture(){
+    return this.transientGestures.dispose({
+      onPinchClass:()=>$('.timelineArea')?.classList.remove('timeline-pinching'),
+      onZoomBadge:()=>this.updateZoomBadge()
+    })
   }
 
   resetTimelineZoom(){
@@ -5585,29 +5995,15 @@ class TimelineController{
   }
 
   stopEdgeAutoScroll(session=null){
-    if(session&&this.edgeAutoScrollSession!==session)return;
-    if(this.edgeAutoScrollRAF)cancelAnimationFrame(this.edgeAutoScrollRAF);
-    this.edgeAutoScrollRAF=0;
-    this.edgeAutoScrollSession=null;
-    this.edgeAutoScrollLastTs=0;
+    return this.transientGestures.stopEdgeAutoScroll(session)
   }
 
   cancelTimelineMomentum(){
-    if(this.momentumRAF){
-      cancelAnimationFrame(this.momentumRAF);
-      this.momentumRAF=0;
-    }
-    this.momentumAxis=null;
-    this.momentumVelocity=0;
-    this.momentumLastTime=0;
+    return this.transientGestures.cancelMomentum()
   }
 
   cancelScrollFrameSettle(){
-    if(this.scrollSettleTimer){
-      clearTimeout(this.scrollSettleTimer);
-      this.scrollSettleTimer=0;
-    }
-    this.manualScrollActive=false
+    return this.transientGestures.cancelScrollFrameSettle()
   }
 
   scheduleScrollFrameSettle(){
@@ -5787,7 +6183,7 @@ class TimelineController{
       }
 
       model.project.timelineGestureVersion=2;
-      this.px=clamp(savedPx,this.minPx,this.maxPx);
+      this.px=this.rulerPolicy.clampZoom(savedPx);
     }
     this.updateZoomBadge();
   }
@@ -5831,39 +6227,26 @@ class TimelineController{
     });
   }
 
-  projectFPS(){return Math.max(1,Math.round(+model.project?.fps||30))}
+  projectFPS(){return this.rulerPolicy.projectFPS()}
 
   frameIndex(time=model.time,mode='round'){
-    const fps=this.projectFPS(),duration=Math.max(0,+model.project?.duration||0),scaled=clamp(+time||0,0,duration)*fps;
-    let index=mode==='floor'?Math.floor(scaled+1e-7):mode==='ceil'?Math.ceil(scaled-1e-7):Math.round(scaled);
-    return clamp(index,0,Math.max(0,Math.floor(duration*fps+1e-7)))
+    return this.rulerPolicy.frameIndex(time,mode)
   }
 
   snapTime(time=model.time,mode='round'){
-    return this.frameIndex(time,mode)/this.projectFPS()
+    return this.rulerPolicy.snapTime(time,mode)
   }
 
   rulerFrameStride(){
-    const fps=this.projectFPS(),framePx=this.px/fps;
-    if(framePx>=1.35)return 1;
-    for(let stride=2;stride<=fps;stride++){
-      if(fps%stride===0&&framePx*stride>=1.35)return stride
-    }
-    return fps
+    return this.rulerPolicy.rulerFrameStride(this.px,this.projectFPS())
   }
 
   rulerStep(){
-    const target=58/Math.max(this.px,.001);
-    const choices=[1,2,5,10,15,30,60,120,300,600,900,1800,3600];
-    return choices.find(v=>v>=target)??7200;
+    return this.rulerPolicy.rulerStep(this.px)
   }
 
   rulerLabel(t){
-    if(t>=60){
-      const min=Math.floor(t/60),sec=Math.round(t%60);
-      return sec?`${min}m${sec}s`:`${min}m`;
-    }
-    return Math.round(t)+'s';
+    return this.rulerPolicy.rulerLabel(t)
   }
 
   renderTimeRuler(ruler,pad){
@@ -6400,11 +6783,7 @@ class TimelineController{
     e.preventDefault();
 
     const ratio=this.pointerDistance(pair)/this.pinch.startDistance;
-    this.pendingPinchPx=clamp(
-      this.pinch.startPx*ratio,
-      this.minPx,
-      this.maxPx
-    );
+    this.pendingPinchPx=this.rulerPolicy.pinchZoom(this.pinch.startPx,ratio);
 
     if(this.pinchRAF)return;
     this.pinchRAF=requestAnimationFrame(()=>{
@@ -6493,7 +6872,7 @@ class TimelineController{
     }
 
     if(cancelled&&Number.isFinite(this.pinch?.startPx)){
-      const restorePx=clamp(this.pinch.startPx,this.minPx,this.maxPx);
+      const restorePx=this.rulerPolicy.clampZoom(this.pinch.startPx);
       if(Math.abs(this.px-restorePx)>.01){
         this.px=restorePx;
         this.rebuild()
@@ -6517,8 +6896,7 @@ class TimelineController{
     if(!model.project||!(e.ctrlKey||e.metaKey))return;
     e.preventDefault();
     const anchor=this.timeFromClientX(e.clientX);
-    const factor=Math.exp(-e.deltaY*.0025);
-    this.applyTimelineZoom(clamp(this.px*factor,this.minPx,this.maxPx),e.clientX,anchor);
+    this.applyTimelineZoom(this.rulerPolicy.wheelZoom(this.px,e.deltaY),e.clientX,anchor);
   }
 
   applyTimelineZoom(nextPx,clientX=null,anchorTime=null,{persist=true}={}){
@@ -6526,7 +6904,7 @@ class TimelineController{
     this.cancelScrollFrameSettle();
     if(!model.project)return;
     const sc=$('#timelineScroll');
-    nextPx=clamp(nextPx,this.minPx,this.maxPx);
+    nextPx=this.rulerPolicy.clampZoom(nextPx);
     if(Math.abs(nextPx-this.px)<.01)return;
 
     const keepTime=this.isCentered()
@@ -6570,46 +6948,71 @@ class TimelineController{
   }
 
   viewportWidth(){
-    return Math.max(240,$('#timelineScroll')?.clientWidth||820);
+    return this.rulerPolicy.viewportWidth($('#timelineScroll')?.clientWidth||820)
   }
 
   centerX(){
-    return this.viewportWidth()/2;
+    return this.rulerPolicy.centerX(this.viewportWidth())
   }
 
   isCentered(){
-    return (model.project?.playheadMode||'center')==='center';
+    return this.rulerPolicy.isCentered()
   }
 
   centerPad(){
     // Center mode adds pre-roll space so t=0 sits exactly under the fixed
     // playhead. Moving mode restores the old timeline origin at the left.
-    return this.isCentered()?Math.max(0,this.centerX()-this.labelW):0;
+    return this.rulerPolicy.centerPad(this.viewportWidth())
   }
 
   width(){
-    if(this.isCentered()){
-      return Math.max(
-        this.viewportWidth()+model.project.duration*this.px,
-        this.labelW+this.centerPad()+model.project.duration*this.px+this.centerX()
-      );
-    }
-    return Math.max(
-      this.viewportWidth(),
-      this.labelW+model.project.duration*this.px+80
-    );
+    return this.rulerPolicy.width(this.viewportWidth(),this.px)
   }
 
   timeFromClientX(clientX){
     const sc=$('#timelineScroll');
     const r=sc.getBoundingClientRect();
     const xInViewport=clientX-r.left;
-    const origin=this.isCentered()?this.centerX():this.labelW;
-    return this.snapTime(clamp(
-      (sc.scrollLeft + xInViewport - origin)/this.px,
-      0,
-      model.project.duration
-    ));
+    return this.rulerPolicy.timeFromViewport({
+      scrollLeft:sc.scrollLeft,
+      xInViewport,
+      px:this.px,
+      viewportWidth:this.viewportWidth()
+    })
+  }
+
+  keyframeLaneInspectorOpen(){
+    return this.keyframeInteractionAllowed()
+  }
+
+  keyframeLaneLayout(layer){
+    return this.keyframeVisualPolicy.layout(layer,this.projectFPS(),{
+      selectedLayerId:model.selected,
+      rowLayerId:layer?.id,
+      inspectorOpen:this.keyframeLaneInspectorOpen()
+    })
+  }
+
+  keyframeLaneStateSignature(){
+    const selected=model.selectedLayer?.();
+    if(!selected)return`none:${this.keyframeLaneInspectorOpen()?'open':'closed'}`;
+    const lanes=this.keyframeVisualPolicy.entries(selected,this.projectFPS());
+    return`${selected.id}:${this.keyframeLaneInspectorOpen()?'open':'closed'}:${lanes.maxStack}:${lanes.stableLaneCount||1}`
+  }
+
+  refreshKeyframeLaneMode(){
+    const next=this.keyframeLaneStateSignature();
+    if(next===this._keyframeLaneSignature)return false;
+    this.rebuild();
+    return true
+  }
+
+  applyKeyframeMarkerVisual(marker,prop){
+    const visual=this.keyframeVisualPolicy.visualFor(prop);
+    marker.style.setProperty('--kf-color',visual.color);
+    marker.dataset.kfVisualIdentity=visual.identity;
+    marker.dataset.kfVisualColor=visual.color;
+    return visual
   }
 
   keyframeInteractionAllowed(){
@@ -6794,6 +7197,7 @@ class TimelineController{
     if(!model.project)return;
     if(!renderer.exporting)model.time=this.snapTime(model.time);
     this.syncProjectZoom();
+    this._keyframeLaneSignature=this.keyframeLaneStateSignature();
     const tracks=$('#tracks'),ruler=$('#ruler'),sc=$('#timelineScroll');
     tracks.innerHTML='';
     ruler.innerHTML='';
@@ -6805,9 +7209,13 @@ class TimelineController{
     this.renderTimeRuler(ruler,pad);
 
     model.layers.forEach(l=>{
+      const keyframeLayout=this.keyframeLaneLayout(l);
       const tr=document.createElement('div');
-      tr.className='track';
+      tr.className='track'+(keyframeLayout.expanded?' keyframeLanesExpanded':'');
       tr.dataset.layerId=l.id;
+      tr.dataset.keyframeLaneCount=String(keyframeLayout.laneCount);
+      tr.dataset.keyframeMaxStack=String(keyframeLayout.maxStack);
+      tr.style.setProperty('--kf-track-height',keyframeLayout.rowHeight+'px');
 
       const head=document.createElement('div');
       head.className='trackHead'+(l.id===model.selected?' sel':'');
@@ -6875,16 +7283,22 @@ class TimelineController{
       clip.onpointerdown=e=>this.clipPointerDown(e,l,clip);
       lane.appendChild(clip);
 
-      // Keyframes live in project time, not clip-local coordinates.
-      for(const [prop,arr] of Object.entries(l.kf||{})){
-        arr.forEach(k=>{
+      // Keyframes live in project time, not clip-local coordinates. Expanded
+      // lane placement is visual-only; canonical key times remain untouched.
+      for(const entry of keyframeLayout.entries){
+          const {prop,key:k,lane:laneIndex,frame}=entry;
           const d=document.createElement('i');
           d.className='kf';
           d.dataset.kfId=k.id;
           d.dataset.kfProp=prop;
           d.dataset.kfTime=String(k.t);
           d.dataset.layerId=l.id;
-          d.title=`${prop} @ ${k.t.toFixed(2)}s`;
+          d.dataset.kfLane=String(laneIndex);
+          d.dataset.kfFrame=String(frame);
+          d.style.setProperty('--kf-top',this.keyframeVisualPolicy.markerTop(laneIndex,keyframeLayout.expanded)+'px');
+          const parameterVisual=this.applyKeyframeMarkerVisual(d,prop);
+          d.title=`${parameterVisual.label} @ ${k.t.toFixed(2)}s${keyframeLayout.expanded?` • lane ${laneIndex+1}/${keyframeLayout.laneCount}`:''}`;
+          d.setAttribute('aria-label',d.title);
           d.style.left=(pad+k.t*this.px-3)+'px';
 
           const keyframeInteractive=this.keyframeInteractionAllowed();
@@ -6908,7 +7322,6 @@ class TimelineController{
             this.keyframePointerDown(e,l,prop,k,d)
           };
           lane.appendChild(d)
-        })
       }
 
       tr.append(head,lane);
@@ -7338,7 +7751,7 @@ class TimelineController{
         clip.style.width=Math.max(22,l.duration*this.px)+'px';
         clip.title=`Clip ${l.duration.toFixed(2)}s`;
         media.sync(model.time,false);
-        interaction.requestRender('timeline-edge-trim');
+        editorInvalidation.requestRender('timeline-edge-trim');
       };
 
       this.trimGesture.updateFromScroll=()=>applyTrimDrag(latestX);
@@ -7981,8 +8394,189 @@ class OMSAutoSave{
 const autosave=new OMSAutoSave(persistentStore);
 
 let portraitSideControls=null;
+// Phase 2 service boundary: owns keyframe-origin resolver registration,
+// precedence, and navigation. UIController remains the built-in route adapter
+// and panel renderer; TimelineController retains all gesture ownership.
+// Invariant: metadata -> registered resolver -> built-in route -> Graph.
+class KeyframeOriginRouter{
+  constructor(ui){this.ui=ui;this.resolvers=[]}
+  register(resolver,{prepend=false}={}){
+    if(typeof resolver!=='function')return()=>{};
+    if(prepend)this.resolvers.unshift(resolver);
+    else this.resolvers.push(resolver);
+    return()=>{
+      const i=this.resolvers.indexOf(resolver);
+      if(i>=0)this.resolvers.splice(i,1)
+    }
+  }
+  normalize(route){
+    if(!route||typeof route!=='object')return null;
+    const out={...route};
+    if(out.panel!=null)out.panel=String(out.panel);
+    if(out.selector!=null)out.selector=String(out.selector);
+    return out
+  }
+  fromMetadata(key){return this.normalize(key?.uiOrigin)}
+  resolve(layer,prop,key){
+    const meta=this.fromMetadata(key);
+    if(meta)return meta;
+    for(const resolver of this.resolvers){
+      try{
+        const route=this.normalize(resolver(layer,prop,key,this.ui));
+        if(route)return route
+      }catch(err){
+        console.warn('Keyframe origin resolver failed:',err)
+      }
+    }
+    return this.ui.builtinKeyframeOrigin(layer,prop,key)
+  }
+  navigate(layer,prop,key,{reason='timeline'}={}){
+    if(!layer||!prop)return false;
+    model.selected=layer.id;
+    const route=this.resolve(layer,prop,key)||{graph:true,prop};
+    if(typeof route.prepare==='function'){
+      try{route.prepare(this.ui,layer,prop,key,{reason})}
+      catch(err){console.warn('Keyframe origin prepare failed:',err)}
+    }
+    if(route.graph||!route.panel){
+      this.ui.openGraphEditor(route.prop||prop);
+      return true
+    }
+    this.ui.openInspector(route.panel);
+    this.ui.highlightKeyframeOrigin(route,prop);
+    return true
+  }
+}
+
+class TransformCameraPolicy{
+  layerTransformSpace(layer){return layer?.transformSpace==='world'?'world':'local'}
+  padAxes(selectedAxes){
+    const selected=new Set(selectedAxes||[]);
+    if(selected.has('z'))return['z'];
+    const axes=['x','y'].filter(axis=>selected.has(axis));
+    return axes.length?axes:['x','y']
+  }
+  toggleExclusivePadAxis(activeAxes,axis,{switchingGroup=false}={}){
+    if(!['x','y','z'].includes(axis))return null;
+    // Position and inline Rotation keep independent X/Y selections. When the
+    // user crosses from one group to the other, the tapped axis starts the
+    // destination group by itself instead of reviving that group's old pair.
+    if(switchingGroup)return[axis];
+    const active=this.padAxes(activeAxes);
+    if(axis==='z')return['z'];
+    if(active.includes('z'))return[axis];
+    // Within the same group, X + Y behave as independent toggles.
+    if(active.length===2)return active.filter(activeAxis=>activeAxis!==axis);
+    if(active[0]===axis)return[axis];
+    return['x','y']
+  }
+  rotationAxes(layer,{orbitActive=false}={}){
+    if(layer?.type==='camera'){
+      const suffix=orbitActive?' Offset':'';
+      return[
+        {axis:'x',prop:'pitch',label:`X Rotation / Pitch${suffix}`},
+        {axis:'y',prop:'yaw',label:`Y Rotation / Yaw${suffix}`},
+        {axis:'z',prop:'roll',label:`Z Rotation / Roll${suffix}`}
+      ]
+    }
+    return[
+      {axis:'x',prop:'rotX',label:'X Rotation / Pitch'},
+      {axis:'y',prop:'rotY',label:'Y Rotation / Yaw'},
+      {axis:'z',prop:'rotation',label:'Z Rotation / Roll'}
+    ]
+  }
+  positionAxes(camera,{orbitActive=false}={}){
+    if(orbitActive)return[
+      {axis:'x',prop:'orbitAzimuth',label:'X Position • Orbit 360°'},
+      {axis:'y',prop:'orbitElevation',label:'Y Position • Orbit 360°'},
+      {axis:'z',prop:'orbitDistance',label:'Z Position • Panjang Tali'}
+    ];
+    return[
+      {axis:'x',prop:'x',label:'X Position'},
+      {axis:'y',prop:'y',label:'Y Position'},
+      {axis:'z',prop:'z',label:'Z Position'}
+    ]
+  }
+  orbitTargets(layers,camera,descendsFrom){
+    return (layers||[]).filter(layer=>
+      layer.id!==camera?.id&&layer.type!=='camera'&&layer.type!=='audio'&&!descendsFrom(layer,camera?.id)
+    )
+  }
+  orbitTarget(camera,targets){
+    return camera?.orbitTargetId&&(targets||[]).find(layer=>layer.id===camera.orbitTargetId)||null
+  }
+  orbitActive(camera,target){return !!(camera?.type==='camera'&&camera.orbitEnabled&&target)}
+  orbitConstraintState(camera){
+    return{
+      posX:camera?.orbitFollowPosX!==false,posY:camera?.orbitFollowPosY!==false,posZ:camera?.orbitFollowPosZ!==false,
+      rotX:!!camera?.orbitFollowRotX,rotY:!!camera?.orbitFollowRotY,rotZ:!!camera?.orbitFollowRotZ
+    }
+  }
+  orbitConstraintSummary(constraints){
+    const parts=[],pos=['X','Y','Z'].filter(axis=>constraints[`pos${axis}`]),rot=['X','Y','Z'].filter(axis=>constraints[`rot${axis}`]);
+    if(pos.length)parts.push(`Pos ${pos.join('/')}`);
+    if(rot.length)parts.push(`Rot ${rot.join('/')}`);
+    return parts.length?parts.join(' • '):'Pivot tetap (tidak mengikuti channel target)'
+  }
+  cameraOpticsFields(camera,lensMode){
+    const projection=camera?.projection||'perspective',fixedLens=lensMode==='prime'||lensMode==='digital',freeLens=lensMode==='free';
+    return[
+      {prop:'fov',keyProp:'fov',label:'FOV',unit:'°',digits:1,motion:'horizontal',projection:'perspective',lens:true,disabled:fixedLens},
+      {prop:'focalLength',keyProp:freeLens?'focalLength':'fov',label:'Focal Length',unit:' mm',digits:1,motion:'vertical',projection:'perspective',synthetic:'focal',lens:true,disabled:fixedLens},
+      {prop:'zoom',keyProp:(lensMode==='digital'||freeLens)?'digitalZoom':projection==='orthographic'?'orthoSize':'fov',label:'Zoom In/Out',unit:'×',digits:2,motion:'vertical',projection:'both',synthetic:'zoom',lens:true,disabled:lensMode==='prime'},
+      {prop:'orthoSize',keyProp:'orthoSize',label:'Ortho Size',unit:'',digits:1,motion:'vertical',projection:'orthographic'},
+      {prop:'near',keyProp:'near',label:'Near Clip',unit:'',digits:2,motion:'horizontal',projection:'both'},
+      {prop:'focusDistance',keyProp:'focusDistance',label:'Focus',unit:'',digits:1,motion:'vertical',projection:'both'}
+    ].map(item=>({...item,dormant:item.projection!=='both'&&item.projection!==projection}))
+  }
+  cameraOpticsKeyProp(camera,field,lensMode){
+    if(field?.disabled)return null;
+    if(field?.prop==='focusDistance'&&camera?.focusEnabled!==true)return null;
+    if(field?.prop==='zoom'&&['digital','free'].includes(lensMode))return 'digitalZoom';
+    if(field?.prop==='zoom'&&(camera?.projection||'perspective')==='orthographic')return 'orthoSize';
+    return field?.keyProp||field?.prop||'fov'
+  }
+  clampCameraOptic(prop,value,{far=50000}={}){
+    if(prop==='fov')return clamp(Number(value)||1,1,175);
+    if(prop==='focalLength')return clamp(Number(value)||CAMERA_BASE_FOCAL_MM,1,1000);
+    if(prop==='orthoSize')return Math.max(1,Number(value)||1);
+    if(prop==='near')return clamp(Number(value)||.01,.01,Math.max(.011,(Number(far)||50000)-.01));
+    if(prop==='focusDistance')return Math.max(.01,Number(value)||.01);
+    if(prop==='zoom')return clamp(Number(value)||1,.05,50);
+    return Number(value)||0
+  }
+  cameraOpticsValueToProperty(camera,field,displayValue,{lensMode='optical-zoom',projectHeight=1080,far=50000}={}){
+    if(field?.disabled)return null;
+    if(field.prop==='focalLength'){
+      const focal=clamp(Number(displayValue)||CAMERA_BASE_FOCAL_MM,1,1000);
+      if(lensMode==='free')return{prop:'focalLength',value:focal,display:focal};
+      return{prop:'fov',value:cameraFovFromFocal(focal),display:focal}
+    }
+    if(field.prop==='zoom'){
+      const zoom=clamp(Number(displayValue)||1,.05,50);
+      if(lensMode==='digital'||lensMode==='free')return{prop:'digitalZoom',value:zoom,display:zoom};
+      if((camera?.projection||'perspective')==='orthographic'){
+        const base=Math.max(1,projectHeight||1080);
+        return{prop:'orthoSize',value:Math.max(1,base/zoom),display:zoom}
+      }
+      return{prop:'fov',value:cameraFovFromZoom(zoom),display:zoom}
+    }
+    const value=this.clampCameraOptic(field.prop,displayValue,{far});
+    return{prop:field.prop,value,display:value}
+  }
+  cameraOpticsDelta(field,dx,dy,start,precision=1){
+    if(field.prop==='fov')return dx*.18*precision;
+    if(field.prop==='focalLength')return -dy*Math.max(.08,Math.abs(start)*.004)*precision;
+    if(field.prop==='orthoSize')return -dy*Math.max(.8,Math.abs(start)*.004)*precision;
+    if(field.prop==='near')return dx*Math.max(.015,Math.abs(start)*.003)*precision;
+    if(field.prop==='focusDistance')return -dy*Math.max(.8,Math.abs(start)*.004)*precision;
+    if(field.prop==='zoom')return -dy*Math.max(.006,Math.abs(start)*.004)*precision;
+    return 0
+  }
+}
+
 class UIController{
-  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this._keyframeOriginResolvers=[]}
+  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this.transformCameraPolicy=new TransformCameraPolicy();this.keyframeOriginRouter=new KeyframeOriginRouter(this);this._keyframeOriginResolvers=this.keyframeOriginRouter.resolvers}
 
   /* =========================================================
      V4.27 — KEYFRAME ORIGIN ROUTING CONTRACT
@@ -8036,25 +8630,15 @@ class UIController{
   }
 
   registerKeyframeOriginResolver(resolver,{prepend=false}={}){
-    if(typeof resolver!=='function')return()=>{};
-    if(prepend)this._keyframeOriginResolvers.unshift(resolver);
-    else this._keyframeOriginResolvers.push(resolver);
-    return()=>{
-      const i=this._keyframeOriginResolvers.indexOf(resolver);
-      if(i>=0)this._keyframeOriginResolvers.splice(i,1)
-    }
+    return this.keyframeOriginRouter.register(resolver,{prepend})
   }
 
   normalizeKeyframeOrigin(route){
-    if(!route||typeof route!=='object')return null;
-    const out={...route};
-    if(out.panel!=null)out.panel=String(out.panel);
-    if(out.selector!=null)out.selector=String(out.selector);
-    return out
+    return this.keyframeOriginRouter.normalize(route)
   }
 
   keyframeOriginFromMetadata(key){
-    return this.normalizeKeyframeOrigin(key?.uiOrigin)
+    return this.keyframeOriginRouter.fromMetadata(key)
   }
 
   keyframeSiblingPropsAtTime(layer,prop,key,candidates){
@@ -8210,18 +8794,7 @@ class UIController{
   }
 
   resolveKeyframeOrigin(layer,prop,key){
-    const meta=this.keyframeOriginFromMetadata(key);
-    if(meta)return meta;
-
-    for(const resolver of this._keyframeOriginResolvers){
-      try{
-        const route=this.normalizeKeyframeOrigin(resolver(layer,prop,key,this));
-        if(route)return route
-      }catch(err){
-        console.warn('Keyframe origin resolver failed:',err)
-      }
-    }
-    return this.builtinKeyframeOrigin(layer,prop,key)
+    return this.keyframeOriginRouter.resolve(layer,prop,key)
   }
 
   highlightKeyframeOrigin(route,prop){
@@ -8237,23 +8810,7 @@ class UIController{
   }
 
   openKeyframeOrigin(layer,prop,key,{reason='timeline'}={}){
-    if(!layer||!prop)return false;
-    model.selected=layer.id;
-
-    const route=this.resolveKeyframeOrigin(layer,prop,key)||{graph:true,prop};
-    if(typeof route.prepare==='function'){
-      try{route.prepare(this,layer,prop,key,{reason})}
-      catch(err){console.warn('Keyframe origin prepare failed:',err)}
-    }
-
-    if(route.graph||!route.panel){
-      this.openGraphEditor(route.prop||prop);
-      return true
-    }
-
-    this.openInspector(route.panel);
-    this.highlightKeyframeOrigin(route,prop);
-    return true
+    return this.keyframeOriginRouter.navigate(layer,prop,key,{reason})
   }
 
   cameraModeBadgeText(){
@@ -8501,6 +9058,10 @@ class UIController{
     timeline.updateDrawerOverlap();
     timeline.updateKeyframePlayheadState();
     timeline.refreshKeyframeInteractionState?.();
+    this.applyKeyframeParameterVisuals?.(d,selected);
+    // Observe the settled drawer mode so Inspector entry expands the selected
+    // collision row, while Settings/Add drawers keep the compact timeline.
+    queueMicrotask(()=>timeline.refreshKeyframeLaneMode?.());
     return d
   }
   closeCameraOrbitShortcut(){
@@ -8576,7 +9137,8 @@ class UIController{
     $('#plusBtn').classList.remove('open');
     timeline.updateDrawerOverlap();
     timeline.updateKeyframePlayheadState();
-    timeline.refreshKeyframeInteractionState?.()
+    timeline.refreshKeyframeInteractionState?.();
+    timeline.refreshKeyframeLaneMode?.()
   }
   openTool(tool){
     this.drawerMode='tool';
@@ -8587,6 +9149,7 @@ class UIController{
     $('#plusBtn').classList.add('open');
     timeline.updateDrawerOverlap();
     timeline.updateKeyframePlayheadState();
+    timeline.refreshKeyframeLaneMode?.();
     timeline.refreshKeyframeInteractionState?.();
 
     const tabs=[
@@ -8781,7 +9344,61 @@ class UIController{
     timeline.rebuild();renderer.render();this.openInspectorRoot()
   }
 
-  row(label,prop,value,key=true,step='.01'){return `<div class="propRow"><label>${label}</label><input data-prop="${prop}" type="number" step="${step}" value="${Number(value??0).toFixed(step==='1'?0:2)}">${key?`<button class="diamond ${model.anim.hasKeyAt(model.selectedLayer(),prop,model.time)?'on':''}" data-key="${prop}">◇</button>`:'<span></span>'}</div>`}
+  keyframeParameterVisual(element,prop){
+    const policy=timeline?.keyframeVisualPolicy;
+    if(!element||!policy||!prop)return null;
+    const visual=policy.visualFor(prop);
+    element.classList.add('kfParameterVisual');
+    element.style.setProperty('--kf-color',visual.color);
+    element.style.setProperty('--kf-primary',visual.color);
+    element.dataset.kfVisualIdentity=visual.identity;
+    element.dataset.kfVisualColor=visual.color;
+    return visual
+  }
+  applyKeyframeParameterVisuals(root=document,l=model.selectedLayer?.()){
+    const policy=timeline?.keyframeVisualPolicy;
+    if(!policy||!root?.querySelectorAll)return;
+    const groupVisual=(element,props)=>{
+      if(!element)return;
+      const group=policy.groupVisual(props);
+      element.classList.add('kfParameterGroupVisual');
+      element.style.setProperty('--kf-primary',group.primary);
+      element.style.setProperty('--kf-group-accent',`linear-gradient(90deg,${group.colors.join(',')})`);
+      element.dataset.kfVisualColors=group.colors.join(',')
+    };
+    root.querySelectorAll('[data-kf-visual-prop]').forEach(element=>{
+      this.keyframeParameterVisual(element,element.dataset.kfVisualProp)
+    });
+    root.querySelectorAll('[data-kf-visual-props]').forEach(element=>{
+      const props=element.dataset.kfVisualProps.split(',').map(prop=>prop.trim()).filter(Boolean);
+      groupVisual(element,props)
+    });
+    root.querySelectorAll('[data-positionaxis]').forEach(element=>{
+      const prop=this.cameraPositionAxes(l).find(item=>item.axis===element.dataset.positionaxis)?.prop;
+      this.keyframeParameterVisual(element,prop)
+    });
+    root.querySelectorAll('[data-camera-rotation-field]').forEach(element=>{
+      this.keyframeParameterVisual(element,element.dataset.cameraRotationField)
+    });
+    root.querySelectorAll('[data-rotationaxis]').forEach(element=>{
+      const prop=this.transformRotationAxes(l).find(item=>item.axis===element.dataset.rotationaxis)?.prop;
+      this.keyframeParameterVisual(element,prop)
+    });
+    root.querySelectorAll('[data-camera-optic]').forEach(element=>{
+      const field=this.cameraOpticsFields(l).find(item=>item.prop===element.dataset.cameraOptic);
+      this.keyframeParameterVisual(element,this.cameraOpticsKeyProp(l,field)||field?.prop)
+    });
+    this.keyframeParameterVisual(root.querySelector('#tvW')?.closest('.transformValue'),'scaleX');
+    this.keyframeParameterVisual(root.querySelector('#tvH')?.closest('.transformValue'),'scaleY');
+    this.keyframeParameterVisual(root.querySelector('#tvSkewX')?.closest('.transformValue'),'skewX');
+    this.keyframeParameterVisual(root.querySelector('#tvSkewY')?.closest('.transformValue'),'skewY');
+    const transformKeySide=root.querySelector('#transformKeySide');
+    if(transformKeySide)groupVisual(transformKeySide,this.transformModeProps(l));
+    const graphProp=root.querySelector('#graphProp')?.value||this.graphProp;
+    this.keyframeParameterVisual(root.querySelector('#addGraphKey'),graphProp);
+    root.querySelectorAll('[data-delkey]').forEach(element=>this.keyframeParameterVisual(element,graphProp))
+  }
+  row(label,prop,value,key=true,step='.01'){return `<div class="propRow"><label>${label}</label><input data-prop="${prop}" type="number" step="${step}" value="${Number(value??0).toFixed(step==='1'?0:2)}">${key?`<button class="diamond ${model.anim.hasKeyAt(model.selectedLayer(),prop,model.time)?'on':''}" data-key="${prop}" data-kf-visual-prop="${prop}">◇</button>`:'<span></span>'}</div>`}
   openInspector(type){const l=model.selectedLayer();if(!l)return;this.drawerMode=type;timeline.refreshKeyframeInteractionState?.();let html='';if(type==='move')html=this.transformHTML(l);
     else if(type==='color')html=`<div class="drawerBody propPanel"><div class="colorRow"><input id="fillColor" type="color" value="${l.color||'#ffffff'}"><input id="fillHex" type="text" value="${l.color||'#ffffff'}"></div><div class="propRow"><label>Blend</label><select id="blend"><option value="source-over">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option><option value="overlay">Overlay</option><option value="lighter">Add</option><option value="difference">Difference</option></select><span></span></div>${this.row('Stroke','strokeWidth',l.strokeWidth||0,false,'1')}</div>`;
     else if(type==='effects'){const e=l.effects||{};html=`<div class="drawerBody propPanel">${this.row('Blur','effects.blur',e.blur||0,false,'1')}${this.row('Brightness','effects.brightness',e.brightness??100,false,'1')}${this.row('Contrast','effects.contrast',e.contrast??100,false,'1')}${this.row('Saturation','effects.saturate',e.saturate??100,false,'1')}${this.row('Hue','effects.hue',e.hue||0,false,'1')}</div>`}
@@ -9041,16 +9658,18 @@ class UIController{
     };
   }
   cameraOrbitTargets(camera){
-    return model.layers.filter(layer=>layer.id!==camera?.id&&layer.type!=='camera'&&layer.type!=='audio'&&!this.layerDescendsFrom(layer,camera?.id))
+    return this.transformCameraPolicy.orbitTargets(
+      model.layers,camera,(layer,ancestorId)=>this.layerDescendsFrom(layer,ancestorId)
+    )
   }
   cameraOrbitTarget(camera){
-    return camera?.orbitTargetId&&this.cameraOrbitTargets(camera).find(layer=>layer.id===camera.orbitTargetId)||null
+    return this.transformCameraPolicy.orbitTarget(camera,this.cameraOrbitTargets(camera))
   }
   cameraOrbitActive(camera=model.selectedLayer()){
-    return !!(camera?.type==='camera'&&camera.orbitEnabled&&this.cameraOrbitTarget(camera))
+    return this.transformCameraPolicy.orbitActive(camera,this.cameraOrbitTarget(camera))
   }
   cameraOrbitConstraintState(camera=model.selectedLayer()){
-    return{posX:camera?.orbitFollowPosX!==false,posY:camera?.orbitFollowPosY!==false,posZ:camera?.orbitFollowPosZ!==false,rotX:!!camera?.orbitFollowRotX,rotY:!!camera?.orbitFollowRotY,rotZ:!!camera?.orbitFollowRotZ}
+    return this.transformCameraPolicy.orbitConstraintState(camera)
   }
   cameraOrbitConstraintHTML(camera,prefix='cameraOrbitConstraint'){
     const c=this.cameraOrbitConstraintState(camera),chip=(group,axis,label,checked)=>`<label class="cameraOrbitConstraintChip"><input type="checkbox" data-orbit-constraint="${group}${axis.toUpperCase()}" ${checked?'checked':''}><span>${label}</span></label>`;
@@ -9061,20 +9680,10 @@ class UIController{
     return{posX:read('posX'),posY:read('posY'),posZ:read('posZ'),rotX:read('rotX'),rotY:read('rotY'),rotZ:read('rotZ')}
   }
   cameraOrbitConstraintSummary(c){
-    const parts=[],pos=['X','Y','Z'].filter(a=>c[`pos${a}`]),rot=['X','Y','Z'].filter(a=>c[`rot${a}`]);
-    if(pos.length)parts.push(`Pos ${pos.join('/')}`);if(rot.length)parts.push(`Rot ${rot.join('/')}`);return parts.length?parts.join(' • '):'Pivot tetap (tidak mengikuti channel target)'
+    return this.transformCameraPolicy.orbitConstraintSummary(c)
   }
   cameraPositionAxes(camera=model.selectedLayer()){
-    if(this.cameraOrbitActive(camera))return[
-      {axis:'x',prop:'orbitAzimuth',label:'X Position • Orbit 360°'},
-      {axis:'y',prop:'orbitElevation',label:'Y Position • Orbit 360°'},
-      {axis:'z',prop:'orbitDistance',label:'Z Position • Panjang Tali'}
-    ];
-    return[
-      {axis:'x',prop:'x',label:'X Position'},
-      {axis:'y',prop:'y',label:'Y Position'},
-      {axis:'z',prop:'z',label:'Z Position'}
-    ]
+    return this.transformCameraPolicy.positionAxes(camera,{orbitActive:this.cameraOrbitActive(camera)})
   }
   cameraPositionAxisInfo(camera,axis){return this.cameraPositionAxes(camera).find(item=>item.axis===axis)}
   cameraOrbitSetup(camera,targetId,constraints=null){
@@ -9112,27 +9721,14 @@ class UIController{
     camera.orbitTargetId=null
   }
   cameraOpticsFields(camera=model.selectedLayer()){
-    const projection=camera?.projection||'perspective',lensMode=this.cameraLensMode(camera),fixedLens=lensMode==='prime'||lensMode==='digital';
-    const freeLens=lensMode==='free';
-    return [
-      {prop:'fov',keyProp:'fov',label:'FOV',unit:'°',digits:1,motion:'horizontal',projection:'perspective',lens:true,disabled:fixedLens},
-      {prop:'focalLength',keyProp:freeLens?'focalLength':'fov',label:'Focal Length',unit:' mm',digits:1,motion:'vertical',projection:'perspective',synthetic:'focal',lens:true,disabled:fixedLens},
-      {prop:'zoom',keyProp:(lensMode==='digital'||freeLens)?'digitalZoom':projection==='orthographic'?'orthoSize':'fov',label:'Zoom In/Out',unit:'×',digits:2,motion:'vertical',projection:'both',synthetic:'zoom',lens:true,disabled:lensMode==='prime'},
-      {prop:'orthoSize',keyProp:'orthoSize',label:'Ortho Size',unit:'',digits:1,motion:'vertical',projection:'orthographic'},
-      {prop:'near',keyProp:'near',label:'Near Clip',unit:'',digits:2,motion:'horizontal',projection:'both'},
-      {prop:'focusDistance',keyProp:'focusDistance',label:'Focus',unit:'',digits:1,motion:'vertical',projection:'both'}
-    ].map(item=>({...item,dormant:item.projection!=='both'&&item.projection!==projection}));
+    return this.transformCameraPolicy.cameraOpticsFields(camera,this.cameraLensMode(camera))
   }
   cameraOpticsField(camera,prop=this.cameraOpticsProp){
     const fields=this.cameraOpticsFields(camera);
     return fields.find(item=>item.prop===prop)||fields.find(item=>item.prop==='zoom')||fields[0];
   }
   cameraOpticsKeyProp(camera,field=this.cameraOpticsField(camera)){
-    if(field?.disabled)return null;
-    if(field?.prop==='focusDistance'&&camera?.focusEnabled!==true)return null;
-    if(field?.prop==='zoom'&&['digital','free'].includes(this.cameraLensMode(camera)))return 'digitalZoom';
-    if(field?.prop==='zoom'&&(camera?.projection||'perspective')==='orthographic')return 'orthoSize';
-    return field?.keyProp||field?.prop||'fov';
+    return this.transformCameraPolicy.cameraOpticsKeyProp(camera,field,this.cameraLensMode(camera))
   }
   cameraOpticsDisplayValue(camera,field=this.cameraOpticsField(camera)){
     if(!camera||!field)return 0;
@@ -9151,64 +9747,29 @@ class UIController{
     return Number(model.prop(camera,field.prop))||0;
   }
   cameraOpticsValueToProperty(camera,field,displayValue){
-    if(field?.disabled)return null;
-    const lensMode=this.cameraLensMode(camera);
-    if(field.prop==='focalLength'){
-      const focal=clamp(Number(displayValue)||CAMERA_BASE_FOCAL_MM,1,1000);
-      if(lensMode==='free')return {prop:'focalLength',value:focal,display:focal};
-      return {prop:'fov',value:cameraFovFromFocal(focal),display:focal};
-    }
-    if(field.prop==='zoom'){
-      const zoom=clamp(Number(displayValue)||1,.05,50);
-      if(lensMode==='digital'||lensMode==='free')return {prop:'digitalZoom',value:zoom,display:zoom};
-      if((camera?.projection||'perspective')==='orthographic'){
-        const base=Math.max(1,model.project?.height||1080);
-        return {prop:'orthoSize',value:Math.max(1,base/zoom),display:zoom};
-      }
-      return {prop:'fov',value:cameraFovFromZoom(zoom),display:zoom};
-    }
-    const value=this.clampCameraOptic(camera,field.prop,displayValue);
-    return {prop:field.prop,value,display:value};
+    return this.transformCameraPolicy.cameraOpticsValueToProperty(camera,field,displayValue,{
+      lensMode:this.cameraLensMode(camera),
+      projectHeight:model.project?.height||1080,
+      far:Number(model.prop(camera,'far'))||50000
+    })
   }
   clampCameraOptic(camera,prop,value){
-    if(prop==='fov')return clamp(Number(value)||1,1,175);
-    if(prop==='focalLength')return clamp(Number(value)||CAMERA_BASE_FOCAL_MM,1,1000);
-    if(prop==='orthoSize')return Math.max(1,Number(value)||1);
-    if(prop==='near')return clamp(Number(value)||.01,.01,Math.max(.011,(Number(model.prop(camera,'far'))||50000)-.01));
-    if(prop==='focusDistance')return Math.max(.01,Number(value)||.01);
-    if(prop==='zoom')return clamp(Number(value)||1,.05,50);
-    return Number(value)||0;
+    return this.transformCameraPolicy.clampCameraOptic(prop,value,{
+      far:Number(model.prop(camera,'far'))||50000
+    })
   }
   cameraOpticsDelta(camera,field,dx,dy,start,precision=1){
-    if(field.prop==='fov')return dx*.18*precision;
-    if(field.prop==='focalLength')return -dy*Math.max(.08,Math.abs(start)*.004)*precision;
-    if(field.prop==='orthoSize')return -dy*Math.max(.8,Math.abs(start)*.004)*precision;
-    if(field.prop==='near')return dx*Math.max(.015,Math.abs(start)*.003)*precision;
-    if(field.prop==='focusDistance')return -dy*Math.max(.8,Math.abs(start)*.004)*precision;
-    if(field.prop==='zoom')return -dy*Math.max(.006,Math.abs(start)*.004)*precision;
-    return 0;
+    return this.transformCameraPolicy.cameraOpticsDelta(field,dx,dy,start,precision)
   }
   transformRotationAxes(l=model.selectedLayer()){
-    if(l?.type==='camera'){
-      const suffix=this.cameraOrbitActive(l)?' Offset':'';
-      return [
-        {axis:'x',prop:'pitch',label:`X Rotation / Pitch${suffix}`},
-        {axis:'y',prop:'yaw',label:`Y Rotation / Yaw${suffix}`},
-        {axis:'z',prop:'roll',label:`Z Rotation / Roll${suffix}`}
-      ];
-    }
-    return [
-      {axis:'x',prop:'rotX',label:'X Rotation / Pitch'},
-      {axis:'y',prop:'rotY',label:'Y Rotation / Yaw'},
-      {axis:'z',prop:'rotation',label:'Z Rotation / Roll'}
-    ];
+    return this.transformCameraPolicy.rotationAxes(l,{orbitActive:this.cameraOrbitActive(l)})
   }
   transformRotationAxisInfo(l=model.selectedLayer()){
     const axes=this.transformRotationAxes(l);
     return axes.find(item=>item.axis===this.transformRotationAxis)||axes[2];
   }
   layerTransformSpace(l=model.selectedLayer()){
-    return l?.transformSpace==='world'?'world':'local';
+    return this.transformCameraPolicy.layerTransformSpace(l)
   }
   transformRotationMatrix(l,t=model.time){
     if(l?.type==='camera'){
@@ -9284,26 +9845,17 @@ class UIController{
       :this.layerEulerFromMatrix(l,m,reference);
   }
   positionPadAxes(){
-    const selected=new Set(this.transformPositionAxes||[]);
-    if(selected.has('z'))return['z'];
-    const axes=['x','y'].filter(axis=>selected.has(axis));
-    return axes.length?axes:['x','y'];
+    return this.transformCameraPolicy.padAxes(this.transformPositionAxes)
   }
   inlineRotationPadAxes(){
-    const selected=new Set(this.transformInlineRotationAxes||[]);
-    if(selected.has('z'))return['z'];
-    const axes=['x','y'].filter(axis=>selected.has(axis));
-    return axes.length?axes:['x','y'];
+    return this.transformCameraPolicy.padAxes(this.transformInlineRotationAxes)
   }
   toggleExclusivePadAxis(group,axis){
-    if(!['x','y','z'].includes(axis))return;
     const isPosition=group==='position';
     const active=isPosition?this.positionPadAxes():this.inlineRotationPadAxes();
-    let next;
-    if(axis==='z')next=['z'];
-    else if(active.includes('z'))next=[axis];
-    else if(active.length===2||active[0]===axis)next=[axis];
-    else next=['x','y'];
+    const switchingGroup=this.transformPadTarget!==group;
+    const next=this.transformCameraPolicy.toggleExclusivePadAxis(active,axis,{switchingGroup});
+    if(!next)return;
     if(isPosition)this.transformPositionAxes=next;
     else this.transformInlineRotationAxes=next;
     this.transformPadTarget=group;
@@ -9498,13 +10050,6 @@ class UIController{
     $$('[data-camera-rotation-inline]').forEach(input=>{
       const prop=input.dataset.cameraRotationInline;
       writeInput(input,model.prop(l,prop));
-    });
-    $$('[data-camera-rotation-key]').forEach(button=>{
-      const prop=button.dataset.cameraRotationKey;
-      const keyed=model.anim.hasKeyAt(l,prop,model.time);
-      button.classList.toggle('on',keyed);
-      button.title=`${keyed?'Hapus':'Tambah'} keyframe ${prop}`;
-      button.setAttribute('aria-label',button.title);
     });
 
     // Mode kedua: layer biasa memakai roda rotasi, CAMERA memakai Camera Optics.
@@ -9992,7 +10537,7 @@ class UIController{
       const padSpec=this.transformPadSpec(l);
       const positionButton=item=>{const axis=item.axis,value=p[axis],active=padSpec.group==='position'&&padSpec.axes.includes(axis),label=item.label;return `<div class="transformValue positionAxisValue ${active?'active':''}" role="button" tabindex="0" data-positionaxis="${axis}" aria-pressed="${active}" aria-label="${label}; ketuk untuk memilih, tekan lama untuk mengedit angka" title="Ketuk untuk memilih ${label} • tekan lama untuk mengetik nilai"><span id="tv${axis.toUpperCase()}" class="positionAxisNumber" data-transform-inline-number data-position-inline="${item.prop}">${value.toFixed(1)}</span><small>${label}</small></div>`};
       const orbitOffset=this.cameraOrbitActive(l)?' Offset':'';
-      const inlineRotation=`<div class="transformReadouts cameraRotationInline" aria-label="Rotasi layer XYZ">${this.transformRotationAxes(l).map(item=>{const value=Number(model.prop(l,item.prop))||0,keyed=model.anim.hasKeyAt(l,item.prop,model.time),active=padSpec.group==='rotation'&&padSpec.axes.includes(item.axis),motionName=item.axis==='x'?'Pitch':item.axis==='y'?'Yaw':'Roll';return `<div class="transformValue cameraRotationField ${active?'padActive':''} ${keyed?'keyed':''}" role="button" tabindex="0" data-camera-rotation-field="${item.prop}" data-camera-rotation-axis="${item.axis}" aria-pressed="${active}" aria-label="${item.label}; ketuk untuk memilih, tekan lama untuk mengedit angka" title="Ketuk untuk memilih ${item.label} • tekan lama untuk mengetik nilai"><div class="cameraRotationNumber"><span data-transform-inline-number data-camera-rotation-inline="${item.prop}">${value.toFixed(1)}</span><span class="cameraRotationDegree" aria-hidden="true">°</span></div><small>${item.axis.toUpperCase()} Rotation • ${motionName}${orbitOffset}</small><button type="button" class="cameraRotationKey ${keyed?'on':''}" data-camera-rotation-key="${item.prop}" title="${keyed?'Hapus':'Tambah'} keyframe ${item.label}" aria-label="${keyed?'Hapus':'Tambah'} keyframe ${item.label}">◇</button></div>`}).join('')}</div>`;
+      const inlineRotation=`<div class="transformReadouts cameraRotationInline" aria-label="Rotasi layer XYZ">${this.transformRotationAxes(l).map(item=>{const value=Number(model.prop(l,item.prop))||0,active=padSpec.group==='rotation'&&padSpec.axes.includes(item.axis),motionName=item.axis==='x'?'Pitch':item.axis==='y'?'Yaw':'Roll';return `<div class="transformValue cameraRotationField ${active?'padActive':''}" role="button" tabindex="0" data-camera-rotation-field="${item.prop}" data-camera-rotation-axis="${item.axis}" aria-pressed="${active}" aria-label="${item.label}; ketuk untuk memilih, tekan lama untuk mengedit angka" title="Ketuk untuk memilih ${item.label} • tekan lama untuk mengetik nilai"><div class="cameraRotationNumber"><span data-transform-inline-number data-camera-rotation-inline="${item.prop}">${value.toFixed(1)}</span><span class="cameraRotationDegree" aria-hidden="true">°</span></div><small>${item.axis.toUpperCase()} Rotation • ${motionName}${orbitOffset}</small></div>`}).join('')}</div>`;
       center=`<div class="transformReadouts">${positionAxes.map(positionButton).join('')}</div>${inlineRotation}<div id="positionPad" class="transformPad padMotion-${padSpec.motion}" data-pad-target="${padSpec.group}" data-pad-axis-mode="${padSpec.mode}"><div class="padHint">${padSpec.hint}</div><div id="positionCursor" class="padCursor"></div></div>`;
     }
     if(m==='rotation'){
@@ -10074,7 +10619,6 @@ class UIController{
         openNumberEditor(freshField,freshInput);
       };
       field.onpointerdown=e=>{
-        if(e.target.closest('[data-camera-rotation-key]'))return;
         if(e.pointerType==='mouse'&&e.button!==0)return;
         e.preventDefault();
         e.stopPropagation();
@@ -10102,7 +10646,6 @@ class UIController{
       field.onpointercancel=clearPress;
       field.onlostpointercapture=()=>field.classList.remove('pressPending');
       field.oncontextmenu=e=>{
-        if(e.target.closest('[data-camera-rotation-key]'))return;
         e.preventDefault();
         e.stopPropagation();
         clearNativeSelection();
@@ -10120,7 +10663,6 @@ class UIController{
       };
       field.ondragstart=e=>{e.preventDefault();e.stopPropagation()};
       field.onclick=e=>{
-        if(e.target.closest('[data-camera-rotation-key]'))return;
         e.preventDefault();
         e.stopPropagation();
         clearNativeSelection();
@@ -10187,17 +10729,6 @@ class UIController{
       field.onpointercancel=clear;field.onlostpointercapture=clear;
       field.oncontextmenu=e=>{e.preventDefault();e.stopPropagation()};
       field.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select()}};
-    });
-
-    $$('[data-camera-rotation-key]').forEach(button=>button.onclick=e=>{
-      e.stopPropagation();
-      renderer.endInteraction();
-      history.push();
-      const prop=button.dataset.cameraRotationKey;
-      model.anim.toggleKey(l,prop,model.time,+model.prop(l,prop)||0);
-      timeline.rebuild();
-      renderer.render();
-      this.openInspector('move');
     });
 
     $('#transformKey')?.addEventListener('click',()=>{
@@ -10730,19 +11261,20 @@ class UIController{
         ?`${this.row('X Orbit / Azimuth','orbitAzimuth',model.prop(l,'orbitAzimuth'))}${this.row('Y Orbit / Elevation','orbitElevation',model.prop(l,'orbitElevation'))}${this.row('Z / Panjang Tali','orbitDistance',model.prop(l,'orbitDistance'))}`
         :`${this.row('Camera X','x',model.prop(l,'x'))}${this.row('Camera Y','y',model.prop(l,'y'))}${this.row('Camera Z','z',model.prop(l,'z'))}`;
       const lensMode=this.cameraLensMode(l),lensFields=Object.fromEntries(this.cameraOpticsFields(l).map(field=>[field.prop,field]));
-      const lensRow=(label,prop,value,disabled=false,step='.1',keyProp=null)=>`<div class="propRow"><label>${label}</label><input data-prop="${prop}" type="number" step="${step}" value="${Number(value||0).toFixed(step==='.01'?2:1)}" ${disabled?'disabled':''}>${keyProp&&!disabled?`<button class="diamond ${model.anim.hasKeyAt(l,keyProp,model.time)?'on':''}" data-key="${keyProp}">◇</button>`:`<span>${disabled?'LOCK':''}</span>`}</div>`;
+      const lensRow=(label,prop,value,disabled=false,step='.1',keyProp=null)=>`<div class="propRow"><label>${label}</label><input data-prop="${prop}" type="number" step="${step}" value="${Number(value||0).toFixed(step==='.01'?2:1)}" ${disabled?'disabled':''}>${keyProp&&!disabled?`<button class="diamond ${model.anim.hasKeyAt(l,keyProp,model.time)?'on':''}" data-key="${keyProp}" data-kf-visual-prop="${keyProp}">◇</button>`:`<span>${disabled?'LOCK':''}</span>`}</div>`;
       const fovValue=this.cameraOpticsDisplayValue(l,lensFields.fov),focalValue=this.cameraOpticsDisplayValue(l,lensFields.focalLength),zoomValue=this.cameraOpticsDisplayValue(l,lensFields.zoom);
       const lensRows=lensRow('FOV','fov',fovValue,!!lensFields.fov.disabled,'.1',['optical-zoom','free'].includes(lensMode)?'fov':null)+lensRow('Focal Length','focalLength',focalValue,!!lensFields.focalLength.disabled,'.1',lensMode==='free'?'focalLength':null)+lensRow('Zoom',['digital','free'].includes(lensMode)?'digitalZoom':'zoom',zoomValue,!!lensFields.zoom.disabled,'.01',['digital','free'].includes(lensMode)?'digitalZoom':null);
       return `<div class="drawerBody propPanel"><div class="true3dCard"><i>⌾</i><div><b>Kamera 3D penuh</b><small>View matrix 4×4 • yaw, pitch, roll • perspective/orthographic</small></div></div><div class="propTitle">Camera Orbit Constraint</div><div class="switchRow"><span>Ikat kamera ke layer</span><input id="cameraOrbitEnabled" type="checkbox" ${orbit?'checked':''} ${targets.length?'':'disabled'}></div><div class="propRow"><label>Target Layer</label><select id="cameraOrbitTarget" ${targets.length?'':'disabled'}><option value="">${targets.length?'Pilih layer target':'Belum ada layer target'}</option>${options}</select><span class="projectionPill">360°</span></div>${this.cameraOrbitConstraintHTML(l,'full')}<div class="miniNote">${orbit?`Kamera terikat ke <b>${esc(target.name)}</b>. ${esc(this.cameraOrbitConstraintSummary(this.cameraOrbitConstraintState(l)))}. X kamera mengatur azimuth 360°, Y elevation 360°, dan Z panjang tali.`:'Pilih layer dan channel transform yang ingin diikuti, lalu aktifkan ikatan.'}</div><div class="propRow"><label>Projection</label><select id="cameraProjection"><option value="perspective" ${l.projection!=='orthographic'?'selected':''}>Perspective</option><option value="orthographic" ${l.projection==='orthographic'?'selected':''}>Orthographic</option></select><span class="projectionPill">LIVE</span></div>${positionRows}${this.row(orbit?'Yaw / Y Offset':'Yaw / Y','yaw',model.prop(l,'yaw'))}${this.row(orbit?'Pitch / X Offset':'Pitch / X','pitch',model.prop(l,'pitch'))}${this.row('Roll / Z','roll',model.prop(l,'roll'))}${lensRows}${this.row('Ortho Size','orthoSize',l.orthoSize||model.project.height,false,'1')}${this.row('Near Clip','near',l.near||1,false,'.1')}${this.row('Far Clip','far',l.far||50000,false,'1')}${this.row('Focus','focusDistance',model.prop(l,'focusDistance'))}<div class="miniNote">${orbit?'ORBIT TARGET memakai lintasan bola sungguhan dan properti keyframe khusus; ekspor tetap melalui Main Camera.':`Kamera memakai ruang transform ${this.layerTransformSpace(l).toUpperCase()}, rotasi tiga sumbu, projection matrix, dan mode lensa ${this.cameraLensModeLabel(lensMode)}.`}</div></div>`
     }
     return `<div class="drawerBody propPanel"><div class="true3dCard"><i>◇</i><div><b>Transform 3D sungguhan</b><small>World matrix • parenting hierarkis • depth test WebGL</small></div></div><div class="switchRow"><span>Aktifkan Ruang 3D</span><input id="env3d" type="checkbox" ${model.layer3DEnabled(l)?'checked':''} ${l.type==='mesh'?'disabled':''}></div><div class="miniNote">${l.type==='mesh'?'Mesh selalu berada di Ruang 3D.':'Layer baru dimulai sebagai komposit 2D. Aktifkan hanya bila layer ini perlu Z, pitch, yaw, depth, atau mengikuti kamera.'}</div><div class="propTitle">Posisi XYZ • ${this.layerTransformSpace(l).toUpperCase()}</div><div class="axisField"><label>X<input data-prop="x" type="number" step=".1" value="${model.prop(l,'x').toFixed(2)}"></label><label>Y<input data-prop="y" type="number" step=".1" value="${model.prop(l,'y').toFixed(2)}"></label><label>Z<input data-prop="z" type="number" step=".1" value="${model.prop(l,'z').toFixed(2)}"></label></div><div class="propTitle">Rotasi Euler</div><div class="axisField"><label>X<input data-prop="rotX" type="number" step=".1" value="${model.prop(l,'rotX').toFixed(2)}"></label><label>Y<input data-prop="rotY" type="number" step=".1" value="${model.prop(l,'rotY').toFixed(2)}"></label><label>Z<input data-prop="rotZ" type="number" step=".1" value="${model.prop(l,'rotZ').toFixed(2)}"></label></div><div class="propTitle">Skala 3D</div><div class="axisField"><label>X<input data-prop="scaleX" type="number" step=".01" value="${model.prop(l,'scaleX').toFixed(3)}"></label><label>Y<input data-prop="scaleY" type="number" step=".01" value="${model.prop(l,'scaleY').toFixed(3)}"></label><label>Z<input data-prop="scaleZ" type="number" step=".01" value="${model.prop(l,'scaleZ').toFixed(3)}"></label></div>${l.type==='mesh'?this.row('Mesh Depth','depth',l.depth||l.w,false,'1'):''}<div class="miniNote">Layer gambar, video, teks, dan shape yang nonaktif tetap dirender sebagai komposit 2D dan tidak dipengaruhi kamera. Saat diaktifkan, layer menjadi textured plane 3D dengan depth test WebGL.</div></div>`}
   bindInspector(type,l){
+    this.applyKeyframeParameterVisuals(document,l);
     if(type==='move')this.bindTransformStudio(l);
     $$('[data-prop]').forEach(inp=>{
       const checkpoint=()=>{if(!inp._historyPending){history.push();inp._historyPending=true}};
       const apply=e=>{const prop=e.target.dataset.prop,value=+e.target.value;if(prop.includes('.'))this.setNested(l,prop,value);else if(l.type==='camera'&&['focalLength','zoom'].includes(prop)){const field=this.cameraOpticsFields(l).find(item=>item.prop===prop);const mapped=this.cameraOpticsValueToProperty(l,field,value);if(mapped)this.setTransformValue(l,mapped.prop,mapped.value)}else this.setTransformValue(l,prop,value)};
       inp.onfocus=checkpoint;inp.onpointerdown=checkpoint;
-      inp.oninput=e=>{renderer.endInteraction();checkpoint();apply(e);interaction.requestRender('property-input')};
+      inp.oninput=e=>{renderer.endInteraction();checkpoint();apply(e);editorInvalidation.requestRender('property-input')};
       inp.onchange=e=>{renderer.endInteraction();checkpoint();apply(e);inp._historyPending=false;timeline.rebuild();renderer.render()};
       inp.onblur=()=>{inp._historyPending=false}
     });
@@ -10838,9 +11370,74 @@ const ui=new UIController();
    - Automatic drawer accommodation is temporary; closing the drawer restores
      the user's base split unless the user manually changed it.
    ========================================================= */
+class EditorSplitLayoutPolicy{
+  projectRatio(project){
+    const value=Number(project?.editorPreviewRatio);
+    return Number.isFinite(value)&&value>.12&&value<.88?value:null
+  }
+  rememberedRatio(px,mainHeight){return clamp(px/Math.max(1,mainHeight),.16,.78)}
+  defaultBaseHeight({project,mainHeight,previewHeight,preDrawerHeight=null}){
+    const ratio=this.projectRatio(project);
+    if(ratio!=null)return ratio*mainHeight;
+    if(preDrawerHeight!=null)return preDrawerHeight;
+    return previewHeight||mainHeight*.54
+  }
+  limits(mainHeight){
+    const height=Math.max(1,+mainHeight||1);
+    const minPreview=clamp(height*.22,150,260);
+    const minTimeline=clamp(height*.24,190,300);
+    return{minPreview,maxPreview:Math.max(minPreview,height-minTimeline),mainH:height}
+  }
+  tallPortrait(project){
+    const width=Math.max(1,+project?.width||1),height=Math.max(1,+project?.height||1);
+    return height/width >= (16/9)*.99
+  }
+  visibleLayerTarget({layerCount,mainHeight,project}){
+    const count=Math.max(0,+layerCount||0);
+    if(count<=1)return count||1;
+    if(this.tallPortrait(project))return 1;
+    return count>=3&&mainHeight>=560?3:2
+  }
+  automaticFocusEligible({layerGestureActive,mobile,drawerOpen,project,visibleLayerTarget,manualDuringDrawer,selectedId}){
+    return !!(
+      !layerGestureActive&&mobile&&drawerOpen&&this.tallPortrait(project)&&
+      visibleLayerTarget===1&&this.projectRatio(project)==null&&!manualDuringDrawer&&selectedId
+    )
+  }
+  focusSessionEligible({layerGestureActive,sessionActive,mobile,project,visibleLayerTarget,selectedId}){
+    return !!(
+      !layerGestureActive&&sessionActive&&mobile&&this.tallPortrait(project)&&
+      visibleLayerTarget===1&&selectedId
+    )
+  }
+  cameraFocusRequired(options){
+    return options.selectedType==='camera'&&this.automaticFocusEligible(options)
+  }
+  requiredTimelineSpace({sideControls=false,transportHeight=38,rulerHeight=22,trackHeight=29,visibleLayerTarget=1,tallPortrait=false}){
+    const transport=sideControls?0:transportHeight;
+    return Math.ceil(transport+rulerHeight+visibleLayerTarget*trackHeight+(tallPortrait?0:12))
+  }
+  maxPreviewWithDrawer({mainTop,drawerTop,requiredTimelineSpace}){
+    return drawerTop-mainTop-requiredTimelineSpace
+  }
+  clampHeight({px,mainHeight,drawerSafe=true,mobile=false,drawerOpen=false,safeMax=Infinity}){
+    const {minPreview,maxPreview}=this.limits(mainHeight);
+    let max=maxPreview;
+    if(drawerSafe&&mobile&&drawerOpen&&Number.isFinite(safeMax)){
+      max=Math.min(max,Math.max(minPreview,safeMax))
+    }
+    return clamp(px,minPreview,Math.max(minPreview,max))
+  }
+  autoDrawerHeight({base,safeMax,tallAuto=false}){
+    if(!Number.isFinite(safeMax))return base;
+    return tallAuto?safeMax:Math.min(base,safeMax)
+  }
+}
+
 class EditorSplitController{
   constructor(ui){
     this.ui=ui;
+    this.layoutPolicy=new EditorSplitLayoutPolicy();
     this.pointerId=null;
     this.dragging=false;
     this.dragRAF=0;
@@ -10896,44 +11493,40 @@ class EditorSplitController{
   timelineArea(){return document.querySelector('.timelineArea')}
   isDrawerOpen(){const d=this.drawer();return !!d&&!d.classList.contains('hidden')}
   projectRatio(){
-    const v=Number(model.project?.editorPreviewRatio);
-    return Number.isFinite(v)&&v>.12&&v<.88?v:null;
+    return this.layoutPolicy.projectRatio(model.project)
   }
   rememberRatio(px){
     const main=this.main();
     if(!main||!model.project)return;
-    const ratio=clamp(px/Math.max(1,main.clientHeight),.16,.78);
+    const ratio=this.layoutPolicy.rememberedRatio(px,main.clientHeight);
     model.project.editorPreviewRatio=ratio;
   }
   defaultBaseHeight(){
     const main=this.main(),preview=this.preview();
     if(!main||!preview)return 0;
-    const ratio=this.projectRatio();
-    if(ratio!=null)return ratio*main.clientHeight;
-    if(this.preDrawerHeight!=null)return this.preDrawerHeight;
-    return preview.getBoundingClientRect().height||main.clientHeight*.54;
+    return this.layoutPolicy.defaultBaseHeight({
+      project:model.project,
+      mainHeight:main.clientHeight,
+      previewHeight:preview.getBoundingClientRect().height,
+      preDrawerHeight:this.preDrawerHeight
+    })
   }
   limits(){
     const main=this.main();
-    const h=Math.max(1,main?.clientHeight||1);
-    const minPreview=clamp(h*.22,150,260);
-    const minTimeline=clamp(h*.24,190,300);
-    return{minPreview,maxPreview:Math.max(minPreview,h-minTimeline),mainH:h};
+    return this.layoutPolicy.limits(main?.clientHeight||1)
   }
   /* V3.95 — tall portrait compositions (9:16 or taller) prioritize the
      canvas when a drawer/Inspector is open. Project dimensions can be rounded
      (for example 608×1080), so use a small tolerance around exact 9:16. */
   tallPortraitComposition(){
-    const pw=Math.max(1,+model.project?.width||1);
-    const ph=Math.max(1,+model.project?.height||1);
-    return ph/pw >= (16/9)*0.99;
+    return this.layoutPolicy.tallPortrait(model.project)
   }
   visibleLayerTarget(){
-    const count=Math.max(0,model.layers?.length||0);
-    if(count<=1)return count||1;
-    if(this.tallPortraitComposition())return 1;
-    const h=this.main()?.clientHeight||0;
-    return count>=3&&h>=560?3:2;
+    return this.layoutPolicy.visibleLayerTarget({
+      layerCount:model.layers?.length||0,
+      mainHeight:this.main()?.clientHeight||0,
+      project:model.project
+    })
   }
   /* V4.11 — deterministic selected-layer focus for tall portrait drawers.
      Scrolling alone can hit browser rounding / maxScroll limits, especially
@@ -10941,17 +11534,17 @@ class EditorSplitController{
      therefore remove non-selected tracks from layout temporarily, so exactly
      the selected track is the single visible row above the drawer. */
   cameraSelectedFocusRequired(){
-    if(this.layerGestureActive())return false;
     const l=model.selectedLayer?.();
-    return !!(
-      l?.type==='camera'&&
-      this.mobile()&&
-      this.isDrawerOpen()&&
-      this.tallPortraitComposition()&&
-      this.visibleLayerTarget()===1&&
-      this.projectRatio()==null&&
-      !this.manualDuringDrawer
-    );
+    return this.layoutPolicy.cameraFocusRequired({
+      selectedType:l?.type,
+      layerGestureActive:this.layerGestureActive(),
+      mobile:this.mobile(),
+      drawerOpen:this.isDrawerOpen(),
+      project:model.project,
+      visibleLayerTarget:this.visibleLayerTarget(),
+      manualDuringDrawer:this.manualDuringDrawer,
+      selectedId:model.selected
+    })
   }
   cameraFocusId(){
     const current=model.selectedLayer?.();
@@ -10977,25 +11570,25 @@ class EditorSplitController{
       this.selectedFocusSession=true;
       this.cameraFocusLayerId=model.selected;
     }
-    return !!(
-      (this.selectedFocusSession||cameraLatch)&&
-      this.mobile()&&
-      this.tallPortraitComposition()&&
-      this.visibleLayerTarget()===1&&
-      (model.selected||this.cameraFocusLayerId)
-    );
+    return this.layoutPolicy.focusSessionEligible({
+      layerGestureActive:this.layerGestureActive(),
+      sessionActive:this.selectedFocusSession||cameraLatch,
+      mobile:this.mobile(),
+      project:model.project,
+      visibleLayerTarget:this.visibleLayerTarget(),
+      selectedId:model.selected||this.cameraFocusLayerId
+    })
   }
   canStartSelectedLayerFocusSession(){
-    if(this.layerGestureActive())return false;
-    return !!(
-      this.mobile()&&
-      this.isDrawerOpen()&&
-      this.tallPortraitComposition()&&
-      this.visibleLayerTarget()===1&&
-      this.projectRatio()==null&&
-      !this.manualDuringDrawer&&
-      model.selected
-    );
+    return this.layoutPolicy.automaticFocusEligible({
+      layerGestureActive:this.layerGestureActive(),
+      mobile:this.mobile(),
+      drawerOpen:this.isDrawerOpen(),
+      project:model.project,
+      visibleLayerTarget:this.visibleLayerTarget(),
+      manualDuringDrawer:this.manualDuringDrawer,
+      selectedId:model.selected
+    })
   }
   startSelectedLayerFocusSession(){
     this.selectedFocusSession=this.canStartSelectedLayerFocusSession();
@@ -11252,36 +11845,78 @@ class EditorSplitController{
     return true;
   }
 
-  requiredTimelineAboveDrawer(){
+  requiredTimelineAboveDrawer({manualResize=false}={}){
     /* V3.96 — use the ACTUAL rendered timeline metrics. For 9:16-or-taller
        compositions the automatic drawer layout must expose exactly one full
-       track: no extra breathing room, because that gap reveals the next layer. */
+       track: no extra breathing room, because that gap reveals the next layer.
+
+       V4.28.1 — expanded keyframe lanes may make the selected row many times
+       taller than a normal row. That height is useful for AUTOMATIC Inspector
+       accommodation, but it must not become a hard ceiling once the user
+       explicitly drags the preview/timeline splitter. During manual resize we
+       reserve only the timeline chrome + one compact row; the timeline's own
+       vertical scroller owns any additional keyframe lanes. */
     const area=this.timelineArea();
     const sideControls=this.main()?.classList.contains('portraitSideControls');
     const transportH=sideControls?0:(area?.querySelector('.transport')?.getBoundingClientRect().height||38);
     const rulerH=document.getElementById('ruler')?.getBoundingClientRect().height||22;
+
+    if(manualResize){
+      const compactTrack=[...document.querySelectorAll('#tracks .track:not(.keyframeLanesExpanded)')]
+        .find(row=>{
+          const h=row.getBoundingClientRect().height;
+          return Number.isFinite(h)&&h>8
+        });
+      const compactTrackH=compactTrack?.getBoundingClientRect().height||29;
+      return this.layoutPolicy.requiredTimelineSpace({
+        sideControls,
+        transportHeight:transportH,
+        rulerHeight:rulerH,
+        trackHeight:compactTrackH,
+        visibleLayerTarget:1,
+        // Keep the normal small breathing room in manual mode. The important
+        // part is that expanded lane count no longer multiplies the hard limit.
+        tallPortrait:false
+      })
+    }
+
     const firstTrack=document.querySelector('#tracks .track.omsSelectedFocus')
       ||document.querySelector('#tracks .track:not(.omsFocusHidden)')
       ||document.querySelector('#tracks .track');
     const trackH=firstTrack?.getBoundingClientRect().height||29;
-    const breathing=this.tallPortraitComposition()?0:12;
-    return Math.ceil(transportH+rulerH+this.visibleLayerTarget()*trackH+breathing);
+    return this.layoutPolicy.requiredTimelineSpace({
+      sideControls,
+      transportHeight:transportH,
+      rulerHeight:rulerH,
+      trackHeight:trackH,
+      visibleLayerTarget:this.visibleLayerTarget(),
+      tallPortrait:this.tallPortraitComposition()
+    })
   }
-  maxPreviewWithDrawer(){
+  maxPreviewWithDrawer({manualResize=false}={}){
     const main=this.main(),drawer=this.drawer();
     if(!main||!drawer||!this.isDrawerOpen())return Infinity;
     const mr=main.getBoundingClientRect();
     const dr=drawer.getBoundingClientRect();
-    return dr.top-mr.top-this.requiredTimelineAboveDrawer();
+    return this.layoutPolicy.maxPreviewWithDrawer({
+      mainTop:mr.top,
+      drawerTop:dr.top,
+      requiredTimelineSpace:this.requiredTimelineAboveDrawer({manualResize})
+    })
   }
   clampHeight(px,{drawerSafe=true}={}){
-    const {minPreview,maxPreview}=this.limits();
-    let max=maxPreview;
-    if(drawerSafe&&this.mobile()&&this.isDrawerOpen()){
-      const safe=this.maxPreviewWithDrawer();
-      if(Number.isFinite(safe))max=Math.min(max,Math.max(minPreview,safe));
-    }
-    return clamp(px,minPreview,Math.max(minPreview,max));
+    // Once a user starts dragging (and for the rest of that open-drawer manual
+    // session), keyframe-lane expansion must not lock the preview at the
+    // automatic accommodation height. The row remains expanded and scrollable.
+    const manualResize=!!(this.dragging||this.manualDuringDrawer);
+    return this.layoutPolicy.clampHeight({
+      px,
+      mainHeight:this.main()?.clientHeight||1,
+      drawerSafe,
+      mobile:this.mobile(),
+      drawerOpen:this.isDrawerOpen(),
+      safeMax:this.maxPreviewWithDrawer({manualResize})
+    })
   }
   fitCanvasNow({render=false}={}){
     try{this.ui.applyCompositionFitZoom()}catch(e){}
@@ -11423,14 +12058,11 @@ class EditorSplitController{
     if(!main||!drawer)return;
     const base=this.preDrawerHeight??this.defaultBaseHeight();
     const safeMax=this.maxPreviewWithDrawer();
-    let target=base;
-    if(Number.isFinite(safeMax)){
-      /* In automatic mode, 9:16-or-taller projects expand the preview all the
-         way to the safe drawer boundary, leaving exactly one timeline layer
-         visible. A user-saved manual split remains authoritative. */
-      const tallAuto=this.tallPortraitComposition()&&this.projectRatio()==null&&!this.manualDuringDrawer;
-      target=tallAuto?safeMax:Math.min(target,safeMax);
-    }
+    /* In automatic mode, 9:16-or-taller projects expand the preview all the
+       way to the safe drawer boundary, leaving exactly one timeline layer
+       visible. A user-saved manual split remains authoritative. */
+    const tallAuto=this.tallPortraitComposition()&&this.projectRatio()==null&&!this.manualDuringDrawer;
+    const target=this.layoutPolicy.autoDrawerHeight({base,safeMax,tallAuto});
     this.applyHeight(target,{drawerSafe:true,fit:true,render:iter>=3});
 
     // Drawer dimensions can depend on viewport/timeline height. Re-evaluate a
@@ -12330,8 +12962,92 @@ const XMLBridge={
   download(){const xml=this.toXML();download(new Blob([xml],{type:'application/xml'}),safe(model.project.name)+'.openmotion.xml')}
 };
 
+// Phase 3 export resource boundary. Cleanup runs in LIFO order, continues
+// after individual failures, and is idempotent. Realtime capture resources are
+// registered here so success and early/error paths share one owner.
+class CleanupStack{
+  constructor(){this.entries=[];this.closed=false}
+  defer(fn,label='cleanup'){
+    if(typeof fn==='function'&&!this.closed)this.entries.push({fn,label});
+    return fn
+  }
+  run(){
+    if(this.closed)return[];
+    this.closed=true;
+    const errors=[];
+    while(this.entries.length){
+      const entry=this.entries.pop();
+      try{entry.fn()}catch(error){errors.push({label:entry.label,error})}
+    }
+    return errors
+  }
+}
+
+// Owns export-session editor snapshots plus common cleanup scope. The three
+// export engines remain separate; codec policy, frame scheduling, audio
+// strategy, progress timing, and output encoding remain engine-owned.
+class ExportSessionGuard{
+  constructor(exporter){this.exporter=exporter;this.cleanup=new CleanupStack()}
+  snapshot(){
+    return{
+      time:model.time,
+      selected:model.selected,
+      playing:model.playing,
+      cameraView:model.cameraView,
+      rendererExporting:renderer.exporting
+    }
+  }
+  resetCleanupScope(){this.cleanup=new CleanupStack();return this.cleanup}
+  beginOffline(setDecodeLock){
+    this.resetCleanupScope();
+    clock.stop();
+    renderer.endInteraction();
+    media.pause();
+    model.selected=null;
+    model.time=0;
+    model.cameraView=true;
+    renderer.exporting=true;
+    setDecodeLock?.(true)
+  }
+  restoreOffline(snapshot,setDecodeLock){
+    model.time=snapshot.time;
+    model.selected=snapshot.selected;
+    model.cameraView=snapshot.cameraView;
+    renderer.exporting=snapshot.rendererExporting;
+    setDecodeLock?.(false);
+    this.exporter.running=false;
+    $('#exportProgress').style.width='0';
+    media.pause();
+    try{media.sync(snapshot.time,false,false)}catch(e){}
+    renderer.render();
+    timeline.rebuild();
+    if(snapshot.playing)clock.start()
+  }
+  beginRealtime(){
+    const cleanup=this.resetCleanupScope();
+    clock.stop();
+    renderer.endInteraction();
+    model.selected=null;
+    model.time=0;
+    model.cameraView=true;
+    renderer.exporting=true;
+    return cleanup
+  }
+  restoreRealtimeEditor(snapshot){
+    this.exporter.running=false;
+    model.time=snapshot.time;
+    model.selected=snapshot.selected;
+    model.cameraView=snapshot.cameraView;
+    renderer.exporting=snapshot.rendererExporting;
+    media.pause();
+    renderer.render();
+    timeline.rebuild();
+    if(snapshot.playing)clock.start()
+  }
+}
+
 class Exporter{
-  constructor(){this.running=false}
+  constructor(){this.running=false;this.exportSessionGuard=new ExportSessionGuard(this)}
   projectJSON(){const data={format:'open-motion-v4',version:4,renderer:'webgl',sceneModel:'true-3d',...model.serialize()};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),safe(model.project.name)+'.openmotion.json')}
   async png(){
     const oldCameraView=model.cameraView,oldExporting=renderer.exporting;
@@ -12353,9 +13069,7 @@ class Exporter{
     // V4.26 — export follows actual content bounds, not historical project
     // duration and not keyframes that live outside their trimmed clip.
     // This prevents blank tails after shortening the last/longest layer.
-    const contentEnd=model.projectContentEnd();
-    if(Number.isFinite(contentEnd))return Math.max(.05,contentEnd);
-    return Math.max(.05,+model.project.duration||0);
+    return model.durationPolicy.effectiveExportDuration(model.project,model.layers)
   }
   async offlineEncoderModule(){
     if(this._offlineEncoder)return this._offlineEncoder;
@@ -12897,27 +13611,13 @@ class Exporter{
     const exportSize=selectedExportDimensions();
     const selected=selectedExportCodec();
     const exportDuration=this.exportDuration();
-    const old={
-      time:model.time,
-      selected:model.selected,
-      playing:model.playing,
-      cameraView:model.cameraView,
-      rendererExporting:renderer.exporting
-    };
+    const old=this.exportSessionGuard.snapshot();
 
     let decoderStates=null;
 
-    clock.stop();
-    renderer.endInteraction();
-    media.pause();
-    model.selected=null;
-    model.time=0;
-    model.cameraView=true;
-    renderer.exporting=true;
-
     // Block HTMLVideo/rVFC cache writers while the dedicated WebCodecs decoder
     // owns source-frame caches.
-    this.setOfflineVideoDecodeLock(true);
+    this.exportSessionGuard.beginOffline(active=>this.setOfflineVideoDecodeLock(active));
 
     const out=document.createElement('canvas');
     out.width=Math.max(2,exportSize.width);
@@ -13097,21 +13797,7 @@ class Exporter{
     }finally{
       this.disposeExperimentalVideoDecoders(decoderStates);
 
-      model.time=old.time;
-      model.selected=old.selected;
-      model.cameraView=old.cameraView;
-      renderer.exporting=old.rendererExporting;
-
-      this.setOfflineVideoDecodeLock(false);
-      this.running=false;
-      $('#exportProgress').style.width='0';
-
-      media.pause();
-      try{media.sync(old.time,false,false)}catch(e){}
-      renderer.render();
-      timeline.rebuild();
-
-      if(old.playing)clock.start()
+      this.exportSessionGuard.restoreOffline(old,active=>this.setOfflineVideoDecodeLock(active))
     }
   }
 
@@ -13130,11 +13816,10 @@ class Exporter{
     const exportDuration=this.exportDuration();
     const platform=String(navigator.userAgentData?.platform||navigator.platform||navigator.userAgent||'');
     const isWindows=/Windows/i.test(platform);
-    const old={time:model.time,selected:model.selected,playing:model.playing,cameraView:model.cameraView,rendererExporting:renderer.exporting};
+    const old=this.exportSessionGuard.snapshot();
     let stableDecoders=null;
 
-    clock.stop();renderer.endInteraction();media.pause();model.selected=null;model.time=0;model.cameraView=true;renderer.exporting=true;
-    this.setOfflineVideoDecodeLock(true);
+    this.exportSessionGuard.beginOffline(active=>this.setOfflineVideoDecodeLock(active));
 
     const out=document.createElement('canvas');
     out.width=Math.max(2,exportSize.width);
@@ -13254,16 +13939,9 @@ class Exporter{
       toast(`Ekspor frame-by-frame selesai • ${fps} FPS${forceSafeWebM?' • Safe VP9':''}`);
     }finally{
       this.disposeStableVideoDecoders(stableDecoders);
-      model.time=old.time;model.selected=old.selected;model.cameraView=old.cameraView;renderer.exporting=old.rendererExporting;
-      this.setOfflineVideoDecodeLock(false);
-      this.running=false;
-      $('#exportProgress').style.width='0';
-      media.pause();
       // Re-seek media to the restored playhead only after normal cache writers
       // are enabled again. This avoids leaving the editor on the export's last frame.
-      try{media.sync(old.time,false,false)}catch(e){}
-      renderer.render();timeline.rebuild();
-      if(old.playing)clock.start();
+      this.exportSessionGuard.restoreOffline(old,active=>this.setOfflineVideoDecodeLock(active));
     }
   }
   async videoRealtimeFallback(){
@@ -13283,246 +13961,277 @@ class Exporter{
       try{if(!MediaRecorder.isTypeSupported(mime))mime=''}catch(e){mime=''}
     }
 
-    const old={time:model.time,selected:model.selected,playing:model.playing,cameraView:model.cameraView,rendererExporting:renderer.exporting};
-
-    // Bekukan durasi ekspor di awal. Jangan bergantung pada nilai yang mungkin
-    // berubah selama render. Layer/keyframe yang lebih panjang juga dihitung.
-    const layerEnd=model.layers.reduce(
-      (mx,l)=>Math.max(mx,(+l.start||0)+Math.max(0,+l.duration||0)),
-      0
-    );
-    const keyEnd=model.layers.reduce(
-      (mx,l)=>Math.max(
-        mx,
-        ...Object.values(l.kf||{}).flat().map(k=>+k.t||0)
-      ),
-      0
-    );
-    const exportDuration=Math.max(
-      .05,
-      +model.project.duration||0,
-      layerEnd,
-      keyEnd
-    );
-
-    clock.stop();renderer.endInteraction();model.selected=null;model.time=0;model.cameraView=true;renderer.exporting=true;
-
-    const out=document.createElement('canvas');
-    out.width=Math.max(2,exportSize.width);
-    out.height=Math.max(2,exportSize.height);
-    const oc=out.getContext('2d');
-
-    // Android Chromium lebih stabil jika canvas sumber benar-benar attached
-    // dan captureStream berjalan dengan FPS normal. requestFrame() hanya
-    // dipakai sebagai bantuan opsional, bukan sebagai sumber timing utama.
-    out.className='exportCaptureCanvas';
-    Object.assign(out.style,{
-      position:'fixed',
-      left:'0',
-      top:'0',
-      width:'1px',
-      height:'1px',
-      opacity:'0.001',
-      pointerEvents:'none',
-      zIndex:'-2147483647'
-    });
-    document.body.appendChild(out);
-
-    let stream=out.captureStream(Math.max(1,fps));
-    let exportVideoTrack=stream.getVideoTracks()[0]||null;
-
-    try{stream=await media.buildAudioMix(stream)}catch(e){}
-
-    // Project shape/text/image tidak punya clock audio nyata. Pada sejumlah
-    // encoder Android, recorder dapat memendekkan timeline ketika hanya ada
-    // canvas track. Tambahkan oscillator praktis tak terdengar agar timestamp
-    // MediaRecorder terus berjalan sampai exportDuration selesai.
-    let exportClock=null;
-    const hasTimedMedia=model.layers.some(l=>
-      (l.type==='video'||l.type==='audio') &&
-      !l.hidden &&
-      (+l.duration||0)>0
-    );
-
-    if(!hasTimedMedia){
-      try{
-        // Hapus audio destination kosong dari buildAudioMix, bila ada.
-        for(const track of [...stream.getAudioTracks()]){
-          try{stream.removeTrack(track);track.stop()}catch(e){}
-        }
-
-        const AC=window.AudioContext||window.webkitAudioContext;
-        if(AC){
-          media.audioCtx ||= new AC();
-          await media.audioCtx.resume().catch(()=>{});
-
-          const dest=media.audioCtx.createMediaStreamDestination();
-          const osc=media.audioCtx.createOscillator();
-          const gain=media.audioCtx.createGain();
-
-          // 19 Hz dengan amplitudo sangat kecil: secara praktis tidak terdengar,
-          // tetapi membuat audio track menghasilkan timestamp kontinu.
-          osc.type='sine';
-          osc.frequency.value=19;
-          gain.gain.value=0.000001;
-
-          osc.connect(gain);
-          gain.connect(dest);
-          osc.start();
-
-          const clockTrack=dest.stream.getAudioTracks()[0]||null;
-          if(clockTrack)stream.addTrack(clockTrack);
-
-          exportClock={osc,gain,dest,track:clockTrack};
-        }
-      }catch(e){
-        console.warn('Export clock audio gagal:',e);
-      }
-    }
-
-    let rec;
-    try{
-      const opts={videoBitsPerSecond:bitrate};
-      if(mime)opts.mimeType=mime;
-      rec=new MediaRecorder(stream,opts);
-    }catch(err){
-      try{
-        mime='video/webm;codecs=vp9';
-        if(!MediaRecorder.isTypeSupported(mime))mime='video/webm';
-        rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:bitrate});
-        toast('Codec pilihan gagal; memakai WebM fallback');
-      }catch(e){
-        this.running=false;
-        model.time=old.time;model.selected=old.selected;model.cameraView=old.cameraView;renderer.exporting=old.rendererExporting;
-        media.pause();
-        renderer.render();timeline.rebuild();
-        if(old.playing)clock.start();
-        toast('Encoder video tidak tersedia pada perangkat ini');
-        return;
-      }
-    }
-
-    const actualMime=rec.mimeType||mime||'video/webm';
-    const ext=actualMime.includes('mp4')?'mp4':(codec.ext||'webm');
-    const chunks=[];
-
-    rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
-    rec.onerror=()=>{
-      this.running=false;
-      chunks.length=0;
-      media.pause();
-      model.time=old.time;model.selected=old.selected;model.cameraView=old.cameraView;renderer.exporting=old.rendererExporting;
-
-      try{exportClock?.osc?.stop()}catch(e){}
-      try{exportClock?.track?.stop()}catch(e){}
-      try{out.remove()}catch(e){}
-
-      renderer.render();timeline.rebuild();
-      if(old.playing)clock.start();
-      toast('Terjadi kesalahan saat encoding '+codec.label);
-    };
-    rec.onstop=()=>{
-      const outputBlob=new Blob(chunks,{type:actualMime});
-      chunks.length=0;
-      download(outputBlob,safe(model.project.name)+'.'+ext);
-      model.time=old.time;model.selected=old.selected;model.cameraView=old.cameraView;renderer.exporting=old.rendererExporting;
-      this.running=false;$('#exportProgress').style.width='0';
-      media.pause();
-
-      try{
-        stream.getTracks().forEach(t=>t.stop());
-      }catch(e){}
-      try{exportClock?.osc?.stop()}catch(e){}
-      try{exportClock?.gain?.disconnect()}catch(e){}
-      try{exportClock?.track?.stop()}catch(e){}
-      try{out.remove()}catch(e){}
-
-      renderer.render();timeline.rebuild();
-      if(old.playing)clock.start();
-      toast('Ekspor selesai: '+codec.label);
-    };
-
-    rec.start(200);
-    const start=performance.now();
-    const frameInterval=1000/Math.max(1,fps);
-    let nextFrameAt=0;
+    const old=this.exportSessionGuard.snapshot();
+    let terminal='pending';
+    let cleanup=null;
+    let rec=null;
+    let out=null;
+    let stream=null;
+    let exportVideoTrack=null;
     let finishing=false;
-    let frameSerial=0;
+    const chunks=[];
+    const ownedTrackStops=new Map();
 
-    media.sync(0,true,false);
-
-    const pushCanvasFrame=()=>{
-      // Keep extension boundaries correct without resetting currentTime every frame.
-      media.tick(model.time,false);
-      renderer.render();
-      oc.clearRect(0,0,out.width,out.height);
-      oc.drawImage(renderer.canvas,0,0,out.width,out.height);
-
-      // Capture heartbeat:
-      // ubah hanya 1 level warna pada 2×2 pixel pojok. Secara visual tidak
-      // terlihat, tetapi bitmap tidak pernah dianggap identik/statis oleh
-      // pipeline capture Android.
-      oc.save();
-      oc.globalAlpha=1/255;
-      oc.fillStyle=(frameSerial++&1)?'#ffffff':'#000000';
-      oc.fillRect(Math.max(0,out.width-2),Math.max(0,out.height-2),2,2);
-      oc.restore();
-
-      // Bantuan tambahan jika browser menyediakan requestFrame().
-      try{exportVideoTrack?.requestFrame?.()}catch(e){}
+    const restoreAndCleanup=()=>{
+      const errors=cleanup?.run()||[];
+      for(const item of errors)console.warn('Realtime cleanup gagal ['+item.label+']:',item.error);
+      try{this.exportSessionGuard.restoreRealtimeEditor(old)}catch(e){console.error('Pemulihan editor Realtime gagal:',e)}
+      try{$('#exportProgress').style.width='0'}catch(e){}
+    };
+    const settleFailure=(error,message='Terjadi kesalahan saat encoding '+codec.label)=>{
+      if(terminal!=='pending')return false;
+      terminal='failure';
+      chunks.length=0;
+      if(error)console.warn('Ekspor Realtime gagal:',error);
+      restoreAndCleanup();
+      toast(message);
+      return true
+    };
+    const settleSuccess=(actualMime,ext)=>{
+      if(terminal!=='pending')return false;
+      terminal='success';
+      let outputError=null;
+      try{
+        const outputBlob=new Blob(chunks,{type:actualMime});
+        download(outputBlob,safe(model.project.name)+'.'+ext)
+      }catch(e){
+        terminal='failure';
+        outputError=e
+      }
+      chunks.length=0;
+      restoreAndCleanup();
+      if(outputError){
+        console.warn('Penyelesaian ekspor Realtime gagal:',outputError);
+        toast('Terjadi kesalahan saat encoding '+codec.label)
+      }else{
+        toast('Ekspor selesai: '+codec.label)
+      }
+      return !outputError
+    };
+    const ownTrack=(track,label)=>{
+      if(!track||ownedTrackStops.has(track))return track;
+      let stopped=false;
+      const stop=()=>{if(stopped)return;stopped=true;try{track.stop()}catch(e){}};
+      ownedTrackStops.set(track,stop);
+      cleanup.defer(stop,label);
+      return track
+    };
+    const ownStream=(owned,label)=>{
+      if(!owned)return owned;
+      for(const track of owned.getTracks?.()||[])ownTrack(track,label);
+      return owned
     };
 
-    model.time=0;
-    pushCanvasFrame();
+    try{
+      // Phase 3: all three video engines use the same canonical content bound.
+      const exportDuration=this.exportDuration();
+      cleanup=this.exportSessionGuard.beginRealtime();
 
-    const finishExport=()=>{
-      if(finishing)return;
-      finishing=true;
+      out=document.createElement('canvas');
+      cleanup.defer(()=>{try{out?.remove()}catch(e){}},'realtime-capture-canvas');
+      out.width=Math.max(2,exportSize.width);
+      out.height=Math.max(2,exportSize.height);
+      const oc=out.getContext('2d');
 
-      model.time=exportDuration;
-      pushCanvasFrame();
-      $('#exportProgress').style.width='100%';
-      media.pause();
+      // Android Chromium lebih stabil jika canvas sumber benar-benar attached
+      // dan captureStream berjalan dengan FPS normal. requestFrame() hanya
+      // dipakai sebagai bantuan opsional, bukan sebagai sumber timing utama.
+      out.className='exportCaptureCanvas';
+      Object.assign(out.style,{
+        position:'fixed',
+        left:'0',
+        top:'0',
+        width:'1px',
+        height:'1px',
+        opacity:'0.001',
+        pointerEvents:'none',
+        zIndex:'-2147483647'
+      });
+      document.body.appendChild(out);
 
-      // Jangan hentikan recorder terlalu dekat dengan frame terakhir.
-      setTimeout(()=>{
-        try{
-          if(rec.state!=='inactive'){
-            try{rec.requestData()}catch(e){}
-            rec.stop();
-          }
-        }catch(e){}
-      },Math.max(180,Math.ceil(frameInterval*4)));
-    };
+      stream=out.captureStream(Math.max(1,fps));
+      ownStream(stream,'realtime-media-stream');
+      exportVideoTrack=stream.getVideoTracks()[0]||null;
 
-    const frame=now=>{
-      if(finishing)return;
-
-      const elapsed=now-start;
-      const durationMs=exportDuration*1000;
-
-      if(elapsed>=durationMs){
-        finishExport();
-        return;
+      try{
+        const mixedStream=await media.buildAudioMix(stream);
+        if(mixedStream)stream=mixedStream;
+        ownStream(stream,'realtime-audio-mix-stream')
+      }catch(e){
+        // Audio mix is best-effort, but tracks already added to the original
+        // stream still become owned before continuing with silent export.
+        ownStream(stream,'realtime-audio-mix-stream');
+        console.warn('Audio mix ekspor gagal:',e)
       }
 
-      if(elapsed+0.5>=nextFrameAt){
-        model.time=Math.min(elapsed/1000,exportDuration);
-        pushCanvasFrame();
+      // Project shape/text/image tidak punya clock audio nyata. Pada sejumlah
+      // encoder Android, recorder dapat memendekkan timeline ketika hanya ada
+      // canvas track. Tambahkan oscillator praktis tak terdengar agar timestamp
+      // MediaRecorder terus berjalan sampai exportDuration selesai.
+      const hasTimedMedia=model.layers.some(l=>
+        (l.type==='video'||l.type==='audio') &&
+        !l.hidden &&
+        (+l.duration||0)>0
+      );
 
-        nextFrameAt+=frameInterval;
-        if(nextFrameAt<elapsed-frameInterval){
-          nextFrameAt=elapsed+frameInterval;
+      if(!hasTimedMedia){
+        try{
+          // Hapus audio destination kosong dari buildAudioMix, bila ada.
+          for(const track of [...stream.getAudioTracks()]){
+            ownTrack(track,'realtime-audio-mix-track');
+            try{stream.removeTrack(track);ownedTrackStops.get(track)?.()}catch(e){}
+          }
+
+          const AC=window.AudioContext||window.webkitAudioContext;
+          if(AC){
+            media.audioCtx ||= new AC();
+            await media.audioCtx.resume().catch(()=>{});
+
+            const dest=media.audioCtx.createMediaStreamDestination();
+            ownStream(dest.stream,'realtime-export-clock-destination');
+            const osc=media.audioCtx.createOscillator();
+            cleanup.defer(()=>{try{osc.stop()}catch(e){}},'realtime-export-clock-oscillator');
+            const gain=media.audioCtx.createGain();
+            cleanup.defer(()=>{try{gain.disconnect()}catch(e){}},'realtime-export-clock-gain');
+
+            // 19 Hz dengan amplitudo sangat kecil: secara praktis tidak terdengar,
+            // tetapi membuat audio track menghasilkan timestamp kontinu.
+            osc.type='sine';
+            osc.frequency.value=19;
+            gain.gain.value=0.000001;
+
+            osc.connect(gain);
+            gain.connect(dest);
+            osc.start();
+
+            const clockTrack=dest.stream.getAudioTracks()[0]||null;
+            if(clockTrack){
+              ownTrack(clockTrack,'realtime-export-clock-track');
+              stream.addTrack(clockTrack)
+            }
+          }
+        }catch(e){
+          console.warn('Export clock audio gagal:',e);
         }
       }
 
-      $('#exportProgress').style.width=
-        (Math.min(elapsed,durationMs)/durationMs*100)+'%';
+      const ownRecorder=candidate=>{
+        rec=candidate;
+        cleanup.defer(()=>{
+          try{if(candidate.state!=='inactive')candidate.stop()}catch(e){}
+        },'realtime-media-recorder');
+        return candidate
+      };
+      try{
+        const opts={videoBitsPerSecond:bitrate};
+        if(mime)opts.mimeType=mime;
+        ownRecorder(new MediaRecorder(stream,opts))
+      }catch(err){
+        try{
+          mime='video/webm;codecs=vp9';
+          if(!MediaRecorder.isTypeSupported(mime))mime='video/webm';
+          ownRecorder(new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:bitrate}));
+          toast('Codec pilihan gagal; memakai WebM fallback')
+        }catch(e){
+          settleFailure(e,'Encoder video tidak tersedia pada perangkat ini');
+          return
+        }
+      }
 
-      requestAnimationFrame(frame);
-    };
+      const actualMime=rec.mimeType||mime||'video/webm';
+      const ext=actualMime.includes('mp4')?'mp4':(codec.ext||'webm');
 
-    requestAnimationFrame(frame);
+      rec.ondataavailable=e=>{
+        if(terminal==='pending'&&e.data.size)chunks.push(e.data)
+      };
+      rec.onerror=e=>settleFailure(e?.error||e);
+      rec.onstop=()=>settleSuccess(actualMime,ext);
+
+      rec.start(200);
+      const start=performance.now();
+      const frameInterval=1000/Math.max(1,fps);
+      let nextFrameAt=0;
+      let frameSerial=0;
+
+      media.sync(0,true,false);
+
+      const pushCanvasFrame=()=>{
+        // Keep extension boundaries correct without resetting currentTime every frame.
+        media.tick(model.time,false);
+        renderer.render();
+        oc.clearRect(0,0,out.width,out.height);
+        oc.drawImage(renderer.canvas,0,0,out.width,out.height);
+
+        // Capture heartbeat: ubah hanya 1 level warna pada 2×2 pixel pojok.
+        oc.save();
+        oc.globalAlpha=1/255;
+        oc.fillStyle=(frameSerial++&1)?'#ffffff':'#000000';
+        oc.fillRect(Math.max(0,out.width-2),Math.max(0,out.height-2),2,2);
+        oc.restore();
+
+        try{exportVideoTrack?.requestFrame?.()}catch(e){}
+      };
+
+      const finishExport=()=>{
+        if(terminal!=='pending'||finishing)return;
+        finishing=true;
+        try{
+          model.time=exportDuration;
+          pushCanvasFrame();
+          $('#exportProgress').style.width='100%';
+          media.pause();
+
+          // Jangan hentikan recorder terlalu dekat dengan frame terakhir.
+          setTimeout(()=>{
+            if(terminal!=='pending')return;
+            try{
+              if(rec.state!=='inactive'){
+                try{rec.requestData()}catch(e){}
+                rec.stop()
+              }
+            }catch(e){settleFailure(e)}
+          },Math.max(180,Math.ceil(frameInterval*4)))
+        }catch(e){
+          settleFailure(e)
+        }
+      };
+
+      const frame=now=>{
+        if(terminal!=='pending'||finishing)return;
+        try{
+          const elapsed=now-start;
+          const durationMs=exportDuration*1000;
+
+          if(elapsed>=durationMs){
+            finishExport();
+            return
+          }
+
+          if(elapsed+0.5>=nextFrameAt){
+            model.time=Math.min(elapsed/1000,exportDuration);
+            pushCanvasFrame();
+
+            nextFrameAt+=frameInterval;
+            if(nextFrameAt<elapsed-frameInterval){
+              nextFrameAt=elapsed+frameInterval
+            }
+          }
+
+          $('#exportProgress').style.width=
+            (Math.min(elapsed,durationMs)/durationMs*100)+'%';
+
+          requestAnimationFrame(frame)
+        }catch(e){
+          settleFailure(e)
+        }
+      };
+
+      model.time=0;
+      pushCanvasFrame();
+      requestAnimationFrame(frame)
+    }catch(e){
+      settleFailure(e)
+    }
   }
 }
 const exporter=new Exporter();
