@@ -1099,50 +1099,46 @@ input[type=range]{accent-color:var(--accent)}
   pointer-events:none;
   opacity:0;
   border-radius:999px;
-
-  /* orange/yellow outer edges -> bright green at the fixed playhead */
-  background:
-    linear-gradient(
-      90deg,
-      rgba(170,91,22,.82) 0%,
-      rgba(211,139,24,.88) 12%,
-      rgba(183,197,32,.92) 25%,
-      rgba(85,218,42,.98) 38%,
-      rgba(0,244,91,1) 50%,
-      rgba(85,218,42,.98) 62%,
-      rgba(183,197,32,.92) 75%,
-      rgba(211,139,24,.88) 88%,
-      rgba(170,91,22,.82) 100%
-    );
-
-  will-change:width,opacity;
+  background:none;
+  --meter-left-width:0px;
+  --meter-right-width:0px;
+  will-change:opacity;
 }
 
+.liveAudioMeter::before,
+.liveAudioMeter::after{
+  content:"";
+  position:absolute;
+  top:0;
+  height:2px;
+  pointer-events:none;
+  will-change:width;
+}
 .liveAudioMeter::before{
-  content:none;
+  right:0;
+  width:var(--meter-left-width);
+  border-radius:999px 0 0 999px;
+  background:linear-gradient(90deg,rgba(170,91,22,.82),rgba(211,139,24,.88) 24%,rgba(85,218,42,.98) 66%,rgba(0,244,91,1));
+}
+.liveAudioMeter::after{
+  left:0;
+  width:var(--meter-right-width);
+  border-radius:0 999px 999px 0;
+  background:linear-gradient(90deg,rgba(0,244,91,1),rgba(85,218,42,.98) 34%,rgba(211,139,24,.88) 76%,rgba(170,91,22,.82));
 }
 
 .liveAudioMeter.active{
   opacity:1;
 }
 
-/* Red is reserved for genuinely high visualizer energy. Keeping it out of the
-   normal gradient prevents quiet audio from looking clipped. */
-.liveAudioMeter.audioHot{
-  background:
-    linear-gradient(
-      90deg,
-      rgba(239,54,45,.98) 0%,
-      rgba(235,103,28,.96) 10%,
-      rgba(214,155,25,.94) 22%,
-      rgba(85,218,42,.98) 38%,
-      rgba(0,244,91,1) 50%,
-      rgba(85,218,42,.98) 62%,
-      rgba(214,155,25,.94) 78%,
-      rgba(235,103,28,.96) 90%,
-      rgba(239,54,45,.98) 100%
-    );
-  box-shadow:0 0 4px rgba(239,54,45,.28);
+/* Each stereo side becomes red independently only at genuinely high energy. */
+.liveAudioMeter.audioHotLeft::before{
+  background:linear-gradient(90deg,rgba(239,54,45,.98),rgba(235,103,28,.96) 22%,rgba(214,155,25,.94) 44%,rgba(85,218,42,.98) 72%,rgba(0,244,91,1));
+  box-shadow:-2px 0 4px rgba(239,54,45,.28);
+}
+.liveAudioMeter.audioHotRight::after{
+  background:linear-gradient(90deg,rgba(0,244,91,1),rgba(85,218,42,.98) 28%,rgba(214,155,25,.94) 56%,rgba(235,103,28,.96) 78%,rgba(239,54,45,.98));
+  box-shadow:2px 0 4px rgba(239,54,45,.28);
 }
 
 
@@ -3613,7 +3609,12 @@ class MediaAssetRegistry{
     if(!this.isMedia(layer)||!layer.dataUrl)return null;
     layer.assetId ||= uid('asset');
     if(this.sources.get(layer.assetId)!==layer.dataUrl)this.sources.set(layer.assetId,layer.dataUrl);
-    if(Array.isArray(layer.audioWave)&&layer.audioWave.length>16)this.waveforms.set(layer.assetId,{wave:layer.audioWave,duration:layer.audioWaveDuration});
+    if(Array.isArray(layer.audioWave)&&layer.audioWave.length>16)this.waveforms.set(layer.assetId,{
+      wave:layer.audioWave,
+      left:Array.isArray(layer.audioWaveL)?layer.audioWaveL:null,
+      right:Array.isArray(layer.audioWaveR)?layer.audioWaveR:null,
+      duration:layer.audioWaveDuration
+    });
     return layer.assetId
   }
   captureLayers(layers=[]){for(const layer of layers)this.captureLayer(layer)}
@@ -3636,7 +3637,12 @@ class MediaAssetRegistry{
       }
     }
     const waveform=layer.assetId&&this.waveforms.get(layer.assetId);
-    if(waveform&&!Array.isArray(layer.audioWave)){layer.audioWave=waveform.wave;layer.audioWaveDuration=waveform.duration}
+    if(waveform){
+      if(!Array.isArray(layer.audioWave))layer.audioWave=waveform.wave;
+      if(!Array.isArray(layer.audioWaveL)&&Array.isArray(waveform.left))layer.audioWaveL=waveform.left;
+      if(!Array.isArray(layer.audioWaveR)&&Array.isArray(waveform.right))layer.audioWaveR=waveform.right;
+      layer.audioWaveDuration ||= waveform.duration
+    }
     return layer
   }
   idsForLayers(layers=[]){
@@ -3931,6 +3937,8 @@ class ProjectModel{
       ...l,
       dataUrl:includeMedia?l.dataUrl:undefined,
       audioWave:includeMedia?l.audioWave:undefined,
+      audioWaveL:includeMedia?l.audioWaveL:undefined,
+      audioWaveR:includeMedia?l.audioWaveR:undefined,
       audioWaveDuration:includeMedia?l.audioWaveDuration:undefined,
       waveformPending:undefined,waveformError:undefined,
       img:undefined,video:undefined,audio:undefined,audioNode:undefined,
@@ -3947,7 +3955,7 @@ class ProjectModel{
     delete c.frameCacheReady;delete c.frameCacheTime;delete c.cacheVideoFrame;
     delete c._offlineDecodeLock;delete c._offlineDecodeEpoch;delete c._offlineCachedTarget;delete c._offlinePresentedMediaTime;
     delete c._disposed;delete c.waveformPending;delete c.waveformError;
-    if(!includeMedia){delete c.dataUrl;delete c.audioWave;delete c.audioWaveDuration}
+    if(!includeMedia){delete c.dataUrl;delete c.audioWave;delete c.audioWaveL;delete c.audioWaveR;delete c.audioWaveDuration}
     return c
   }
   serialize({includeMedia=true}={}){return{project:this.project,layers:this.layers.map(l=>this.cleanLayer(l,{includeMedia})),selected:this.selected,time:this.time,mode3d:this.mode3d,cameraView:this.cameraView,snap:this.snap}}
@@ -4369,53 +4377,78 @@ function omsAnalyzeFrequencySpectrum(data,previous,{sampleRate=48000,fftSize=204
   const band=(low,high)=>{
     const a=clamp(Math.floor(low/binHz),0,data.length-1);
     const z=clamp(Math.ceil(Math.min(high,nyquist)/binHz),a+1,data.length);
-    let sum=0,peak=0,count=0;
+    const top=[0,0,0,0];
+    let sum=0,count=0;
     for(let i=a;i<z;i++){
       const value=normalizedAt(i);
       sum+=value*value;
-      peak=Math.max(peak,value);
+      if(value>top[3]){
+        top[3]=value;
+        for(let j=3;j>0&&top[j]>top[j-1];j--){
+          const swap=top[j-1];top[j-1]=top[j];top[j]=swap
+        }
+      }
       count++
     }
-    return count?clamp(Math.sqrt(sum/count)*.72+peak*.28,0,1):0
+    if(!count)return 0;
+    const topCount=Math.min(top.length,count);
+    let topSquare=0;
+    for(let i=0;i<topCount;i++)topSquare+=top[i]*top[i];
+    const rms=Math.sqrt(sum/count);
+    const detail=Math.sqrt(topSquare/topCount);
+    // Wide bands no longer dilute a narrow cymbal, consonant or snare peak.
+    return clamp(rms*.42+detail*.58,0,1)
   };
 
   const low=band(20,250);
-  const mid=band(250,4000);
-  const high=band(4000,Math.min(20000,nyquist));
-  const fluxStart=clamp(Math.floor(1500/binHz),0,data.length-1);
-  const fluxEnd=clamp(Math.ceil(Math.min(20000,nyquist)/binHz),fluxStart+1,data.length);
-  let fluxSquare=0,fluxPeak=0,fluxCount=0;
-  for(let i=0;i<data.length;i++){
-    const value=normalizedAt(i);
-    if(primed&&i>=fluxStart&&i<fluxEnd){
-      const delta=Math.max(0,value-(previous[i]||0));
-      fluxSquare+=delta*delta;
-      fluxPeak=Math.max(fluxPeak,delta);
-      fluxCount++
+  const lowMid=band(250,1500);
+  const upperMid=band(1500,4000);
+  const presence=band(4000,8000);
+  const air=band(8000,Math.min(20000,nyquist));
+  const spectralFlux=(lowHz,highHz)=>{
+    if(!primed)return 0;
+    const a=clamp(Math.floor(lowHz/binHz),0,data.length-1);
+    const z=clamp(Math.ceil(Math.min(highHz,nyquist)/binHz),a+1,data.length);
+    let square=0,peak=0,count=0;
+    for(let i=a;i<z;i++){
+      const delta=Math.max(0,normalizedAt(i)-(previous[i]||0));
+      square+=delta*delta;
+      peak=Math.max(peak,delta);
+      count++
     }
-    previous[i]=value
+    return count?clamp(Math.sqrt(square/count)*1.5+peak*.34,0,1):0
+  };
+  const midFlux=spectralFlux(1500,4000);
+  const highFlux=spectralFlux(4000,Math.min(20000,nyquist));
+  for(let i=0;i<data.length;i++){
+    previous[i]=normalizedAt(i)
   }
-  const flux=clamp(
-    Math.sqrt(fluxSquare/Math.max(1,fluxCount))*2.0+fluxPeak*.42,
-    0,1
-  );
+  const mid=Math.max(lowMid,upperMid);
+  const high=Math.max(presence,air);
+  const flux=Math.max(midFlux,highFlux);
   const energy=clamp(Math.max(
-    low*.76,
-    mid*.98,
-    high*1.12,
-    flux*1.05,
-    (low*.25+mid*.39+high*.36)
+    low*.70,
+    lowMid*.88,
+    upperMid*.95,
+    presence*1.02,
+    air,
+    midFlux*1.08,
+    highFlux*1.12,
+    low*.16+lowMid*.19+upperMid*.22+presence*.23+air*.20
   ),0,1);
-  return {energy,low,mid,high,flux,sampleRate,fftSize}
+  return {energy,low,lowMid,upperMid,presence,air,mid,high,midFlux,highFlux,flux,sampleRate,fftSize}
 }
 class MediaManager{
   constructor(model){
     this.model=model;
     this.audioCtx=null;
     this.exportDest=null;
-    // V4.64 — lightweight live spectrum analysis. The analyser stays on the
-    // playback mix, uses one reusable buffer, and never changes project/export
-    // data. FFT 2048 gives useful high-frequency detail without burdening mobile.
+    // V4.66 — the playback mix stays stereo: one silent analysis tap feeds an
+    // analyser per channel while the same bus feeds the speakers only once.
+    // FFT 2048 gives useful high-frequency detail without changing export data.
+    this.liveAnalysisBus=null;
+    this.liveChannelSplitter=null;
+    this.liveAnalysers=null;
     this.liveAnalyser=null;
     this.liveFrequencyData=null;
     this.livePreviousSpectrum=null;
@@ -4481,7 +4514,11 @@ class MediaManager{
 
   async analyzeWaveform(l){
     if(!l||!l.dataUrl||!(l.type==='video'||l.type==='audio'))return false;
-    if(Array.isArray(l.audioWave)&&l.audioWave.length>16)return true;
+    if(
+      Array.isArray(l.audioWave)&&l.audioWave.length>16 &&
+      Array.isArray(l.audioWaveL)&&l.audioWaveL.length>16 &&
+      Array.isArray(l.audioWaveR)&&l.audioWaveR.length>16
+    )return true;
     if(this.waveJobs.has(l))return this.waveJobs.get(l);
 
     l.waveformPending=true;
@@ -4506,34 +4543,51 @@ class MediaManager{
         // from inflating localStorage.
         const bins=clamp(Math.ceil(duration*36),480,5000);
         const wave=new Array(bins).fill(0);
+        const waveL=new Array(bins).fill(0);
+        const waveR=new Array(bins).fill(0);
         const frames=decoded.length;
         const channels=decoded.numberOfChannels;
+        const channelData=Array.from({length:channels},(_,c)=>decoded.getChannelData(c));
+        const leftData=channelData[0];
+        // Web Audio duplicates mono content into both speakers. Store that same
+        // semantic here so a mono asset produces balanced L/R visualization.
+        const rightData=channelData[1]||leftData;
         const stride=Math.max(1,Math.floor(frames/(bins*28)));
 
         for(let b=0;b<bins;b++){
           const a=Math.floor(b*frames/bins);
           const z=Math.max(a+1,Math.floor((b+1)*frames/bins));
-          let sum=0,count=0,peak=0;
+          let sum=0,sumL=0,sumR=0,count=0,peak=0,peakL=0,peakR=0;
 
           for(let i=a;i<z;i+=stride){
-            let sample=0;
-            for(let c=0;c<channels;c++){
-              sample+=Math.abs(decoded.getChannelData(c)[i]||0)
-            }
-            sample/=Math.max(1,channels);
+            const sampleL=Math.abs(leftData?.[i]||0);
+            const sampleR=Math.abs(rightData?.[i]||0);
+            const sample=(sampleL+sampleR)*.5;
             sum+=sample*sample;
+            sumL+=sampleL*sampleL;
+            sumR+=sampleR*sampleR;
             if(sample>peak)peak=sample;
+            if(sampleL>peakL)peakL=sampleL;
+            if(sampleR>peakR)peakR=sampleR;
             count++;
           }
 
           const rms=Math.sqrt(sum/Math.max(1,count));
+          const rmsL=Math.sqrt(sumL/Math.max(1,count));
+          const rmsR=Math.sqrt(sumR/Math.max(1,count));
           // Blend RMS with peak so beats stay visible but quiet regions
           // do not become a solid block.
           const level=clamp(rms*.78+peak*.42,0,1);
+          const levelL=clamp(rmsL*.78+peakL*.42,0,1);
+          const levelR=clamp(rmsR*.78+peakR*.42,0,1);
           wave[b]=Math.round(Math.pow(level,.62)*255);
+          waveL[b]=Math.round(Math.pow(levelL,.62)*255);
+          waveR[b]=Math.round(Math.pow(levelR,.62)*255);
         }
 
         l.audioWave=wave;
+        l.audioWaveL=waveL;
+        l.audioWaveR=waveR;
         l.audioWaveDuration=duration;
         l.waveformError=false;
 
@@ -4561,7 +4615,11 @@ class MediaManager{
 
   ensureWaveform(l){
     if(!l||!(l.type==='video'||l.type==='audio')||!l.dataUrl)return;
-    if(Array.isArray(l.audioWave)&&l.audioWave.length>16)return;
+    if(
+      Array.isArray(l.audioWave)&&l.audioWave.length>16 &&
+      Array.isArray(l.audioWaveL)&&l.audioWaveL.length>16 &&
+      Array.isArray(l.audioWaveR)&&l.audioWaveR.length>16
+    )return;
     if(l.waveformPending||l.waveformError)return;
     this.analyzeWaveform(l)
   }
@@ -4924,18 +4982,42 @@ class MediaManager{
 
     try{
       this.audioCtx ||= new AC({latencyHint:'interactive'});
-      if(!this.liveAnalyser){
-        const analyser=this.audioCtx.createAnalyser();
-        analyser.fftSize=2048;
-        analyser.minDecibels=-96;
-        analyser.maxDecibels=-18;
-        // Low analyser smoothing retains short hi-hats/cymbals. The visible
-        // meter applies its own time-based attack/release below.
-        analyser.smoothingTimeConstant=.18;
-        analyser.connect(this.audioCtx.destination);
-        this.liveAnalyser=analyser;
-        this.liveFrequencyData=new Float32Array(analyser.frequencyBinCount);
-        this.livePreviousSpectrum=new Float32Array(analyser.frequencyBinCount)
+      if(!this.liveAnalysisBus){
+        const bus=this.audioCtx.createGain();
+        bus.channelCount=2;
+        bus.channelCountMode='explicit';
+        bus.channelInterpretation='speakers';
+        const splitter=this.audioCtx.createChannelSplitter(2);
+        const makeAnalyser=()=>{
+          const analyser=this.audioCtx.createAnalyser();
+          analyser.fftSize=2048;
+          analyser.minDecibels=-96;
+          analyser.maxDecibels=-18;
+          // Low analyser smoothing retains short hi-hats/cymbals. The visible
+          // meter applies its own time-based attack/release below.
+          analyser.smoothingTimeConstant=.12;
+          return analyser
+        };
+        const left=makeAnalyser();
+        const right=makeAnalyser();
+        // The audible route and analysis tap branch from one stereo bus. Analyser
+        // nodes are not connected onward, avoiding duplicate playback volume.
+        bus.connect(this.audioCtx.destination);
+        bus.connect(splitter);
+        splitter.connect(left,0,0);
+        splitter.connect(right,1,0);
+        this.liveAnalysisBus=bus;
+        this.liveChannelSplitter=splitter;
+        this.liveAnalysers=[left,right];
+        this.liveAnalyser=left;
+        this.liveFrequencyData=[
+          new Float32Array(left.frequencyBinCount),
+          new Float32Array(right.frequencyBinCount)
+        ];
+        this.livePreviousSpectrum=[
+          new Float32Array(left.frequencyBinCount),
+          new Float32Array(right.frequencyBinCount)
+        ]
       }
 
       let connected=0;
@@ -4946,7 +5028,7 @@ class MediaManager{
           if(!l.audioNode)l.audioNode=this.audioCtx.createMediaElementSource(el);
           if(this.liveAudioRoutes.get(l.audioNode)!=='live'){
             try{l.audioNode.disconnect()}catch(e){}
-            l.audioNode.connect(this.liveAnalyser);
+            l.audioNode.connect(this.liveAnalysisBus);
             this.liveAudioRoutes.set(l.audioNode,'live')
           }
           connected++
@@ -4954,7 +5036,7 @@ class MediaManager{
       }
 
       this.audioCtx.resume().catch(()=>{});
-      return connected?this.liveAnalyser:null
+      return connected?this.liveAnalysers:null
     }catch(err){
       console.warn('Live audio analyser gagal, memakai waveform fallback:',err);
       this.liveAnalysisError=true;
@@ -4970,32 +5052,40 @@ class MediaManager{
   }
 
   liveSpectrumEnergy(){
-    const analyser=this.liveAnalyser;
+    const analysers=this.liveAnalysers;
     const ctx=this.audioCtx;
-    if(!analyser||!ctx||ctx.state!=='running')return null;
+    if(!Array.isArray(analysers)||analysers.length<2||!ctx||ctx.state!=='running')return null;
+    const channels=[];
 
-    const data=this.liveFrequencyData;
-    const previous=this.livePreviousSpectrum;
-    if(!data||data.length!==analyser.frequencyBinCount)return null;
-    analyser.getFloatFrequencyData(data);
-
-    // Positive spectral change above 1.5 kHz preserves brief high-frequency
-    // attacks which disappear in a conventional RMS envelope. Bass no longer
-    // owns the meter: mid/high bands receive perceptual compensation.
-    this.liveSpectrumSnapshot=omsAnalyzeFrequencySpectrum(data,previous,{
-      sampleRate:ctx.sampleRate,
-      fftSize:analyser.fftSize,
-      minDecibels:analyser.minDecibels,
-      maxDecibels:analyser.maxDecibels,
-      primed:this.liveSpectrumPrimed
-    });
+    // Five perceptual bands plus separate upper-mid/high spectral flux preserve
+    // narrow consonants, snares and cymbal attacks independently in L and R.
+    for(let channel=0;channel<2;channel++){
+      const analyser=analysers[channel];
+      const data=this.liveFrequencyData?.[channel];
+      const previous=this.livePreviousSpectrum?.[channel];
+      if(!data||data.length!==analyser.frequencyBinCount)return null;
+      analyser.getFloatFrequencyData(data);
+      channels[channel]=omsAnalyzeFrequencySpectrum(data,previous,{
+        sampleRate:ctx.sampleRate,
+        fftSize:analyser.fftSize,
+        minDecibels:analyser.minDecibels,
+        maxDecibels:analyser.maxDecibels,
+        primed:this.liveSpectrumPrimed
+      })
+    }
+    this.liveSpectrumSnapshot={
+      left:channels[0],
+      right:channels[1],
+      energy:Math.max(channels[0].energy,channels[1].energy)
+    };
     this.liveSpectrumPrimed=true;
     return this.liveSpectrumSnapshot
   }
 
   resetLiveSpectrumAnalysis(){
     this.liveSpectrumPrimed=false;
-    this.liveSpectrumSnapshot=null
+    this.liveSpectrumSnapshot=null;
+    for(const previous of this.livePreviousSpectrum||[])previous?.fill?.(0)
   }
 
   tick(t,muted=false){
@@ -5066,13 +5156,13 @@ class MediaManager{
       try{gain.disconnect()}catch(e){}
     }
     this.exportGains?.clear?.();
-    const playbackDestination=this.liveAnalyser||this.audioCtx.destination;
+    const playbackDestination=this.liveAnalysisBus||this.audioCtx.destination;
     for(const l of model.layers){
       if(!l.audioNode)continue;
       try{
         l.audioNode.disconnect();
         l.audioNode.connect(playbackDestination);
-        this.liveAudioRoutes.set(l.audioNode,this.liveAnalyser?'live':'direct');
+        this.liveAudioRoutes.set(l.audioNode,this.liveAnalysisBus?'live':'direct');
       }catch(e){}
     }
     try{this.exportDest?.stream.getTracks().forEach(t=>t.stop())}catch(e){}
@@ -6711,6 +6801,12 @@ class TimelineController{
     this.audioMeterLevel=0;
     this.audioMeterPeak=0;
     this.audioMeterPeakHoldUntil=0;
+    this.audioMeterLeftLevel=0;
+    this.audioMeterLeftPeak=0;
+    this.audioMeterLeftPeakHoldUntil=0;
+    this.audioMeterRightLevel=0;
+    this.audioMeterRightPeak=0;
+    this.audioMeterRightPeakHoldUntil=0;
     this.audioMeterLastTime=-1;
     this.audioMeterLastStamp=0;
 
@@ -7354,8 +7450,12 @@ class TimelineController{
     }
   }
 
-  waveformValueAt(l,projectTime){
-    const wave=l.audioWave;
+  waveformValueAt(l,projectTime,channel='mix'){
+    const wave=channel==='left'
+      ? (l.audioWaveL||l.audioWave)
+      : channel==='right'
+        ? (l.audioWaveR||l.audioWave)
+        : l.audioWave;
     if(!Array.isArray(wave)||wave.length<2)return 0;
     if(l.hidden||clamp(l.volume??1,0,1)<=0)return 0;
 
@@ -7447,42 +7547,59 @@ class TimelineController{
   }
 
   realtimeAudioEnergy(t=model.time){
-    if(!model.project?.audioVisualizer)return 0;
+    return this.realtimeAudioStereoEnergy(t).energy
+  }
 
-    let peak=0;
-    let sum=0;
+  realtimeAudioStereoEnergy(t=model.time){
+    if(!model.project?.audioVisualizer)return {left:0,right:0,energy:0};
+
+    let peakL=0,peakR=0;
+    let sumL=0,sumR=0;
     let count=0;
 
     for(const l of model.layers){
       if((l.type!=='video'&&l.type!=='audio')||l.hidden)continue;
       if(clamp(l.volume??1,0,1)<=0)continue;
 
-      const v=this.waveformValueAt(l,t);
-      if(v<=0)continue;
+      const left=this.waveformValueAt(l,t,'left');
+      const right=this.waveformValueAt(l,t,'right');
+      if(left<=0&&right<=0)continue;
 
-      peak=Math.max(peak,v);
-      sum+=v*v;
+      peakL=Math.max(peakL,left);
+      peakR=Math.max(peakR,right);
+      sumL+=left*left;
+      sumR+=right*right;
       count++;
     }
 
-    if(!count)return 0;
+    if(!count)return {left:0,right:0,energy:0};
 
-    const rms=Math.sqrt(sum/count);
-    return clamp(peak*.72+rms*.36,0,1);
+    const rmsL=Math.sqrt(sumL/count);
+    const rmsR=Math.sqrt(sumR/count);
+    const left=clamp(peakL*.72+rmsL*.36,0,1);
+    const right=clamp(peakR*.72+rmsR*.36,0,1);
+    return {left,right,energy:Math.max(left,right)};
   }
 
   resetRealtimeAudioMeter(hide=false){
     this.audioMeterLevel=0;
     this.audioMeterPeak=0;
     this.audioMeterPeakHoldUntil=0;
+    this.audioMeterLeftLevel=0;
+    this.audioMeterLeftPeak=0;
+    this.audioMeterLeftPeakHoldUntil=0;
+    this.audioMeterRightLevel=0;
+    this.audioMeterRightPeak=0;
+    this.audioMeterRightPeakHoldUntil=0;
     this.audioMeterLastTime=-1;
     this.audioMeterLastStamp=0;
 
     const meter=$('#liveAudioMeter');
     if(!meter)return;
 
-    meter.style.width='0px';
-    meter.classList.remove('audioHot');
+    meter.style.setProperty('--meter-left-width','0px');
+    meter.style.setProperty('--meter-right-width','0px');
+    meter.classList.remove('audioHotLeft','audioHotRight');
     if(hide)meter.classList.remove('active');
   }
 
@@ -7532,24 +7649,25 @@ class TimelineController{
     const spectrumReady=!!(
       mobileSpectrum &&
       model.playing &&
-      media.liveAnalyser &&
+      Array.isArray(media.liveAnalysers) &&
       media.audioCtx?.state==='running'
     );
 
     if(!waveformReady&&!spectrumReady){
       meter.classList.remove('active');
-      meter.classList.remove('audioHot');
-      meter.style.width='0px';
+      meter.classList.remove('audioHotLeft','audioHotRight');
+      meter.style.setProperty('--meter-left-width','0px');
+      meter.style.setProperty('--meter-right-width','0px');
       meter.style.opacity='0';
       return;
     }
 
     const spectrum=mobileSpectrum&&model.playing?media.liveSpectrumEnergy():null;
-    // Mobile follows the actual FFT mix, with the precomputed waveform as a
-    // fallback. Desktop intentionally continues using that original waveform.
-    const raw=model.playing
-      ? (spectrum?.energy??this.realtimeAudioEnergy(model.time))
-      : 0;
+    const waveform=this.realtimeAudioStereoEnergy(model.time);
+    // Mobile follows the actual stereo FFT mix, with the precomputed stereo
+    // waveform as a fallback. Desktop retains that original waveform algorithm.
+    const rawLeft=model.playing ? (spectrum?.left?.energy??waveform.left) : 0;
+    const rawRight=model.playing ? (spectrum?.right?.energy??waveform.right) : 0;
 
     // Mobile uses a low-latency envelope. Desktop deliberately retains the
     // original waveform envelope and cadence requested for the PC layout.
@@ -7558,49 +7676,76 @@ class TimelineController{
       ? clamp((stamp-this.audioMeterLastStamp)/1000,1/240,.25)
       : 1/30;
     this.audioMeterLastStamp=stamp;
-    if(mobileSpectrum){
-      const attack=1-Math.exp(-dt/.014);
-      const release=1-Math.exp(-dt/(model.playing ? .112 : .070));
-      this.audioMeterLevel+=(raw-this.audioMeterLevel)*(raw>this.audioMeterLevel?attack:release);
-
-      if(model.playing&&this.audioMeterLevel>=this.audioMeterPeak){
-        this.audioMeterPeak=this.audioMeterLevel;
-        this.audioMeterPeakHoldUntil=stamp+100
-      }else if(model.playing&&stamp>=this.audioMeterPeakHoldUntil){
-        this.audioMeterPeak=Math.max(this.audioMeterLevel,this.audioMeterPeak*Math.exp(-dt/.13))
+    const updateMobileChannel=(raw,side)=>{
+      const levelKey=`audioMeter${side}Level`;
+      const peakKey=`audioMeter${side}Peak`;
+      const holdKey=`audioMeter${side}PeakHoldUntil`;
+      const attack=1-Math.exp(-dt/.012);
+      const release=1-Math.exp(-dt/(model.playing ? .092 : .060));
+      this[levelKey]+=(raw-this[levelKey])*(raw>this[levelKey]?attack:release);
+      if(model.playing&&this[levelKey]>=this[peakKey]){
+        this[peakKey]=this[levelKey];
+        this[holdKey]=stamp+65
+      }else if(model.playing&&stamp>=this[holdKey]){
+        this[peakKey]=Math.max(this[levelKey],this[peakKey]*Math.exp(-dt/.105))
       }else if(!model.playing){
-        this.audioMeterPeak*=Math.exp(-dt/.06)
+        this[peakKey]*=Math.exp(-dt/.06)
       }
-    }else{
+      return Math.max(this[levelKey],this[peakKey])
+    };
+    const updateDesktopChannel=(raw,side)=>{
+      const levelKey=`audioMeter${side}Level`;
+      const peakKey=`audioMeter${side}Peak`;
       const attack=.62;
       const release=model.playing ? .13 : .24;
-      this.audioMeterLevel+=(raw-this.audioMeterLevel)*(raw>this.audioMeterLevel?attack:release);
-      this.audioMeterPeak=model.playing
-        ? Math.max(this.audioMeterLevel,this.audioMeterPeak*.90)
-        : this.audioMeterPeak*.76
+      this[levelKey]+=(raw-this[levelKey])*(raw>this[levelKey]?attack:release);
+      this[peakKey]=model.playing
+        ? Math.max(this[levelKey],this[peakKey]*.90)
+        : this[peakKey]*.76;
+      return Math.max(this[levelKey],this[peakKey])
+    };
+    let effectiveLeft=0,effectiveRight=0;
+    if(mobileSpectrum){
+      effectiveLeft=updateMobileChannel(rawLeft,'Left');
+      effectiveRight=updateMobileChannel(rawRight,'Right')
+    }else{
+      effectiveLeft=updateDesktopChannel(rawLeft,'Left');
+      effectiveRight=updateDesktopChannel(rawRight,'Right')
     }
 
-    const effective=Math.max(this.audioMeterLevel,this.audioMeterPeak);
+    this.audioMeterLevel=Math.max(this.audioMeterLeftLevel,this.audioMeterRightLevel);
+    this.audioMeterPeak=Math.max(this.audioMeterLeftPeak,this.audioMeterRightPeak);
+    this.audioMeterPeakHoldUntil=Math.max(this.audioMeterLeftPeakHoldUntil,this.audioMeterRightPeakHoldUntil);
+    const effective=Math.max(effectiveLeft,effectiveRight);
     const areaWidth=$('.timelineArea')?.clientWidth || window.innerWidth || 360;
 
     // No artificial minimum width: silence should fully collapse to zero.
-    const maxWidth=Math.max(120,areaWidth*.76);
-    const shaped=Math.pow(clamp(effective,0,1),.72);
-    const width=maxWidth*shaped;
+    const maxSideWidth=Math.max(60,areaWidth*.38);
+    const leftWidth=maxSideWidth*Math.pow(clamp(effectiveLeft,0,1),.72);
+    const rightWidth=maxSideWidth*Math.pow(clamp(effectiveRight,0,1),.72);
 
-    meter.style.width=Math.round(width)+'px';
+    meter.style.setProperty('--meter-left-width',Math.round(leftWidth)+'px');
+    meter.style.setProperty('--meter-right-width',Math.round(rightWidth)+'px');
     meter.style.opacity=String(clamp(effective*1.15,0,1));
-    meter.classList.toggle('audioHot',mobileSpectrum&&effective>=.86);
+    meter.classList.toggle('audioHotLeft',mobileSpectrum&&effectiveLeft>=.86);
+    meter.classList.toggle('audioHotRight',mobileSpectrum&&effectiveRight>=.86);
 
     if(effective>.012){
       meter.classList.add('active');
     }else{
       meter.classList.remove('active');
-      meter.style.width='0px';
+      meter.style.setProperty('--meter-left-width','0px');
+      meter.style.setProperty('--meter-right-width','0px');
       meter.style.opacity='0';
       this.audioMeterLevel=0;
       this.audioMeterPeak=0;
       this.audioMeterPeakHoldUntil=0;
+      this.audioMeterLeftLevel=0;
+      this.audioMeterLeftPeak=0;
+      this.audioMeterLeftPeakHoldUntil=0;
+      this.audioMeterRightLevel=0;
+      this.audioMeterRightPeak=0;
+      this.audioMeterRightPeakHoldUntil=0;
     }
 
     this.audioMeterLastTime=model.time;
@@ -19752,7 +19897,9 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   .blendModeGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.blendModeBtn{min-height:68px}.blendOpacityPanel{padding:12px}
 }
 </style>
-<!-- V4.65 — mobile FFT uses a balanced 45 Hz low-latency envelope with a 100 ms peak hold and red high-energy zone; desktop retains the original waveform visualizer. -->
+<!-- V4.67 — true stereo metering places L left of the playhead and R right; mobile uses dual live FFT analysers while desktop retains independently decoded L/R waveform envelopes. -->
+<!-- V4.66 — five mobile FFT bands, top-bin detail and separate upper-mid/high flux restore short vocal, snare and hi-hat movement with a tighter 65 ms peak hold. -->
+<!-- V4.65 — mobile FFT uses a balanced 45 Hz low-latency envelope with a red high-energy zone; desktop retains the original waveform visualizer. -->
 <!-- V4.64 — the realtime audio meter reads a 2048-point FFT playback mix, balances low/mid/high bands, preserves high-frequency spectral transients, and updates independently from project rendering. -->
 <!-- V4.63 — alpha track mattes add shape/media-driven Mask and Exclude modes, with all-layers-below or explicit-target scope in Blending & Opacity. -->
 <!-- V4.62 — dedicated Blending & Opacity Inspector with keyframeable opacity, grouped compositing modes, WebGL backdrop compositing, and XML persistence. -->
