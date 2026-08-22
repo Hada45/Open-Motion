@@ -536,8 +536,42 @@ input[type=range]{accent-color:var(--accent)}
   box-shadow:0 8px 20px rgba(0,0,0,.35);
   opacity:.96;
 }
+.track{
+  --reorder-shift-y:0px;
+}
+.track.reorder-shift{
+  transform:translate3d(0,var(--reorder-shift-y),0);
+  transition:transform .17s cubic-bezier(.2,.78,.24,1);
+  will-change:transform;
+}
 .track.reorder-source{
-  opacity:.28;
+  --reorder-drag-y:0px;
+  z-index:42;
+  opacity:1;
+  transform:translate3d(0,var(--reorder-drag-y),0) scale(.995);
+  transition:transform .045s linear;
+  will-change:transform;
+  filter:drop-shadow(0 10px 16px rgba(0,0,0,.28));
+}
+.track.reorder-source .trackHead,
+.track.reorder-source .trackLane{
+  background-color:rgba(111,122,153,.34) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.12),
+    inset 0 -1px 0 rgba(0,0,0,.22);
+}
+.track.reorder-source .trackLane{
+  /* Highlight the empty timeline area on both sides of the clip as well. */
+  background-image:linear-gradient(rgba(155,166,195,.10),rgba(155,166,195,.10));
+}
+.track.reorder-source .clip{
+  filter:brightness(1.035);
+  box-shadow:0 4px 10px rgba(0,0,0,.24);
+}
+.track.reorder-hover .trackHead,
+.track.reorder-hover .trackLane{
+  background-color:rgba(0,215,167,.055);
+  transition:background-color .12s ease;
 }
 .track.reorder-target-before::before,
 .track.reorder-target-after::after{
@@ -547,41 +581,14 @@ input[type=range]{accent-color:var(--accent)}
   right:3px;
   height:1.3px;
   background:var(--accent);
-  z-index:30;
+  z-index:50;
   pointer-events:none;
-  box-shadow:0 0 8px rgba(0,215,167,.7);
+  box-shadow:0 0 8px rgba(0,215,167,.5);
+  opacity:.82;
 }
 .track.reorder-target-before::before{top:0}
 .track.reorder-target-after::after{bottom:0}
 
-.layerReorderGhost{
-  position:fixed;
-  z-index:9999;
-  height:29px;
-  border:1px solid rgba(255,255,255,.55);
-  border-radius:6px;
-  background:#252c40;
-  color:#edf3ff;
-  display:grid;
-  grid-template-columns:20px minmax(0,1fr);
-  align-items:center;
-  gap:7px;
-  padding:0 8px;
-  box-shadow:0 14px 32px rgba(0,0,0,.42);
-  pointer-events:none;
-  font-size:9px;
-  font-weight:700;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  transform:translate3d(0,0,0);
-}
-.layerReorderGhost .dot{
-  width:9px;
-  height:9px;
-  border-radius:50%;
-  background:var(--accent);
-}
 .trackHead,
 .trackLane{
   -webkit-touch-callout:none;
@@ -603,7 +610,6 @@ input[type=range]{accent-color:var(--accent)}
   user-select:none !important;
   -webkit-touch-callout:none !important;
 }
-.track.reorder-source{opacity:.45}
 
 /* V3.41 — transform touchpad live numeric readout fix */
 /* Position + Rotation cards repaint every interaction frame on Android. */
@@ -1951,6 +1957,50 @@ input[type=range]{accent-color:var(--accent)}
   .simpleHome .fabHome{right:15px;bottom:17px;height:45px}
 }
 
+/* V4.43 — the existing New Project action joins the projects heading row on
+   desktop. Mobile keeps the same floating placement and the same button node. */
+.simpleHome .sectionRowActions{display:flex;align-items:center;gap:8px;min-width:0}
+@media(min-width:900px){
+  .simpleHome .sectionRow{align-items:flex-end}
+  .simpleHome .sectionRowActions{flex:0 0 auto}
+  .simpleHome .sectionRowActions .fabHome{
+    position:static!important;
+    left:auto!important;
+    right:auto!important;
+    top:auto!important;
+    bottom:auto!important;
+    width:auto;
+    min-width:122px;
+    height:34px;
+    padding:0 12px;
+    gap:7px;
+    border-radius:10px;
+    transform:none!important;
+    box-shadow:none!important;
+  }
+  .simpleHome .sectionRowActions .fabHome span{font-size:17px}
+  .simpleHome .sectionRowActions .fabHome b{font-size:8px}
+}
+@media(max-width:899px){
+  .simpleHome .sectionRowActions{display:contents}
+  .simpleHome .sectionRowActions .fabHome{
+    position:fixed!important;
+    left:auto!important;
+    right:max(20px,calc((100vw - 760px)/2))!important;
+    top:auto!important;
+    bottom:22px!important;
+  }
+}
+@media(max-width:520px){
+  .simpleHome .sectionRowActions .fabHome{
+    left:20px!important;
+    right:auto!important;
+  }
+}
+@media(max-width:360px){
+  .simpleHome .sectionRowActions .fabHome{left:15px!important;bottom:17px!important;height:45px}
+}
+
 
 /* V3.41 — Homepage language selector */
 .simpleHome .homeTopActions{display:flex;align-items:center;gap:7px}
@@ -2352,6 +2402,239 @@ input[type=range]{accent-color:var(--accent)}
 }
 
 </style>
+
+<style id="oms-v429-layer-actions">
+/* V4.29 — compact layer clipboard/actions popover. */
+.layerActionsBtn{
+  position:relative;
+  display:grid;
+  place-items:center;
+}
+.layerActionsBtn.active{
+  color:#fff!important;
+  background:#252b3e!important;
+}
+.layerActionsToolbarIcon{
+  position:relative;
+  width:18px;
+  height:17px;
+  display:block;
+}
+.layerActionsToolbarIcon::before,
+.layerActionsToolbarIcon::after{
+  content:"";
+  position:absolute;
+  width:10px;
+  height:12px;
+  border:1.25px solid currentColor;
+  border-radius:3px;
+  background:transparent;
+}
+.layerActionsToolbarIcon::before{left:1px;top:4px}
+.layerActionsToolbarIcon::after{left:6px;top:0}
+.layerActionsToolbarIcon{
+  --plus-x:15px;
+}
+.layerActionsBtn .layerActionsToolbarIcon span{display:none}
+.layerActionsToolbarIcon:after{}
+.layerActionsBtn::before,
+.layerActionsBtn::after{
+  content:"";
+  position:absolute;
+  background:currentColor;
+  border-radius:2px;
+  pointer-events:none;
+}
+.layerActionsBtn::before{width:8px;height:1.25px;right:3px;bottom:5px}
+.layerActionsBtn::after{width:1.25px;height:8px;right:6.35px;bottom:1.8px}
+
+.layerActionsShade{
+  position:fixed;
+  inset:0;
+  z-index:220;
+  background:rgba(4,7,13,.36);
+  backdrop-filter:blur(1.5px);
+  -webkit-backdrop-filter:blur(1.5px);
+}
+.layerActionsPopup{
+  position:fixed;
+  width:min(335px,calc(100vw - 20px));
+  max-height:min(520px,calc(100vh - 20px));
+  overflow:auto;
+  color:#eef2fb;
+  background:linear-gradient(180deg,#252a3e 0%,#202536 100%);
+  border:1px solid #3b435c;
+  border-radius:16px;
+  box-shadow:0 22px 58px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.025);
+  padding:9px;
+  overscroll-behavior:contain;
+}
+.layerActionsHead{
+  min-height:46px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:3px 4px 8px 9px;
+  border-bottom:1px solid #343b51;
+}
+.layerActionsHead>div{min-width:0}
+.layerActionsHead b{display:block;font-size:13px}
+.layerActionsHead small{display:block;margin-top:2px;color:#8f9ab1;font-size:8px}
+.layerActionsHead button{
+  flex:0 0 34px;
+  width:34px;
+  height:34px;
+  border:0;
+  border-radius:9px;
+  background:transparent;
+  color:#aab3c6;
+  font-size:22px;
+}
+.layerActionsHead button:active{background:#31384d;color:white}
+.layerActionsList{display:grid;padding-top:5px}
+.layerActionRow{
+  width:100%;
+  min-height:58px;
+  border:0;
+  border-radius:11px;
+  background:transparent;
+  color:#e8edf7;
+  display:grid;
+  grid-template-columns:46px minmax(0,1fr);
+  align-items:center;
+  gap:8px;
+  padding:7px 8px;
+  text-align:left;
+  -webkit-tap-highlight-color:transparent;
+}
+.layerActionRow:not(:disabled):active,
+.layerActionRow:not(:disabled):focus-visible{
+  background:#30384d;
+  outline:none;
+}
+.layerActionRow:disabled{
+  opacity:.34;
+  color:#8791a8;
+}
+.layerActionCopy{min-width:0}
+.layerActionCopy b{
+  display:block;
+  font-size:12px;
+  font-weight:650;
+  line-height:1.15;
+}
+.layerActionCopy small{
+  display:block;
+  margin-top:3px;
+  color:#929db3;
+  font-size:8px;
+  line-height:1.25;
+}
+.layerActionRow:disabled .layerActionCopy small{color:#737d92}
+.layerActionMenuIcon{
+  position:relative;
+  width:35px;
+  height:35px;
+  display:block;
+  color:#f3f6fc;
+}
+.layerActionMenuIcon::before,
+.layerActionMenuIcon::after{
+  content:"";
+  position:absolute;
+  width:18px;
+  height:22px;
+  border:1.7px solid currentColor;
+  border-radius:5px;
+  background:#252a3e;
+}
+.layerActionMenuIcon::before{left:3px;top:9px}
+.layerActionMenuIcon::after{left:11px;top:3px}
+.layerActionMenuIcon.duplicate i::before,
+.layerActionMenuIcon.duplicate i::after,
+.layerActionMenuIcon.copyLayer i::before,
+.layerActionMenuIcon.copyLayer i::after,
+.layerActionMenuIcon.pasteLayer i::before,
+.layerActionMenuIcon.pasteLayer i::after{
+  content:"";
+  position:absolute;
+  z-index:2;
+  background:currentColor;
+  border-radius:2px;
+}
+.layerActionMenuIcon.duplicate i::before{width:11px;height:1.8px;left:16px;top:14px}
+.layerActionMenuIcon.duplicate i::after{width:1.8px;height:11px;left:20.6px;top:9.4px}
+.layerActionMenuIcon.copyLayer i::before{
+  width:10px;height:1.8px;left:17px;top:11px;transform:rotate(-45deg);transform-origin:right center
+}
+.layerActionMenuIcon.copyLayer i::after{
+  width:7px;height:7px;left:21px;top:7px;background:transparent;border-top:1.8px solid currentColor;border-right:1.8px solid currentColor
+}
+.layerActionMenuIcon.pasteLayer i::before{
+  width:10px;height:1.8px;left:10px;top:22px;transform:rotate(-45deg);transform-origin:left center
+}
+.layerActionMenuIcon.pasteLayer i::after{
+  width:7px;height:7px;left:7px;top:20px;background:transparent;border-left:1.8px solid currentColor;border-bottom:1.8px solid currentColor
+}
+.layerActionMenuIcon.pasteStyle i{
+  position:absolute;
+  z-index:3;
+  right:0;
+  top:0;
+  width:15px;
+  height:15px;
+  border-radius:5px;
+  display:grid;
+  place-items:center;
+  font-style:normal;
+  font-size:8px;
+  font-weight:800;
+  color:#10201c;
+  background:var(--accent);
+  box-shadow:0 0 0 2px #252a3e;
+}
+.layerActionMenuIcon.selectAll::before,
+.layerActionMenuIcon.selectAll::after{display:none}
+.layerActionMenuIcon.selectAll{
+  border:1.7px solid currentColor;
+  border-radius:9px;
+  width:31px;height:27px;
+  margin-left:2px;
+}
+.layerActionMenuIcon.selectAll i::before,
+.layerActionMenuIcon.selectAll i::after{
+  content:"";
+  position:absolute;
+}
+.layerActionMenuIcon.selectAll i::before{
+  left:7px;top:12px;width:7px;height:4px;
+  border-left:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+  transform:rotate(-45deg);
+}
+.layerActionMenuIcon.selectAll i::after{
+  right:5px;top:6px;width:8px;height:1.6px;
+  background:currentColor;
+  box-shadow:0 6px 0 currentColor,0 12px 0 currentColor;
+  border-radius:2px;
+}
+.layerActionsStatus{
+  min-height:18px;
+  padding:5px 10px 2px;
+  color:#7fe6cd;
+  font-size:8px;
+  border-top:1px solid #30374c;
+}
+.trackHead.multiSel{background:#263246!important;box-shadow:inset 3px 0 0 var(--accent)}
+.clip.multiSel{outline:2px solid rgba(126,234,209,.9);outline-offset:1px}
+
+@media (max-width:560px){
+  .layerActionsPopup{width:min(318px,calc(100vw - 16px));border-radius:15px}
+  .layerActionRow{min-height:56px}
+}
+</style>
+
 
 <style id="oms-editor-split-v393">
 /* =========================================================
@@ -2848,16 +3131,17 @@ input[type=range]{accent-color:var(--accent)}
       <section class="projectsWrap" aria-labelledby="workspaceTitle">
         <div class="sectionRow">
           <div><span id="workspaceKicker" class="sectionKicker">WORKSPACE LOKAL</span><h1 id="workspaceTitle"><span id="workspaceTitleText">Proyek Anda</span> <span id="projectCountBadge" class="projectCountBadge">0</span></h1></div>
-          <label id="projectSortLabel" class="projectSort" title="Urutkan proyek">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" aria-hidden="true"><path d="M7 6h12M7 12h9M7 18h6M4 5v14"/></svg>
-            <select id="projectSort" aria-label="Urutkan proyek"><option id="sortNewest" value="newest">Terbaru</option><option id="sortOldest" value="oldest">Terlama</option><option id="sortName" value="name">Nama</option></select>
-          </label>
+          <div class="sectionRowActions">
+            <label id="projectSortLabel" class="projectSort" title="Urutkan proyek">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" aria-hidden="true"><path d="M7 6h12M7 12h9M7 18h6M4 5v14"/></svg>
+              <select id="projectSort" aria-label="Urutkan proyek"><option id="sortNewest" value="newest">Terbaru</option><option id="sortOldest" value="oldest">Terlama</option><option id="sortName" value="name">Nama</option></select>
+            </label>
+            <button id="newProjectFab" class="fabHome" type="button"><span aria-hidden="true">＋</span><b id="newProjectFabLabel">PROYEK BARU</b></button>
+          </div>
         </div>
         <div id="projectList" class="projectGrid"></div>
       </section>
     </main>
-
-    <button id="newProjectFab" class="fabHome" type="button"><span aria-hidden="true">＋</span><b id="newProjectFabLabel">PROYEK BARU</b></button>
 
     <div id="languageModal" class="languageModal hidden" role="dialog" aria-modal="true" aria-labelledby="languageTitle">
       <section class="languageSheet">
@@ -2941,17 +3225,18 @@ input[type=range]{accent-color:var(--accent)}
       <section class="timelineArea">
         <div class="transport transportBalanced">
           <div class="transportLeft">
-            <button id="jumpStart">↤</button>
-            <button id="prevKey">◇←</button>
+            <button id="jumpStart" class="transportNavSvgBtn" aria-label="Ke awal timeline" title="Ke awal timeline"><svg class="transportNavSvg transportNavSvgJump" viewBox="0 0 28 24" aria-hidden="true"><path d="M5 5.5V18.5"/><path d="M20.5 12H8.5"/><path d="M12.5 8L8.5 12L12.5 16"/></svg></button>
+            <button id="prevKey" class="transportNavSvgBtn" aria-label="Keyframe sebelumnya" title="Keyframe sebelumnya"><svg class="transportNavSvg transportNavSvgKey" viewBox="0 0 28 24" aria-hidden="true"><g><path d="M9.8 5L14.8 12L9.8 19L4.8 12Z"/><path d="M27.8 12H16.8"/><path d="M20.8 8L16.8 12L20.8 16"/></g></svg></button>
           </div>
           <div class="transportCenter">
-            <button id="playBtn">▶</button>
+            <button id="playBtn" aria-label="Putar" title="Putar"></button>
           </div>
           <div class="transportRight">
-            <button id="nextKey">→◇</button>
-            <button id="jumpEnd">↦</button>
+            <button id="nextKey" class="transportNavSvgBtn" aria-label="Keyframe berikutnya" title="Keyframe berikutnya"><svg class="transportNavSvg transportNavSvgKey" viewBox="0 0 28 24" aria-hidden="true"><g transform="translate(28 0) scale(-1 1)"><path d="M9.8 5L14.8 12L9.8 19L4.8 12Z"/><path d="M27.8 12H16.8"/><path d="M20.8 8L16.8 12L20.8 16"/></g></svg></button>
+            <button id="jumpEnd" class="transportNavSvgBtn" aria-label="Ke akhir timeline" title="Ke akhir timeline"><svg class="transportNavSvg transportNavSvgJump" viewBox="0 0 28 24" aria-hidden="true"><g transform="translate(28 0) scale(-1 1)"><path d="M5 5.5V18.5"/><path d="M20.5 12H8.5"/><path d="M12.5 8L8.5 12L12.5 16"/></g></svg></button>
             <button id="audioToggle">♫</button>
-            <button id="snapToggle" class="active">⌗</button>
+            <button id="layerActionsBtn" class="layerActionsBtn" type="button" title="Aksi Layer" aria-label="Aksi Layer" aria-haspopup="dialog" aria-expanded="false"><span class="layerActionsToolbarIcon" aria-hidden="true"></span></button>
+            <button id="snapToggle" class="active" type="button" hidden aria-hidden="true" tabindex="-1">⌗</button>
           </div>
           <!-- Tetap ada untuk kompatibilitas JS, tetapi tidak ditampilkan. -->
           <div id="timeRead" class="timeRead transportTimeHidden" aria-hidden="true">00:00:00</div>
@@ -2997,11 +3282,53 @@ input[type=range]{accent-color:var(--accent)}
 
 <input id="mediaInput" type="file" multiple accept="image/*,video/*,audio/*" hidden>
 <input id="projectInput" type="file" accept="application/json,text/xml,.json,.xml" hidden>
+
+<div id="layerActionsShade" class="layerActionsShade hidden" aria-hidden="true">
+  <section id="layerActionsPopup" class="layerActionsPopup" role="dialog" aria-modal="true" aria-label="Aksi Layer">
+    <div class="layerActionsHead">
+      <div><b>Aksi Layer</b><small>Kelola layer &amp; gaya</small></div>
+      <button id="layerActionsClose" type="button" aria-label="Tutup">×</button>
+    </div>
+    <div class="layerActionsList">
+      <button type="button" class="layerActionRow" data-layer-action="select-multiple">
+        <span class="layerActionMenuIcon selectAll" aria-hidden="true"><i></i></span>
+        <span class="layerActionCopy"><b>Pilih Beberapa Layer</b><small>Aktifkan mode pilih, lalu klik layer di timeline</small></span>
+      </button>
+      <button type="button" class="layerActionRow" data-layer-action="select-all">
+        <span class="layerActionMenuIcon selectAll" aria-hidden="true"><i></i></span>
+        <span class="layerActionCopy"><b>Pilih Semua Layer</b><small>Pilih seluruh layer di timeline</small></span>
+      </button>
+      <button type="button" class="layerActionRow" data-layer-action="export-selected">
+        <span class="layerActionMenuIcon exportSelection" aria-hidden="true"><i>↗</i></span>
+        <span class="layerActionCopy"><b>Ekspor Layer Terpilih</b><small>Hanya layer terpilih, dari awal paling kiri sampai ujung paling kanan</small></span>
+      </button>
+      <button type="button" class="layerActionRow" data-layer-action="duplicate">
+        <span class="layerActionMenuIcon duplicate" aria-hidden="true"><i></i></span>
+        <span class="layerActionCopy"><b>Gandakan 1 Layer</b><small>Duplikat layer terpilih beserta keyframe &amp; efek</small></span>
+      </button>
+      <button type="button" class="layerActionRow" data-layer-action="copy-layer">
+        <span class="layerActionMenuIcon copyLayer" aria-hidden="true"><i></i></span>
+        <span class="layerActionCopy"><b>Salin 1 Layer</b><small>Termasuk keyframe dan efek</small></span>
+      </button>
+      <button type="button" class="layerActionRow" data-layer-action="paste-layer">
+        <span class="layerActionMenuIcon pasteLayer" aria-hidden="true"><i></i></span>
+        <span class="layerActionCopy"><b>Tempel 1 Layer</b><small>Aktif hanya saat tidak ada layer terpilih</small></span>
+      </button>
+      <button type="button" class="layerActionRow" data-layer-action="paste-style">
+        <span class="layerActionMenuIcon pasteStyle" aria-hidden="true"><i>S</i></span>
+        <span class="layerActionCopy"><b>Tempel Gaya</b><small>Keyframe + efek ke layer lain</small></span>
+      </button>
+    </div>
+    <div id="layerActionsStatus" class="layerActionsStatus" aria-live="polite"></div>
+  </section>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <section id="exportSheet" class="exportSheet hidden">
   <div class="exportTop"><button id="closeExport">×</button><b>Ekspor &amp; Bagikan</b><span></span></div>
   <div class="exportBody">
+    <div id="exportScopeNotice" class="exportScopeNotice hidden" role="status" aria-live="polite"></div>
     <div class="spaceRow"><span>Ruang yang Tersedia</span><b id="spaceInfo">Browser</b></div>
     <div class="estRow"><span>Ukuran file (perkiraan)</span><b id="estSize">Tergantung codec</b></div>
     <div class="exportOption">
@@ -3028,9 +3355,9 @@ input[type=range]{accent-color:var(--accent)}
       <div style="height:10px"></div><label>Frame Rate</label><select id="exportFps"><option>15</option><option>24</option><option selected>30</option><option>60</option></select>
       <div style="height:10px"></div><label>Kualitas</label><input id="qualityRange" style="width:100%" type="range" min="3" max="16" value="10"><div class="progress"><i id="exportProgress"></i></div>
     </div>
-    <div class="exportOption"><div class="radioRow"><span class="radioDot"></span><div><b>Frame Saat Ini sebagai PNG</b><small style="display:block;color:#888">Simpan frame aktif</small></div><button id="exportPng" style="border:0;background:#eef1f5;border-radius:7px;padding:7px">PNG</button></div></div>
-    <div class="exportOption"><div class="radioRow"><span class="radioDot"></span><div><b>Paket Proyek</b><small style="display:block;color:#888">JSON lengkap untuk dibuka lagi</small></div><button id="exportJson" style="border:0;background:#eef1f5;border-radius:7px;padding:7px">JSON</button></div></div>
-    <div class="exportOption"><div class="radioRow"><span class="radioDot"></span><div><b>XML Interchange</b><small style="display:block;color:#888">Kompatibilitas struktur Alight Motion; fitur 3D ditulis sebagai ekstensi Open Motion</small></div><button id="exportXml" style="border:0;background:#eef1f5;border-radius:7px;padding:7px">XML</button></div></div>
+    <div class="exportOption nonVideoExportOption"><div class="radioRow"><span class="radioDot"></span><div><b>Frame Saat Ini sebagai PNG</b><small style="display:block;color:#888">Simpan frame aktif</small></div><button id="exportPng" style="border:0;background:#eef1f5;border-radius:7px;padding:7px">PNG</button></div></div>
+    <div class="exportOption nonVideoExportOption"><div class="radioRow"><span class="radioDot"></span><div><b>Paket Proyek</b><small style="display:block;color:#888">JSON lengkap untuk dibuka lagi</small></div><button id="exportJson" style="border:0;background:#eef1f5;border-radius:7px;padding:7px">JSON</button></div></div>
+    <div class="exportOption nonVideoExportOption"><div class="radioRow"><span class="radioDot"></span><div><b>XML Interchange</b><small style="display:block;color:#888">Kompatibilitas struktur Alight Motion; fitur 3D ditulis sebagai ekstensi Open Motion</small></div><button id="exportXml" style="border:0;background:#eef1f5;border-radius:7px;padding:7px">XML</button></div></div>
   </div>
   <div class="exportFoot"><button id="doExport">Ekspor Video</button></div>
 </section>
@@ -3173,6 +3500,25 @@ function mediaClipMap(layer,projectTime){
       ?lastFrame
       :clamp(sourceIn+contentLocal*speed,sourceIn,lastFrame);
   return {active,local,region,mediaTime,sourceIn,sourceOut,sourceDuration,speed,contentDuration,extendIn,extendOut}
+}
+
+function layerVisibilityIcon(hidden=false){
+  const slash=hidden?'<path class="trackEyeSlash" d="M4 3.5 20 20.5"/>':'';
+  return `<svg class="trackEyeSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.45-6 9.5-6 9.5 6 9.5 6-3.45 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.75"/>${slash}</svg>`
+}
+
+// V4.49 — Temporary render/export scope. Null outside an active export, so
+// editor preview and project serialization never inherit an export selection.
+let omsExportLayerIds=null;
+function omsLayerIncludedInExport(layer){
+  return !omsExportLayerIds||omsExportLayerIds.has(layer?.id)
+}
+function omsSelectedLayerExportBounds(layers,fps=30){
+  const usable=(layers||[]).filter(layer=>Math.max(0,+layer?.duration||0)>0);
+  if(!usable.length)return null;
+  const start=Math.min(...usable.map(layer=>Math.max(0,+layer.start||0)));
+  const end=Math.max(...usable.map(layer=>Math.max(0,+layer.start||0)+Math.max(0,+layer.duration||0)));
+  return{start,end,duration:Math.max(1/Math.max(1,+fps||30),end-start),count:usable.length}
 }
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),1700)}
 // V3.78 — granular Camera Orbit Constraint channels.
@@ -3436,7 +3782,31 @@ class ProjectModel{
     }
     return merged;
   }
-  addLayer(type,opt={}){const l=this.defaultLayer(type,opt);this.layers.unshift(l);this.selected=l.id;this.hydrateLayer(l);bus.emit('model:changed');return l}
+  addLayer(type,opt={}){
+    const projectDuration=Math.max(0,+this.project?.duration||0);
+    const fps=Math.max(1,+this.project?.fps||30);
+    const start=Object.prototype.hasOwnProperty.call(opt,'start')
+      ?Math.max(0,+opt.start||0)
+      :clamp(+this.time||0,0,projectDuration);
+    const nextOpt={...opt,start};
+    if(!Object.prototype.hasOwnProperty.call(opt,'duration')){
+      // Every newly-created non-media layer starts with an exact 2-second
+      // duration at the playhead, including Camera and Null/Controller.
+      // Video/audio remain provisional until metadata supplies their real
+      // source duration. Duplicate/paste paths provide an explicit duration
+      // and therefore keep the source layer length unchanged.
+      nextOpt.duration=(type==='video'||type==='audio')
+        ?Math.max(1/fps,projectDuration-start)
+        :2;
+    }
+    const l=this.defaultLayer(type,nextOpt);
+    this.layers.unshift(l);this.selected=l.id;this.hydrateLayer(l);
+    // Visible non-control layers are allowed to extend the editor timeline.
+    // Camera/null remain control-only and therefore never create blank tail.
+    if(this.durationPolicy.isOutputLayer(l)&&type!=='video'&&type!=='audio')
+      this.ensureProjectDuration(l.start+l.duration);
+    bus.emit('model:changed');return l
+  }
   layer3DEnabled(layer){return !!layer&&(['camera','mesh'].includes(layer.type)||layer.space3d===true)}
   layerActiveAt(layer,t=this.time){return !!layer&&!layer.hidden&&t>=layer.start&&t<=layer.start+layer.duration}
   hasActive3DLayer(t=this.time){return this.layers.some(layer=>layer.type!=='audio'&&this.layerActiveAt(layer,t)&&this.layer3DEnabled(layer))}
@@ -3525,8 +3895,8 @@ class ProjectModel{
   }
   serialize({includeMedia=true}={}){return{project:this.project,layers:this.layers.map(l=>this.cleanLayer(l,{includeMedia})),selected:this.selected,time:this.time,mode3d:this.mode3d,cameraView:this.cameraView,snap:this.snap}}
   snapshot({includeMedia=true}={}){return JSON.stringify(this.serialize({includeMedia}))}
-  restore(str){
-    const previousProjectId=this.project?.id,d=typeof str==='string'?JSON.parse(str):str;
+  restore(str,{preserveTime=false,timeOverride=null}={}){
+    const previousProjectId=this.project?.id,previousTime=+this.time||0,d=typeof str==='string'?JSON.parse(str):str;
     const previousLayers=Array.isArray(this.layers)?this.layers:[];
     const incomingLayers=Array.isArray(d.layers)?d.layers:[];
     mediaAssets.captureLayers(previousLayers);
@@ -3641,7 +4011,12 @@ class ProjectModel{
     });
     const ids=new Set(this.layers.map(l=>l.id));
     this.layers.filter(l=>l.type==='camera').forEach(l=>{if(!ids.has(l.orbitTargetId)){l.orbitEnabled=false;l.orbitTargetId=null}});
-    this.selected=d.selected||null;this.time=d.time||0;this.mode3d=!!d.mode3d;this.cameraView=d.cameraView!==false;this.snap=d.snap!==false;
+    this.selected=d.selected||null;
+    const restoredDuration=Math.max(0,+this.project?.duration||0);
+    if(timeOverride!=null&&Number.isFinite(+timeOverride))this.time=clamp(+timeOverride,0,restoredDuration);
+    else if(preserveTime)this.time=clamp(previousTime,0,restoredDuration);
+    else this.time=clamp(+d.time||0,0,restoredDuration);
+    this.mode3d=!!d.mode3d;this.cameraView=d.cameraView!==false;this.snap=d.snap!==false;
     if(!this.editorCamera||previousProjectId!==this.project?.id)this.resetEditorCamera();
     // Only hydrate layers whose runtime was not preserved. Re-hydrating reused
     // media would create a second decoder and defeat the continuity fix above.
@@ -3774,7 +4149,10 @@ class HistoryManager{
   constructor(model){this.model=model;this.past=[];this.future=[];this.max=80;this.maxBytes=8*1024*1024}
   capture(){
     mediaAssets.captureLayers(this.model.layers);
-    const json=this.model.snapshot({includeMedia:false});
+    const state=this.model.serialize({includeMedia:false});
+    // Playhead position is editor navigation, not undoable project state.
+    state.time=0;
+    const json=JSON.stringify(state);
     return{json,bytes:json.length*2,assetIds:mediaAssets.idsForLayers(this.model.layers)}
   }
   json(entry){return typeof entry==='string'?entry:entry?.json}
@@ -3798,12 +4176,12 @@ class HistoryManager{
   undo(){
     if(!this.past.length)return;
     const current=this.capture(),target=this.past.pop();
-    this.future.push(current);this.model.restore(this.json(target));this.pruneAssets()
+    this.future.push(current);this.model.restore(this.json(target),{preserveTime:true});this.pruneAssets()
   }
   redo(){
     if(!this.future.length)return;
     const current=this.capture(),target=this.future.pop();
-    this.past.push(current);this.trim();this.model.restore(this.json(target));this.pruneAssets()
+    this.past.push(current);this.trim();this.model.restore(this.json(target),{preserveTime:true});this.pruneAssets()
   }
   clear(){this.past=[];this.future=[];this.pruneAssets()}
 }
@@ -4175,7 +4553,9 @@ class MediaManager{
     if(state?.unsupported)return null;
     if(state?.initializing)return state.initializing;
 
-    state=state||{id:l.id,ready:false,unsupported:false,busy:false,latestTarget:Number.NaN,disposed:false};
+    state=state||{id:l.id,ready:false,unsupported:false,busy:false,latestTarget:Number.NaN,latestSerial:0,requestSerial:0,disposed:false};
+    state.requestSerial=Number.isFinite(state.requestSerial)?state.requestSerial:0;
+    state.latestSerial=Number.isFinite(state.latestSerial)?state.latestSerial:state.requestSerial;
     this.scrubDecodeStates.set(l.id,state);
     state.initializing=(async()=>{
       try{
@@ -4228,6 +4608,7 @@ class MediaManager{
     try{
       while(!state.disposed&&state.ready&&Number.isFinite(state.latestTarget)){
         const target=state.latestTarget;
+        const requestSerial=state.latestSerial;
         state.latestTarget=Number.NaN;
         let result=null;
         try{result=await state.sink.getCanvas(target)}catch(err){
@@ -4237,7 +4618,10 @@ class MediaManager{
           break
         }
         if(state.disposed)break;
-        if(result)this.commitDecodedScrubCanvas(l,result,target);
+        // A layer move or newer scrub may have replaced this request while the
+        // decoder was working. Never let that obsolete frame overwrite the
+        // newly aligned frame cache.
+        if(result&&requestSerial===state.requestSerial)this.commitDecodedScrubCanvas(l,result,target);
         // latestTarget may have been replaced many times while decoding; only
         // the newest requested timestamp is decoded next (no backlog).
       }
@@ -4252,6 +4636,8 @@ class MediaManager{
     if(!l?.video)return false;
     let state=this.scrubDecodeStates.get(l.id);
     if(state?.ready&&!state.disposed){
+      state.requestSerial=(Number.isFinite(state.requestSerial)?state.requestSerial:0)+1;
+      state.latestSerial=state.requestSerial;
       state.latestTarget=+target;
       this.pumpWebCodecsScrub(l,state);
       return true
@@ -4261,7 +4647,9 @@ class MediaManager{
     // First use: keep the old HTMLVideo preview responsive while the WebCodecs
     // backend initializes in parallel. Subsequent scrub events switch to the
     // dedicated decoder as soon as it is ready.
-    state=state||{id:l.id,ready:false,unsupported:false,busy:false,latestTarget:+target,disposed:false};
+    state=state||{id:l.id,ready:false,unsupported:false,busy:false,latestTarget:+target,latestSerial:0,requestSerial:0,disposed:false};
+    state.requestSerial=(Number.isFinite(state.requestSerial)?state.requestSerial:0)+1;
+    state.latestSerial=state.requestSerial;
     state.latestTarget=+target;
     this.scrubDecodeStates.set(l.id,state);
     this.ensureScrubDecodeState(l).then(ready=>{
@@ -4274,7 +4662,11 @@ class MediaManager{
   cancelSmartPausedVideoPreview(l){
     this.cancelPausedVideoSeek(l);
     const state=l?.id&&this.scrubDecodeStates.get(l.id);
-    if(state)state.latestTarget=Number.NaN
+    if(state){
+      state.requestSerial=(Number.isFinite(state.requestSerial)?state.requestSerial:0)+1;
+      state.latestSerial=state.requestSerial;
+      state.latestTarget=Number.NaN
+    }
   }
 
   pausedSeekState(l){
@@ -4293,13 +4685,20 @@ class MediaManager{
     return this.pausedSeeks.cancel(l)
   }
 
-  sync(t,playing=false,muted=false){
+  sync(t,playing=false,muted=false,{forceSeek=false}={}){
     // Hard synchronization is reserved for explicit transport actions:
     // play start, scrub/seek, loop wrap, trim edits, and stop. During normal
     // playback use tick() below so Android's decoder is not repeatedly flushed.
     model.layers.forEach(l=>{
       const el=l.video||l.audio;
       if(!el)return;
+      if(l.hidden||!omsLayerIncludedInExport(l)){
+        if(l.video)this.cancelSmartPausedVideoPreview(l);
+        if(!el.paused)el.pause();
+        el.volume=0;
+        this.playStates.set(l,{active:false,region:l.hidden?'hidden':'export-excluded',time:t});
+        return
+      }
       const map=mediaClipMap(l,t);
       if(!map.active){
         if(l.video)this.cancelSmartPausedVideoPreview(l);
@@ -4311,19 +4710,26 @@ class MediaManager{
       const edgeRegion=map.region!=='content';
       let didSeek=false;
       try{
-        const tolerance=edgeRegion ? .010 : (playing ? .060 : .012);
+        const tolerance=forceSeek ? .0005 : (edgeRegion ? .010 : (playing ? .060 : .012));
 
-        if(l.video&&!playing){
+        if(l.video&&!playing&&!forceSeek){
           // V4.21: use random-access WebCodecs preview when available; until it
           // initializes (or on unsupported codecs), retain V4.20 coalesced
           // HTMLVideo seeking as the automatic fallback.
           didSeek=this.queueSmartPausedVideoPreview(l,map.mediaTime);
         }else{
           if(l.video)this.cancelSmartPausedVideoPreview(l);
-          if(Math.abs(el.currentTime-map.mediaTime)>tolerance){
+          if(forceSeek||Math.abs(el.currentTime-map.mediaTime)>tolerance){
+            if(l.video){l.frameCacheReady=false;l.frameCacheTime=-1}
             el.currentTime=map.mediaTime;
             didSeek=true;
           }
+        }
+
+        // An explicit paused alignment also requests the exact WebCodecs frame.
+        // Request serials reject a decode started before the layer was moved.
+        if(l.video&&!playing&&forceSeek){
+          didSeek=this.queueSmartPausedVideoPreview(l,map.mediaTime)||didSeek
         }
 
         if(Math.abs((+el.playbackRate||1)-map.speed)>.001)el.playbackRate=map.speed;
@@ -4342,6 +4748,44 @@ class MediaManager{
     })
   }
 
+  alignEquivalentMediaPlayback(t){
+    const fps=Math.max(1,+this.model.project?.fps||30);
+    const threshold=Math.max(.008,.45/fps);
+    const groups=new Map();
+
+    for(const l of this.model.layers||[]){
+      const el=l.video||l.audio;
+      if(!el||el.paused||!omsLayerIncludedInExport(l))continue;
+      const map=mediaClipMap(l,t);
+      if(!map.active||map.region!=='content')continue;
+      const source=l.dataUrl||(l.assetId&&mediaAssets.sources.get(l.assetId))||l.sourceRef||'';
+      if(!source)continue;
+      let bySource=groups.get(l.type);
+      if(!bySource){bySource=new Map();groups.set(l.type,bySource)}
+      let entries=bySource.get(source);
+      if(!entries){entries=[];bySource.set(source,entries)}
+      entries.push({l,el,map})
+    }
+
+    for(const bySource of groups.values())for(const entries of bySource.values()){
+      if(entries.length<2)continue;
+      const leader=entries[0];
+      if(leader.el.seeking)continue;
+      const leaderTime=+leader.el.currentTime||0;
+      for(let i=1;i<entries.length;i++){
+        const item=entries[i];
+        if(item.el.seeking)continue;
+        const expectedDelta=item.map.mediaTime-leader.map.mediaTime;
+        const actualDelta=(+item.el.currentTime||0)-leaderTime;
+        if(Math.abs(actualDelta-expectedDelta)<=threshold)continue;
+        try{
+          item.el.currentTime=Math.max(0,leaderTime+expectedDelta);
+          if(item.l.video){item.l.frameCacheReady=false;item.l.frameCacheTime=-1}
+        }catch(e){}
+      }
+    }
+  }
+
   tick(t,muted=false){
     // Lightweight continuous-playback follower. It checks only state/region
     // changes every rendered project frame. currentTime is never rewritten
@@ -4350,6 +4794,12 @@ class MediaManager{
     model.layers.forEach(l=>{
       const el=l.video||l.audio;
       if(!el)return;
+      if(l.hidden||!omsLayerIncludedInExport(l)){
+        if(!el.paused)el.pause();
+        el.volume=0;
+        this.playStates.set(l,{active:false,region:l.hidden?'hidden':'export-excluded',time:t});
+        return
+      }
       const map=mediaClipMap(l,t);
       const prev=this.playStates.get(l);
 
@@ -4388,11 +4838,20 @@ class MediaManager{
       if(el.paused)el.play().catch(()=>{});
 
       this.playStates.set(l,{active:true,region:'content',time:t,mediaTime:map.mediaTime});
-    })
+    });
+    // HTMLMediaElement instances own separate decoder clocks. When the exact
+    // same source is used by overlapping layers, keep their RELATIVE source
+    // positions within half a project frame without chasing the project clock
+    // or hard-seeking unrelated clips.
+    this.alignEquivalentMediaPlayback(t)
   }
 
   restorePlaybackAudio(){
     if(!this.audioCtx||!this.exportDest)return;
+    for(const gain of this.exportGains||[]){
+      try{gain.disconnect()}catch(e){}
+    }
+    this.exportGains?.clear?.();
     for(const l of model.layers){
       if(!l.audioNode)continue;
       try{
@@ -4417,9 +4876,42 @@ class MediaManager{
     }
   }
   async buildAudioMix(stream){
-    const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return stream;this.audioCtx ||= new AC();await this.audioCtx.resume().catch(()=>{});this.exportDest=this.audioCtx.createMediaStreamDestination();
-    for(const l of model.layers){const el=l.video||l.audio;if(!el)continue;try{if(!l.audioNode)l.audioNode=this.audioCtx.createMediaElementSource(el);l.audioNode.disconnect();const gain=this.audioCtx.createGain();gain.gain.value=clamp(l.volume??1,0,1);l.audioNode.connect(gain);gain.connect(this.exportDest)}catch(e){}}
-    this.exportDest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));return stream;
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC)return stream;
+    this.audioCtx ||= new AC();
+    await this.audioCtx.resume().catch(()=>{});
+
+    // V4.50 — export audio is an allow-list. Disconnect every existing media
+    // source first so an unselected video/audio layer cannot retain a route from
+    // normal playback or a previous export session.
+    for(const gain of this.exportGains||[]){
+      try{gain.disconnect()}catch(e){}
+    }
+    this.exportGains=new Set();
+    for(const l of model.layers){
+      if(!l.audioNode)continue;
+      try{l.audioNode.disconnect()}catch(e){}
+    }
+    if(this.exportDest){
+      try{this.exportDest.stream.getTracks().forEach(track=>track.stop())}catch(e){}
+    }
+    this.exportDest=this.audioCtx.createMediaStreamDestination();
+
+    for(const l of model.layers){
+      const el=l.video||l.audio;
+      if(!el||l.hidden||!omsLayerIncludedInExport(l))continue;
+      try{
+        if(!l.audioNode)l.audioNode=this.audioCtx.createMediaElementSource(el);
+        l.audioNode.disconnect();
+        const gain=this.audioCtx.createGain();
+        gain.gain.value=clamp(l.volume??1,0,1);
+        l.audioNode.connect(gain);
+        gain.connect(this.exportDest);
+        this.exportGains.add(gain)
+      }catch(e){}
+    }
+    this.exportDest.stream.getAudioTracks().forEach(track=>stream.addTrack(track));
+    return stream;
   }
 }
 const media=new MediaManager(model);
@@ -4601,7 +5093,7 @@ class Renderer{
   }
   activeLayers(){
     const layers=[...model.layers].reverse().filter(
-      l=>!l.hidden&&model.time>=l.start&&model.time<=l.start+l.duration
+      l=>!l.hidden&&omsLayerIncludedInExport(l)&&model.time>=l.start&&model.time<=l.start+l.duration
     );
     if(model.scene3DActive()){const slots=layers.map((l,i)=>this.layerUses3D(l)?i:-1).filter(i=>i>=0),sorted=slots.map(i=>layers[i]).sort((a,b)=>(model.effective(b).z||0)-(model.effective(a).z||0));slots.forEach((slot,i)=>layers[slot]=sorted[i])}
     return layers;
@@ -5137,7 +5629,7 @@ class WebGLRenderer{
     }
   }
   layerVP(layer){return this.layerUses3D(layer)?this.vp:this.vp2d}
-  activeLayers(){return[...model.layers].reverse().filter(l=>!l.hidden&&model.time>=l.start&&model.time<=l.start+l.duration)}
+  activeLayers(){return[...model.layers].reverse().filter(l=>!l.hidden&&omsLayerIncludedInExport(l)&&model.time>=l.start&&model.time<=l.start+l.duration)}
   hex(value,alpha=1){let h=String(value||'#ffffff').replace('#','');if(h.length===3)h=h.split('').map(x=>x+x).join('');const n=parseInt(h,16);return[Number.isFinite(n)?((n>>16)&255)/255:1,Number.isFinite(n)?((n>>8)&255)/255:1,Number.isFinite(n)?(n&255)/255:1,alpha]}
   textureSignature(l){const e=l.effects||{},m=l.mask||{},frame=l.type==='video'?(l.frameCacheTime??l.video?.currentTime??0):0,previewQ=this.exporting?1:omsPreviewQualityScale();return JSON.stringify([l.type,l.w,l.h,l.shape,l.color,l.stroke,l.strokeWidth,l.radius,l.text,l.fontSize,l.fontWeight,l.fontFamily,l.align,l.sourceRef||'',e.blur,e.brightness,e.contrast,e.saturate,e.hue,m.enabled,m.type,m.feather,m.invert,l.img?.naturalWidth||0,Math.round(frame*1000),previewQ])}
   textureEntry(l){
@@ -5773,7 +6265,14 @@ class TimelineController{
     this.pinch=null;
     this.pendingPinchPx=null;
     this.pinchRAF=0;
+    this.wheelZoomEndTimer=0;
     this._projectId=null;
+    // Responsive initial timeline fit: while armed, t=0 stays under the normal
+    // timeline origin/playhead and t=2s is fitted near the visible right edge.
+    // The first completed user zoom disables this auto-fit so pinch remains free.
+    this.initialFitActive=false;
+    this.initialFitSeconds=2;
+    this.initialFitRAF=0;
     this.timelinePointers=new Map();
     this.emptyPan=null;
     // V3.83 — gesture arbitration while a keyframe is held.
@@ -5816,7 +6315,9 @@ class TimelineController{
     sc.addEventListener('pointerup',e=>this.onTimelinePointerUp(e),{capture:true,passive:false});
     sc.addEventListener('pointercancel',e=>this.onTimelinePointerUp(e),{capture:true,passive:false});
 
-    sc.addEventListener('wheel',e=>this.onZoomWheel(e),{passive:false});
+    // Mouse-wheel zoom belongs only to the ruler band. Pointer pinch remains
+    // available across the complete timeline surface for touch and pen.
+    $('#ruler')?.addEventListener('wheel',e=>this.onZoomWheel(e),{passive:false});
 
     // V4.25 — pointer events can occasionally be lost when a keyframe marker is
     // rebuilt while Android pointer capture is changing ownership. Keep a
@@ -5842,6 +6343,17 @@ class TimelineController{
         this.clearTimelineLayerSelection();
       }
     });
+
+    // As long as the initial 2-second fit has not been replaced by a manual
+    // zoom, keep it responsive to phone/tablet/desktop width and orientation.
+    if('ResizeObserver' in window){
+      this.timelineResizeObserver=new ResizeObserver(()=>{
+        if(!this.initialFitActive||$('#editor')?.classList.contains('hidden'))return;
+        cancelAnimationFrame(this.initialFitRAF);
+        this.initialFitRAF=requestAnimationFrame(()=>this.applyInitialSecondsFit({persist:true,rebuild:true}));
+      });
+      this.timelineResizeObserver.observe(sc);
+    }
   }
 
   onDocumentTimelinePointerEnd(e){
@@ -5891,8 +6403,67 @@ class TimelineController{
     })
   }
 
+  initialSecondsFitPx(seconds=this.initialFitSeconds){
+    const fps=this.rulerPolicy.projectFPS();
+    // Quantize the requested span to an integer frame count first. This keeps
+    // the initial fit frame-exact (2.000s = 60 frames at 30 fps) instead of
+    // depending on a visual inset measured in CSS pixels.
+    const frameSpan=Math.max(1,Math.round(Math.max(.25,+seconds||2)*fps));
+    // Reserve exactly one canonical frame after the requested span so the
+    // major tick at the end (for example 2s / frame 60 at 30 fps) is rendered
+    // inside the viewport instead of landing on the clipped right boundary.
+    // This is frame-based, not a CSS-pixel fudge, so it scales across FPS and
+    // screen sizes: 30 fps => 61 visible frame intervals, 60 fps => 121.
+    const visibleFrameSpan=frameSpan+1;
+    const span=visibleFrameSpan/fps;
+    const viewport=this.viewportWidth();
+    const origin=this.isCentered()?this.centerX():this.labelW;
+    const usable=Math.max(48,viewport-origin);
+    return Math.max(this.minPx,usable/span)
+  }
+
+  applyInitialSecondsFit({persist=true,rebuild=true}={}){
+    if(!this.initialFitActive||!model.project)return false;
+    const next=this.initialSecondsFitPx(this.initialFitSeconds);
+    // Large desktop CSS viewports can require >360 px/s for a true 2-second
+    // fit. Raise only the zoom ceiling as needed; the zoom-out floor is unchanged.
+    if(next>this.rulerPolicy.maxPx)this.rulerPolicy.maxPx=next;
+    const fitted=this.rulerPolicy.clampZoom(next);
+    if(Math.abs(fitted-this.px)<.01){this.updateZoomBadge();return false}
+    this.px=fitted;
+    if(persist){
+      model.project.timelinePx=fitted;
+      model.project.timelineGestureVersion=2;
+    }
+    if(rebuild)this.rebuild();
+    if(this.isCentered()){
+      const sc=$('#timelineScroll');
+      if(sc){
+        this.syncingScroll=true;
+        sc.scrollLeft=clamp(model.time||0,0,model.project.duration||0)*this.px;
+        requestAnimationFrame(()=>{this.syncingScroll=false;this.updatePlayhead()});
+      }
+    }
+    this.updateZoomBadge();
+    return true
+  }
+
+  activateInitialSecondsFit(seconds=2){
+    this.initialFitSeconds=Math.max(.25,+seconds||2);
+    this.initialFitActive=true;
+    cancelAnimationFrame(this.initialFitRAF);
+    this.initialFitRAF=requestAnimationFrame(()=>this.applyInitialSecondsFit({persist:true,rebuild:true}));
+  }
+
+  disableInitialSecondsFit(){
+    this.initialFitActive=false;
+    cancelAnimationFrame(this.initialFitRAF);
+    this.initialFitRAF=0;
+  }
+
   resetTimelineZoom(){
     if(!model.project)return;
+    this.disableInitialSecondsFit();
     this.resetTransientTimelineGesture({restoreInterruptedPinch:true});
     const sc=$('#timelineScroll');
     const keepTime=clamp(model.time||0,0,model.project.duration||0);
@@ -6164,6 +6735,7 @@ class TimelineController{
     if(!model.project)return;
     if(this._projectId!==model.project.id){
       this.resetTransientTimelineGesture({restoreInterruptedPinch:true});
+      this.disableInitialSecondsFit();
       this._projectId=model.project.id;
 
       let savedPx=Number.isFinite(model.project.timelinePx)
@@ -6551,9 +7123,12 @@ class TimelineController{
   }
 
   clearTimelineLayerSelection(){
-    if(!model.selected)return;
+    const hadSingle=!!model.selected;
+    const hadMulti=!!ui?.layerMultiSelectedIds?.size;
+    if(!hadSingle&&!hadMulti)return;
 
     model.selected=null;
+    ui?.clearLayerMultiSelection?.();
 
     // Tutup panel properti karena tidak ada layer yang aktif lagi.
     if(ui?.drawerMode)ui.closeDrawer();
@@ -6885,6 +7460,10 @@ class TimelineController{
     this.suppressClickUntil=performance.now()+500;
     $('.timelineArea')?.classList.remove('timeline-pinching');
 
+    // A completed pinch is an explicit user zoom choice. From now on keep the
+    // user's zoom even if the viewport later resizes. Cancelled pinches do not.
+    if(!cancelled)this.disableInitialSecondsFit();
+
     if(model.project){
       model.project.timelinePx=this.px;
       model.project.timelineGestureVersion=2
@@ -6893,8 +7472,24 @@ class TimelineController{
   }
 
   onZoomWheel(e){
-    if(!model.project||!(e.ctrlKey||e.metaKey))return;
+    if(!model.project||!Number.isFinite(e.deltaY)||Math.abs(e.deltaY)<.01)return;
+    const modified=!!(e.ctrlKey||e.metaKey);
+    let finePointer=false;
+    try{
+      finePointer=window.matchMedia('(pointer:fine)').matches &&
+        !window.matchMedia('(hover:none)').matches;
+    }catch(err){
+      finePointer=true;
+    }
+    // Plain vertical mouse-wheel movement emulates the existing pinch zoom.
+    // Preserve predominantly horizontal trackpad gestures for timeline panning.
+    if(!modified&&(!finePointer||Math.abs(e.deltaX)>Math.abs(e.deltaY)))return;
     e.preventDefault();
+    this.disableInitialSecondsFit();
+    const area=$('.timelineArea');
+    area?.classList.add('timeline-pinching');
+    clearTimeout(this.wheelZoomEndTimer);
+    this.wheelZoomEndTimer=setTimeout(()=>area?.classList.remove('timeline-pinching'),140);
     const anchor=this.timeFromClientX(e.clientX);
     this.applyTimelineZoom(this.rulerPolicy.wheelZoom(this.px,e.deltaY),e.clientX,anchor);
   }
@@ -7211,31 +7806,36 @@ class TimelineController{
     model.layers.forEach(l=>{
       const keyframeLayout=this.keyframeLaneLayout(l);
       const tr=document.createElement('div');
-      tr.className='track'+(keyframeLayout.expanded?' keyframeLanesExpanded':'');
+      tr.className='track'+(l.hidden?' layerHidden':'')+(keyframeLayout.expanded?' keyframeLanesExpanded':'');
       tr.dataset.layerId=l.id;
       tr.dataset.keyframeLaneCount=String(keyframeLayout.laneCount);
       tr.dataset.keyframeMaxStack=String(keyframeLayout.maxStack);
       tr.style.setProperty('--kf-track-height',keyframeLayout.rowHeight+'px');
 
       const head=document.createElement('div');
-      head.className='trackHead'+(l.id===model.selected?' sel':'');
-      head.innerHTML=`<button class="eye">${l.hidden?'○':'●'}</button><div class="trackName">${esc(l.name)}${model.layer3DEnabled(l)?'<span class="badge3d">3D</span>':''}</div><button class="lock">${l.locked?'▣':'▢'}</button>`;
+      const rowSelected=ui?.layerIsSelected?.(l.id)??(l.id===model.selected);
+      head.className='trackHead'+(rowSelected?' sel':'')+(!model.selected&&ui?.layerMultiSelectedIds?.has?.(l.id)?' multiSel':'');
+      const visibilityLabel=`${l.hidden?'Tampilkan':'Sembunyikan'} layer ${l.name}`;
+      head.innerHTML=`<button type="button" class="eye" aria-label="${esc(visibilityLabel)}" title="${esc(visibilityLabel)}" aria-pressed="${l.hidden?'false':'true'}">${layerVisibilityIcon(l.hidden)}</button><div class="trackName">${esc(l.name)}${model.layer3DEnabled(l)?'<span class="badge3d">3D</span>':''}</div><button type="button" class="lock">${l.locked?'▣':'▢'}</button>`;
       head.onclick=e=>{
         if(performance.now()<this.suppressClickUntil){e.preventDefault();e.stopPropagation();return}
-        if(e.target.classList.contains('eye')){
-          history.push();l.hidden=!l.hidden;this.rebuild();renderer.render();e.stopPropagation();return
+        if(e.target.closest?.('.eye')){
+          history.push();l.hidden=!l.hidden;this.rebuild();media.sync(model.time,model.playing,false);renderer.render();e.stopPropagation();return
         }
-        if(e.target.classList.contains('lock')){
+        if(e.target.closest?.('.lock')){
           history.push();l.locked=!l.locked;this.rebuild();e.stopPropagation();return
         }
-        model.selected=l.id;this.rebuild();ui.openInspectorRoot();renderer.render()
+        if(ui?.layerMultiSelectMode||e.ctrlKey||e.metaKey){
+          ui?.toggleLayerMultiSelection?.(l.id);e.stopPropagation();return
+        }
+        ui?.clearLayerMultiSelection?.();model.selected=l.id;this.rebuild();ui.openInspectorRoot();renderer.render()
       };
       head.onpointerdown=e=>{
         if(e.target.closest('.eye,.lock'))return;
-        // V3.81: long-press layer reorder is only armed from Inspector root.
-        // Transform/other drawers reserve long-press gestures for keyframe editing.
-        if(ui?.drawerMode&&ui.drawerMode!=='root')return;
-        this.reorderPointerDown(e,l,tr,head)
+        if(ui?.layerMultiSelectMode||e.ctrlKey||e.metaKey)return;
+        // V4.50: holding the layer header enters additive layer selection
+        // without opening Inspector. Reorder remains available from the lane.
+        this.layerSelectionPointerDown(e,l,head)
       };
 
       const lane=document.createElement('div');
@@ -7265,7 +7865,7 @@ class TimelineController{
       };
 
       const clip=document.createElement('div');
-      clip.className=`clip ${l.type}${l.id===model.selected?' sel':''}`;
+      clip.className=`clip ${l.type}${rowSelected?' sel':''}${!model.selected&&ui?.layerMultiSelectedIds?.has?.(l.id)?' multiSel':''}`;
       clip.style.left=(pad+l.start*this.px)+'px';
       clip.style.width=Math.max(22,l.duration*this.px)+'px';
       clip.title=Number.isFinite(l.sourceDuration)
@@ -7275,12 +7875,19 @@ class TimelineController{
       clip.onclick=e=>{
         e.stopPropagation();
         if(performance.now()<this.suppressClickUntil){e.preventDefault();return}
+        if(ui?.layerMultiSelectMode||e.ctrlKey||e.metaKey){
+          ui?.toggleLayerMultiSelection?.(l.id);return
+        }
+        ui?.clearLayerMultiSelection?.();
         model.selected=l.id;
         this.rebuild();
         ui.openInspectorRoot();
         renderer.render()
       };
-      clip.onpointerdown=e=>this.clipPointerDown(e,l,clip);
+      clip.onpointerdown=e=>{
+        if(ui?.layerMultiSelectMode||e.ctrlKey||e.metaKey)return;
+        this.clipPointerDown(e,l,clip)
+      };
       lane.appendChild(clip);
 
       // Keyframes live in project time, not clip-local coordinates. Expanded
@@ -7311,6 +7918,7 @@ class TimelineController{
             e.stopPropagation();
             if(performance.now()<this.suppressClickUntil){e.preventDefault();return}
             this.cancelScrollFrameSettle();
+            ui?.clearLayerMultiSelection?.();
             model.selected=l.id;
             model.time=this.snapTime(k.t);
             this.rebuild();
@@ -8087,6 +8695,53 @@ class TimelineController{
     clip.addEventListener('pointercancel',finish);
   }
 
+  layerSelectionPointerDown(e,l,handle){
+    if(this.reorderSession||this.pinching)return;
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+
+    e.stopPropagation();
+    const pointerId=e.pointerId;
+    const startX=e.clientX;
+    const startY=e.clientY;
+    const slop=8;
+    let ended=false;
+    let activated=false;
+
+    try{handle.setPointerCapture(pointerId)}catch(err){}
+    handle.classList.add('layer-select-armed');
+
+    const activate=()=>{
+      if(ended||activated||this.pinching)return;
+      activated=true;
+      this.suppressClickUntil=performance.now()+650;
+      handle.classList.remove('layer-select-armed');
+      ui?.selectLayerByLongPress?.(l.id);
+      if(navigator.vibrate)navigator.vibrate(20)
+    };
+    const timer=setTimeout(activate,Math.max(360,this.longPressMs));
+
+    const move=ev=>{
+      if(ev.pointerId!==pointerId||ended||activated)return;
+      if(Math.hypot(ev.clientX-startX,ev.clientY-startY)<=slop)return;
+      clearTimeout(timer);
+      handle.classList.remove('layer-select-armed')
+    };
+    const finish=ev=>{
+      if(ev.pointerId!==pointerId||ended)return;
+      ended=true;
+      clearTimeout(timer);
+      handle.classList.remove('layer-select-armed');
+      try{if(handle.hasPointerCapture(pointerId))handle.releasePointerCapture(pointerId)}catch(err){}
+      handle.removeEventListener('pointermove',move);
+      handle.removeEventListener('pointerup',finish);
+      handle.removeEventListener('pointercancel',finish)
+    };
+
+    handle.addEventListener('pointermove',move,{passive:true});
+    handle.addEventListener('pointerup',finish);
+    handle.addEventListener('pointercancel',finish)
+  }
+
   reorderPointerDown(e,l,row,handle){
     if(ui?.drawerMode&&ui.drawerMode!=='root')return;
     if(l.locked||this.reorderSession)return;
@@ -8112,6 +8767,23 @@ class TimelineController{
     try{handle.setPointerCapture(pointerId)}catch(err){}
     handle.classList.add('reorder-armed');
 
+    const allTrackRows=()=>[...$('#tracks').children]
+      .filter(r=>r.classList?.contains('track'));
+
+    const clearIndicators=({clearTransforms=false}={})=>{
+      allTrackRows().forEach(r=>{
+        r.classList.remove(
+          'reorder-target-before',
+          'reorder-target-after',
+          'reorder-hover'
+        );
+        if(clearTransforms&&r!==this.reorderSession?.row){
+          r.classList.remove('reorder-shift');
+          r.style.removeProperty('--reorder-shift-y');
+        }
+      });
+    };
+
     const activate=()=>{
       if(this.pinching||ended||active||mode!=='hold')return;
       mode='reorder';
@@ -8121,25 +8793,38 @@ class TimelineController{
       model.selected=l.id;
       this.suppressClickUntil=performance.now()+700;
 
+      const rows=allTrackRows();
       const rowRect=row.getBoundingClientRect();
-      const ghost=document.createElement('div');
-      ghost.className='layerReorderGhost';
-      ghost.style.left=rowRect.left+'px';
-      ghost.style.top=rowRect.top+'px';
-      ghost.style.width=Math.min(rowRect.width,Math.max(150,this.viewportWidth()*.72))+'px';
-      ghost.innerHTML=`<span class="dot"></span><span>${esc(l.name)}</span>`;
-      document.body.appendChild(ghost);
+      const sourceIndex=rows.indexOf(row);
+      const baseRows=rows.map((r,index)=>{
+        const rect=r.getBoundingClientRect();
+        return{
+          row:r,
+          layerId:r.dataset.layerId,
+          index,
+          top:rect.top,
+          height:rect.height,
+          bottom:rect.bottom
+        }
+      });
 
       row.classList.add('reorder-source');
+      row.style.setProperty('--reorder-drag-y','0px');
       handle.classList.remove('reorder-armed');
 
       this.reorderSession={
         layerId:l.id,
         row,
-        ghost,
         grabOffsetY:startY-rowRect.top,
+        sourceTop:rowRect.top,
+        sourceHeight:rowRect.height,
+        sourceIndex,
+        baseRows,
+        scrollStartTop:sc.scrollTop,
         dropBeforeId:null,
-        dropAfterId:null
+        dropAfterId:null,
+        insertAt:sourceIndex,
+        lastPointerY:startY
       };
 
       if(navigator.vibrate)navigator.vibrate(24);
@@ -8147,16 +8832,69 @@ class TimelineController{
 
     const timer=setTimeout(activate,this.longPressMs);
 
-    const clearIndicators=()=>{
-      [...$('#tracks').children].forEach(r=>{
-        r.classList.remove('reorder-target-before','reorder-target-after');
+    const applyPreview=(s,clientY)=>{
+      const scrollDelta=s.scrollStartTop-sc.scrollTop;
+      const sourceBaseTop=s.sourceTop+scrollDelta;
+      const dragTop=clientY-s.grabOffsetY;
+      const dragDelta=dragTop-sourceBaseTop;
+      s.row.style.setProperty('--reorder-drag-y',`${dragDelta}px`);
+      s.lastPointerY=clientY;
+
+      const reduced=s.baseRows.filter(meta=>meta.layerId!==s.layerId);
+      let insertAt=0;
+      for(;insertAt<reduced.length;insertAt++){
+        const meta=reduced[insertAt];
+        const center=meta.top+scrollDelta+meta.height/2;
+        if(clientY<center)break;
+      }
+      s.insertAt=insertAt;
+
+      clearIndicators({clearTransforms:false});
+      s.dropBeforeId=null;
+      s.dropAfterId=null;
+
+      // Close the old slot and open the new one with compositor-only transforms.
+      for(const meta of reduced){
+        let dy=0;
+        if(insertAt<s.sourceIndex){
+          if(meta.index>=insertAt&&meta.index<s.sourceIndex)dy=s.sourceHeight;
+        }else if(insertAt>s.sourceIndex){
+          if(meta.index>s.sourceIndex&&meta.index<=insertAt)dy=-s.sourceHeight;
+        }
+        meta.row.classList.add('reorder-shift');
+        meta.row.style.setProperty('--reorder-shift-y',`${dy}px`);
+      }
+
+      if(!reduced.length)return;
+
+      if(insertAt<reduced.length){
+        const target=reduced[insertAt];
+        target.row.classList.add('reorder-target-before','reorder-hover');
+        s.dropBeforeId=target.layerId;
+      }else{
+        const target=reduced.at(-1);
+        target.row.classList.add('reorder-target-after','reorder-hover');
+        s.dropAfterId=target.layerId;
+      }
+    };
+
+    const cleanupVisuals=()=>{
+      const s=this.reorderSession;
+      clearIndicators({clearTransforms:true});
+      if(s?.row){
+        s.row.classList.remove('reorder-source');
+        s.row.style.removeProperty('--reorder-drag-y');
+      }
+      allTrackRows().forEach(r=>{
+        r.classList.remove('reorder-shift');
+        r.style.removeProperty('--reorder-shift-y');
       });
     };
 
     const move=ev=>{
       ev.preventDefault();
 
-      // Pinch timeline selalu menang atas reorder/pan satu jari.
+      // Pinch timeline always wins over single-finger reorder/pan.
       if(this.pinching)return;
 
       if(!active){
@@ -8188,37 +8926,7 @@ class TimelineController{
 
       const s=this.reorderSession;
       if(!s)return;
-
-      s.ghost.style.top=(ev.clientY-s.grabOffsetY)+'px';
-      clearIndicators();
-
-      const rows=[...$('#tracks').children].filter(r=>r.dataset.layerId!==s.layerId);
-      s.dropBeforeId=null;
-      s.dropAfterId=null;
-
-      if(!rows.length)return;
-
-      let chosen=null;
-      let before=true;
-
-      for(const r of rows){
-        const rect=r.getBoundingClientRect();
-        if(ev.clientY<rect.top+rect.height/2){
-          chosen=r;
-          before=true;
-          break;
-        }
-      }
-
-      if(!chosen){
-        chosen=rows.at(-1);
-        before=false;
-      }
-
-      chosen.classList.add(before?'reorder-target-before':'reorder-target-after');
-
-      if(before)s.dropBeforeId=chosen.dataset.layerId;
-      else s.dropAfterId=chosen.dataset.layerId;
+      applyPreview(s,ev.clientY);
     };
 
     const finish=()=>{
@@ -8226,15 +8934,8 @@ class TimelineController{
       handle.classList.remove('reorder-armed');
 
       if(this.pinching){
-        const s=this.reorderSession;
-        if(s){
-          s.row.classList.remove('reorder-source');
-          s.ghost?.remove();
-          [...$('#tracks').children].forEach(r=>{
-            r.classList.remove('reorder-target-before','reorder-target-after')
-          });
-          this.reorderSession=null;
-        }
+        cleanupVisuals();
+        this.reorderSession=null;
         if(splitGestureSuspended){
           splitGestureSuspended=false;
           try{editorSplit?.endTimelineLayerGesture?.()}catch(err){}
@@ -8247,14 +8948,9 @@ class TimelineController{
 
       const s=this.reorderSession;
       if(s){
-        clearIndicators();
-        s.row.classList.remove('reorder-source');
-        s.ghost.remove();
-
         const from=model.layers.findIndex(x=>x.id===s.layerId);
         if(from>=0){
           const [moving]=model.layers.splice(from,1);
-
           let insertAt=model.layers.length;
 
           if(s.dropBeforeId){
@@ -8271,6 +8967,7 @@ class TimelineController{
           model.layers.splice(insertAt,0,moving);
         }
 
+        cleanupVisuals();
         this.reorderSession=null;
         this.suppressClickUntil=performance.now()+500;
         this.rebuild();
@@ -8301,6 +8998,34 @@ class TimelineController{
     handle.addEventListener('pointermove',move,{passive:false});
     handle.addEventListener('pointerup',finish);
     handle.addEventListener('pointercancel',finish);
+  }
+
+  jumpBoundary(toEnd=false){
+    if(!model.project)return;
+    this.cancelTimelineMomentum();
+    this.cancelScrollFrameSettle();
+
+    // Rebuild against the CURRENT timeline viewport. A desktop split may have
+    // changed clientWidth since the previous rebuild; using stale center padding
+    // or inner width makes the browser clamp end-scroll before the real edge.
+    this.rebuild();
+
+    const duration=Math.max(0,+model.project.duration||0);
+    model.time=toEnd?duration:0;
+    const sc=$('#timelineScroll');
+    if(this.isCentered()&&sc){
+      this.syncingScroll=true;
+      sc.scrollLeft=model.time*this.px;
+      this.lastScrollLeft=sc.scrollLeft;
+      cancelAnimationFrame(this.scrollRelease);
+      this.scrollRelease=requestAnimationFrame(()=>{
+        this.syncingScroll=false;
+        this.updatePlayhead();
+        this.updateRulerLabels(true)
+      })
+    }
+    media.sync(model.time,false,false,{forceSeek:true});
+    renderer.render()
   }
 
   nearest(dir){
@@ -8575,8 +9300,114 @@ class TransformCameraPolicy{
   }
 }
 
+
+class LayerActionClipboardService{
+  constructor(model){
+    this.model=model;
+    this.payload=null
+  }
+  clone(value){
+    if(value===undefined)return undefined;
+    try{return typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value))}
+    catch(e){return JSON.parse(JSON.stringify(value))}
+  }
+  snapshot(layer){
+    if(!layer)return null;
+    mediaAssets.captureLayer(layer);
+    return this.clone(this.model.cleanLayer(layer,{includeMedia:false}))
+  }
+  styleSnapshot(layer){
+    if(!layer)return null;
+    return{
+      kf:this.clone(layer.kf||{}),
+      effects:this.clone(layer.effects||{})
+    }
+  }
+  copy(layer){
+    if(!layer)return null;
+    const layerSnapshot=this.snapshot(layer);
+    if(!layerSnapshot)return null;
+    this.payload={
+      sourceId:layer.id,
+      sourceName:layer.name||'Layer',
+      copiedAt:Date.now(),
+      layer:layerSnapshot,
+      style:this.styleSnapshot(layer),
+      mediaSource:mediaAssets.isMedia(layer)?(layer.dataUrl||mediaAssets.sources.get(layer.assetId)||''):''
+    };
+    return this.payload
+  }
+  hasLayer(){return !!this.payload?.layer}
+  sourceId(){return this.payload?.sourceId||null}
+  renewKeyIds(kf){
+    const next=this.clone(kf||{});
+    for(const arr of Object.values(next||{})){
+      if(!Array.isArray(arr))continue;
+      for(const key of arr)if(key&&typeof key==='object')key.id=uid('kf')
+    }
+    return next
+  }
+  cloneForInsert(snapshot=this.payload?.layer,{nameSuffix=''}={}){
+    if(!snapshot)return null;
+    const layer=this.clone(snapshot);
+    layer.id=uid('layer');
+    layer.kf=this.renewKeyIds(layer.kf||{});
+    layer._disposed=false;
+    if(nameSuffix)layer.name=`${layer.name||'Layer'}${nameSuffix}`;
+    if(mediaAssets.isMedia(layer)&&this.payload?.mediaSource)layer.dataUrl=this.payload.mediaSource;
+    return layer
+  }
+  insert(layer,{nearLayerId=null}={}){
+    if(!layer)return null;
+    const layers=this.model.layers;
+    const sourceIndex=nearLayerId?layers.findIndex(item=>item.id===nearLayerId):-1;
+    const insertAt=sourceIndex>=0?sourceIndex:0;
+    layers.splice(insertAt,0,layer);
+    this.model.selected=layer.id;
+    this.model.hydrateLayer(layer);
+    this.model.syncProjectDurationToContent('layer-action-insert');
+    bus.emit('model:changed');
+    return layer
+  }
+  duplicate(layer){
+    const snapshot=this.snapshot(layer);
+    if(!snapshot)return null;
+    const previous=this.payload;
+    const mediaSource=mediaAssets.isMedia(layer)?(layer.dataUrl||mediaAssets.sources.get(layer.assetId)||''):'';
+    this.payload={sourceId:layer.id,sourceName:layer.name||'Layer',copiedAt:Date.now(),layer:snapshot,style:this.styleSnapshot(layer),mediaSource};
+    const clone=this.cloneForInsert(snapshot,{nameSuffix:' • Salinan'});
+    this.payload=previous;
+    return this.insert(clone,{nearLayerId:layer.id})
+  }
+  pasteLayer(){
+    if(!this.hasLayer())return null;
+    const clone=this.cloneForInsert(this.payload.layer,{nameSuffix:' • Salinan'});
+    const oldStart=Math.max(0,+clone.start||0);
+    const nextStart=Math.max(0,+this.model.time||0);
+    const delta=nextStart-oldStart;
+    clone.start=nextStart;
+    if(Math.abs(delta)>.0000001){
+      for(const arr of Object.values(clone.kf||{})){
+        if(!Array.isArray(arr))continue;
+        for(const key of arr)if(key&&Number.isFinite(+key.t))key.t=Math.max(0,+key.t+delta)
+      }
+    }
+    return this.insert(clone)
+  }
+  canPasteStyle(target){
+    return !!target&&!!this.payload?.style&&target.id!==this.payload.sourceId
+  }
+  pasteStyle(target){
+    if(!this.canPasteStyle(target))return false;
+    target.kf=this.renewKeyIds(this.payload.style.kf||{});
+    target.effects=this.clone(this.payload.style.effects||{});
+    bus.emit('model:changed');
+    return true
+  }
+}
+
 class UIController{
-  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this.transformCameraPolicy=new TransformCameraPolicy();this.keyframeOriginRouter=new KeyframeOriginRouter(this);this._keyframeOriginResolvers=this.keyframeOriginRouter.resolvers}
+  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this.transformCameraPolicy=new TransformCameraPolicy();this.keyframeOriginRouter=new KeyframeOriginRouter(this);this._keyframeOriginResolvers=this.keyframeOriginRouter.resolvers;this.layerActionClipboard=new LayerActionClipboardService(model);this.layerMultiSelectedIds=new Set();this.layerMultiSelectMode=false}
 
   /* =========================================================
      V4.27 — KEYFRAME ORIGIN ROUTING CONTRACT
@@ -8813,6 +9644,292 @@ class UIController{
     return this.keyframeOriginRouter.navigate(layer,prop,key,{reason})
   }
 
+
+  clearLayerMultiSelection(){
+    const had=this.layerMultiSelectedIds.size>0;
+    this.layerMultiSelectedIds.clear();
+    this.layerMultiSelectMode=false;
+    this.syncLayerMultiSelectModeUI();
+    return had
+  }
+
+  syncLayerMultiSelectModeUI(){
+    const button=$('#layerActionsBtn');
+    if(!button)return;
+    button.classList.toggle('selectionMode',this.layerMultiSelectMode);
+    const label=this.layerMultiSelectMode?'Mode pilih layer aktif':'Aksi Layer';
+    button.setAttribute('aria-label',label);
+    button.setAttribute('title',label)
+  }
+
+  selectedLayerIds(){
+    if(this.layerMultiSelectedIds.size)return new Set(this.layerMultiSelectedIds);
+    return model.selected?new Set([model.selected]):new Set()
+  }
+
+  selectedOutputLayers(){
+    const ids=this.selectedLayerIds();
+    return (model.layers||[]).filter(layer=>ids.has(layer.id)&&model.durationPolicy.isOutputLayer(layer))
+  }
+
+  beginLayerMultiSelection(){
+    if(this.layerMultiSelectMode){
+      this.layerMultiSelectMode=false;
+      this.closeLayerActions();
+      this.syncLayerMultiSelectModeUI();
+      timeline.rebuild();
+      renderer.render();
+      toast('Mode pilih layer selesai • pilihan tetap dipertahankan');
+      return true
+    }
+    // Starting a new selection session must not inherit stale IDs from a
+    // previous session; otherwise an old video/audio layer can leak into a
+    // later selected-only export even though it is no longer visibly chosen.
+    this.layerMultiSelectedIds.clear();
+    if(model.selected)this.layerMultiSelectedIds.add(model.selected);
+    model.selected=null;
+    this.layerMultiSelectMode=true;
+    this.closeLayerActions();
+    this.closeDrawer();
+    this.syncLayerMultiSelectModeUI();
+    timeline.rebuild();
+    renderer.render();
+    toast('Mode pilih layer aktif • klik layer untuk memilih atau membatalkan')
+  }
+
+  selectLayerByLongPress(layerId){
+    if(!(model.layers||[]).some(layer=>layer.id===layerId))return false;
+    if(!this.layerMultiSelectMode)this.layerMultiSelectedIds.clear();
+    model.selected=null;
+    this.layerMultiSelectMode=true;
+    this.layerMultiSelectedIds.add(layerId);
+    this.closeLayerActions();
+    this.closeDrawer();
+    this.syncLayerMultiSelectModeUI();
+    timeline.rebuild();
+    renderer.render();
+    toast(`${this.layerMultiSelectedIds.size} layer dipilih • klik layer lain untuk menambah`);
+    return true
+  }
+
+  toggleLayerMultiSelection(layerId){
+    const previousSingle=model.selected;
+    if(previousSingle&&!this.layerMultiSelectedIds.has(previousSingle))this.layerMultiSelectedIds.add(previousSingle);
+    model.selected=null;
+    this.layerMultiSelectMode=true;
+    if(previousSingle!==layerId&&this.layerMultiSelectedIds.has(layerId))this.layerMultiSelectedIds.delete(layerId);
+    else if(previousSingle!==layerId)this.layerMultiSelectedIds.add(layerId);
+    else if(this.layerMultiSelectedIds.has(layerId))this.layerMultiSelectedIds.delete(layerId);
+    else this.layerMultiSelectedIds.add(layerId);
+    this.closeDrawer();
+    this.syncLayerMultiSelectModeUI();
+    timeline.rebuild();
+    renderer.render();
+    toast(this.layerMultiSelectedIds.size?`${this.layerMultiSelectedIds.size} layer dipilih`:'Belum ada layer dipilih')
+  }
+
+  async exportSelectedLayers(){
+    const plan=exporter.configureLayerSelection(this.selectedLayerIds());
+    if(!plan){toast('Pilih minimal satu layer visual atau audio yang terlihat');return false}
+    this.closeLayerActions();
+    await openExportSheet({keepLayerSelection:true});
+    return true
+  }
+
+  layerIsSelected(layerId){
+    if(model.selected)return model.selected===layerId;
+    return this.layerMultiSelectedIds.has(layerId)
+  }
+
+  hasAnyLayerSelection(){
+    return !!model.selected||this.layerMultiSelectedIds.size>0
+  }
+
+  singleSelectedLayer(){
+    if(this.layerMultiSelectedIds.size)return null;
+    return model.selectedLayer?.()||null
+  }
+
+  selectAllLayers(){
+    this.closeLayerActions();
+    this.closeDrawer();
+    model.selected=null;
+    this.layerMultiSelectedIds=new Set((model.layers||[]).map(layer=>layer.id));
+    this.layerMultiSelectMode=true;
+    this.syncLayerMultiSelectModeUI();
+    timeline.rebuild();
+    renderer.render();
+    toast(this.layerMultiSelectedIds.size?`${this.layerMultiSelectedIds.size} layer dipilih`:'Tidak ada layer')
+  }
+
+  duplicateSelectedLayer(){
+    const layer=this.singleSelectedLayer();
+    if(!layer)return false;
+    history.push();
+    const duplicated=this.layerActionClipboard.duplicate(layer);
+    if(!duplicated)return false;
+    this.clearLayerMultiSelection();
+    this.closeLayerActions();
+    this.rebuildAll();
+    this.openInspectorRoot();
+    toast('Layer digandakan');
+    return true
+  }
+
+  copySelectedLayer(){
+    const layer=this.singleSelectedLayer();
+    if(!layer)return false;
+    this.layerActionClipboard.copy(layer);
+    this.closeLayerActions();
+    toast('Layer disalin beserta gaya');
+    return true
+  }
+
+  pasteCopiedLayer(){
+    if(this.hasAnyLayerSelection()||!this.layerActionClipboard.hasLayer())return false;
+    history.push();
+    const pasted=this.layerActionClipboard.pasteLayer();
+    if(!pasted)return false;
+    this.clearLayerMultiSelection();
+    this.closeLayerActions();
+    this.rebuildAll();
+    this.openInspectorRoot();
+    toast('Layer ditempel');
+    return true
+  }
+
+  pasteCopiedStyle(){
+    const target=this.singleSelectedLayer();
+    if(!this.layerActionClipboard.canPasteStyle(target))return false;
+    const drawerMode=this.drawerMode;
+    history.push();
+    if(!this.layerActionClipboard.pasteStyle(target))return false;
+    this.closeLayerActions();
+    timeline.rebuild();
+    renderer.render();
+    if(drawerMode==='root')this.openInspectorRoot();
+    else if(['move','color','effects','mask','text','shape','three','hier'].includes(drawerMode))this.openInspector(drawerMode);
+    else if(drawerMode==='keys')this.openGraphEditor(this.graphProp);
+    toast('Gaya ditempel: keyframe + efek');
+    return true
+  }
+
+  layerActionsState(){
+    const selected=this.singleSelectedLayer();
+    const anySelection=this.hasAnyLayerSelection();
+    const clipboard=this.layerActionClipboard.hasLayer();
+    return{
+      selected,
+      anySelection,
+      clipboard,
+      canSelectAll:(model.layers||[]).length>0,
+      canSelectMultiple:(model.layers||[]).length>0,
+      canExportSelected:this.selectedOutputLayers().length>0,
+      canDuplicate:!!selected,
+      canCopy:!!selected,
+      canPasteLayer:clipboard&&!anySelection,
+      canPasteStyle:clipboard&&this.layerActionClipboard.canPasteStyle(selected)
+    }
+  }
+
+  refreshLayerActions(){
+    const popup=$('#layerActionsPopup');
+    if(!popup)return;
+    const state=this.layerActionsState();
+    const enable=(action,value)=>{
+      const btn=popup.querySelector(`[data-layer-action="${action}"]`);
+      if(!btn)return;
+      btn.disabled=!value;
+      btn.setAttribute('aria-disabled',value?'false':'true')
+    };
+    enable('select-multiple',state.canSelectMultiple);
+    enable('select-all',state.canSelectAll);
+    enable('export-selected',state.canExportSelected);
+    enable('duplicate',state.canDuplicate);
+    enable('copy-layer',state.canCopy);
+    enable('paste-layer',state.canPasteLayer);
+    enable('paste-style',state.canPasteStyle);
+
+    const multiButton=popup.querySelector('[data-layer-action="select-multiple"]');
+    if(multiButton){
+      const title=multiButton.querySelector('.layerActionCopy b');
+      const help=multiButton.querySelector('.layerActionCopy small');
+      if(title)title.textContent=this.layerMultiSelectMode?'Selesai Memilih Layer':'Pilih Beberapa Layer';
+      if(help)help.textContent=this.layerMultiSelectMode?'Pertahankan pilihan dan kembali ke klik normal':'Aktifkan mode pilih, lalu klik layer di timeline';
+      multiButton.setAttribute('aria-pressed',this.layerMultiSelectMode?'true':'false')
+    }
+
+    const status=$('#layerActionsStatus');
+    if(status){
+      if(this.layerMultiSelectedIds.size){
+        status.textContent=`${this.layerMultiSelectedIds.size} layer sedang dipilih`;
+      }else if(state.selected){
+        status.textContent=`Terpilih: ${state.selected.name||'Layer'}`;
+      }else if(state.clipboard){
+        status.textContent=`Clipboard: ${this.layerActionClipboard.payload?.sourceName||'Layer'}`;
+      }else{
+        status.textContent='Pilih layer untuk menyalin atau menggandakan';
+      }
+    }
+  }
+
+  positionLayerActions(){
+    const popup=$('#layerActionsPopup'),button=$('#layerActionsBtn');
+    if(!popup||!button)return;
+    const br=button.getBoundingClientRect();
+    const margin=8;
+    const pw=Math.min(335,window.innerWidth-20);
+    popup.style.width=`${pw}px`;
+    popup.style.left='0px';
+    popup.style.top='0px';
+    const ph=Math.min(popup.scrollHeight||430,window.innerHeight-20);
+    let left=clamp(br.right-pw,margin,Math.max(margin,window.innerWidth-pw-margin));
+    let top=br.top-ph-8;
+    if(top<margin)top=Math.min(window.innerHeight-ph-margin,br.bottom+8);
+    popup.style.left=`${Math.round(left)}px`;
+    popup.style.top=`${Math.max(margin,Math.round(top))}px`
+  }
+
+  openLayerActions(){
+    const shade=$('#layerActionsShade'),button=$('#layerActionsBtn');
+    if(!shade||!button)return;
+    this.refreshLayerActions();
+    shade.classList.remove('hidden');
+    shade.setAttribute('aria-hidden','false');
+    button.classList.add('active');
+    button.setAttribute('aria-expanded','true');
+    requestAnimationFrame(()=>this.positionLayerActions())
+  }
+
+  closeLayerActions(){
+    const shade=$('#layerActionsShade'),button=$('#layerActionsBtn');
+    if(shade){
+      shade.classList.add('hidden');
+      shade.setAttribute('aria-hidden','true')
+    }
+    if(button){
+      button.classList.remove('active');
+      button.setAttribute('aria-expanded','false')
+    }
+  }
+
+  toggleLayerActions(){
+    const shade=$('#layerActionsShade');
+    if(!shade)return;
+    shade.classList.contains('hidden')?this.openLayerActions():this.closeLayerActions()
+  }
+
+  runLayerAction(action){
+    if(action==='select-multiple')return this.beginLayerMultiSelection();
+    if(action==='select-all')return this.selectAllLayers();
+    if(action==='export-selected')return this.exportSelectedLayers();
+    if(action==='duplicate')return this.duplicateSelectedLayer();
+    if(action==='copy-layer')return this.copySelectedLayer();
+    if(action==='paste-layer')return this.pasteCopiedLayer();
+    if(action==='paste-style')return this.pasteCopiedStyle();
+    return false
+  }
+
   cameraModeBadgeText(){
     return model.cameraView?'3D CAMERA':'FREE PERSPECTIVE'
   }
@@ -8920,7 +10037,10 @@ class UIController{
     }
 
     // Desktop memakai layout preview/timeline berdampingan; cukup fit canvas.
-    if(window.matchMedia('(min-width:900px)').matches){
+    // Mobile landscape can opt into the same desktop workspace without reloading
+    // or restoring the project from storage. The class is toggled by the
+    // orientation controller near the end of the document.
+    if(window.matchMedia('(min-width:900px)').matches || document.documentElement.classList.contains('omsMobileLandscapeDesktop')){
       main.classList.remove('fitCompositionLayout');
       main.style.gridTemplateRows='';
       requestAnimationFrame(()=>this.applyCompositionFitZoom());
@@ -9199,9 +10319,9 @@ class UIController{
     $('#addText')?.addEventListener('click',()=>{history.push();model.addLayer('text');this.rebuildAll();this.openInspectorRoot()});
     $$('[data-template]').forEach(b=>b.onclick=()=>this.applyTemplate(b.dataset.template));
   }
-  applyTemplate(name){history.push();if(name==='title'){const l=model.addLayer('text',{text:'OPEN MOTION',fontSize:model.project.height*.08});model.anim.setKey(l,'scaleX',0,.45,'ease-out');model.anim.setKey(l,'scaleX',.7,1,'overshoot');model.anim.setKey(l,'scaleY',0,.45,'ease-out');model.anim.setKey(l,'scaleY',.7,1,'overshoot');model.anim.setKey(l,'opacity',0,0,'ease-out');model.anim.setKey(l,'opacity',.45,1,'ease-out')}
-    if(name==='parallax'){model.mode3d=true;[-420,0,420].forEach((z,i)=>{const l=model.addLayer('shape',{shape:'rect',name:'Parallax '+(i+1),space3d:true,z,x:model.project.width*(.3+i*.2),y:model.project.height*(.38+i*.13),w:model.project.width*.34,h:model.project.height*.14,color:['#6ca8ff','#27d3b5','#ff907c'][i]})})}
-    if(name==='camera'){model.mode3d=true;const c=model.addLayer('camera');const z=c.z;model.anim.setKey(c,'z',0,z,'ease-in-out');model.anim.setKey(c,'z',model.project.duration,z*.55,'ease-in-out');model.anim.setKey(c,'roll',0,0,'ease-in-out');model.anim.setKey(c,'roll',model.project.duration,3,'ease-in-out')}
+  applyTemplate(name){history.push();if(name==='title'){const l=model.addLayer('text',{text:'OPEN MOTION',fontSize:model.project.height*.08}),t0=l.start,t1=Math.min(t0+.7,t0+l.duration),tf=Math.min(t0+.45,t0+l.duration);model.anim.setKey(l,'scaleX',t0,.45,'ease-out');model.anim.setKey(l,'scaleX',t1,1,'overshoot');model.anim.setKey(l,'scaleY',t0,.45,'ease-out');model.anim.setKey(l,'scaleY',t1,1,'overshoot');model.anim.setKey(l,'opacity',t0,0,'ease-out');model.anim.setKey(l,'opacity',tf,1,'ease-out')}
+    if(name==='parallax'){model.mode3d=true;[-420,0,420].forEach((z,i)=>{model.addLayer('shape',{shape:'rect',name:'Parallax '+(i+1),space3d:true,z,x:model.project.width*(.3+i*.2),y:model.project.height*(.38+i*.13),w:model.project.width*.34,h:model.project.height*.14,color:['#6ca8ff','#27d3b5','#ff907c'][i]})})}
+    if(name==='camera'){model.mode3d=true;const c=model.addLayer('camera'),t0=c.start,t1=t0+c.duration,z=c.z;model.anim.setKey(c,'z',t0,z,'ease-in-out');model.anim.setKey(c,'z',t1,z*.55,'ease-in-out');model.anim.setKey(c,'roll',t0,0,'ease-in-out');model.anim.setKey(c,'roll',t1,3,'ease-in-out')}
     this.rebuildAll();this.openInspectorRoot()}
   openInspectorRoot(){const l=model.selectedLayer();if(!l){this.closeDrawer();return}this.drawerMode='root';timeline.refreshKeyframeInteractionState?.();const ins=(id,ico,txt,extra='')=>`<button class="insBtn" data-ins="${id}" ${extra}><span>${ico}</span>${txt}</button>`;const mediaTools=(l.type==='video'||l.type==='audio')?this.mediaQuickHTML(l):this.layerQuickHTML(l);const isRelinkable=['image','video','audio'].includes(l.type);const relinkTile=isRelinkable?ins('relink','↻','Tautkan Ulang','id="omsInspectorRelinkBtn" aria-label="Tautkan ulang media"'):'';const html=`<div class="drawerBody"><div class="propTitle">${esc(l.name)} ${model.layer3DEnabled(l)?'<span class="badge3d">TRUE 3D</span>':''}</div>${mediaTools}<div class="inspectorGrid">${ins('move','✥','Transform')}${ins('color','◉','Warna & Fill')}${ins('effects','✦','Efek')}${ins('mask','⬡','Mask')}${l.type==='text'?ins('text','T','Edit Teks'):''}${l.type==='shape'?ins('shape','◇','Edit Bentuk'):''}${ins('keys','⌁','Keyframes')}${ins('hier','◎','Scene Graph')}${ins('three','◇','Ruang 3D')}${relinkTile}</div><div style="height:10px"></div><button id="deleteLayer" class="createBtn" style="background:#3b1e2a;color:#ff91a6">HAPUS LAYER</button></div>`;this.drawerShell('Inspector',html);$$('[data-ins]').forEach(b=>b.onclick=()=>{if(b.dataset.ins==='relink'){openRelinkMenu(l);return}this.openInspector(b.dataset.ins)});this.bindMediaQuick(l);$('#deleteLayer').onclick=()=>{history.push();for(const camera of model.layers.filter(x=>x.type==='camera'&&x.orbitTargetId===l.id))this.cameraOrbitDisable(camera);model.removeLayer(l.id);this.closeDrawer();this.rebuildAll()}}
   mediaQuickContext(l){
@@ -9305,7 +10425,10 @@ class UIController{
     // Raw keyframes outside the clip do not create output and therefore must
     // not extend the project. Only actual layer bounds determine content length.
     model.syncProjectDurationToContent();
-    media.sync(model.time,false);
+    // Moving/trimming a clip changes the project-time -> source-time mapping.
+    // Force every active media element to the exact mapped timestamp so two
+    // instances of the same source cannot keep a pre-move 1–2 frame offset.
+    media.sync(model.time,false,false,{forceSeek:true});
     timeline.rebuild();renderer.render();
     this.mediaQuickMode=null;
     this.openInspectorRoot();
@@ -11355,7 +12478,7 @@ class UIController{
     metas.forEach((p,index)=>{const d=document.createElement('article'),hash=String(p.id||p.name||index).split('').reduce((n,ch)=>(n*31+ch.charCodeAt(0))>>>0,7);d.className='projectCard';d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label',homeTr('openProject').replace('{name}',p.name||homeTr('untitled')));d.style.setProperty('--thumb-hue',String(150+hash%105));d.innerHTML=`<div class="projectThumb"><span class="projectThumbBadge">SCENE 4</span></div><div class="projectMeta"><span class="projectArrow" aria-hidden="true">↗</span><b>${esc(p.name||homeTr('untitled'))}</b><div class="projectMetaLine"><span>${Number(p.width)||0}×${Number(p.height)||0} · ${Number(p.fps)||30} FPS</span><span class="projectDate">${dateLabel(p.updated)}</span></div></div>`;const open=e=>{if(e&&e.isTrusted===false)return;this.loadLocal(p.id,{userInitiated:true})};d.onclick=e=>open(e);d.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.isTrusted){e.preventDefault();open(e)}};root.appendChild(d)})
   }
   async saveLocal(notify=true){if(!model.project)return false;const ok=await autosave.flush(!!notify);await this.loadProjectList();return ok}
-  async loadLocal(id,{silent=false,userInitiated=false}={}){if(!userInitiated){console.warn('Blocked automatic project restore to editor:',id);return false}try{const data=await persistentStore.loadProjectData(id);if(!data)throw Error('missing project');model.restore(data);history.clear();autosave.lastFingerprint=autosave.fingerprint();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}this.authorizeEditorOpen();this.showEditor();persistentStore.saveCurrent().catch(()=>{});return true}catch(e){console.warn('Project load failed:',e);if(!silent)toast('Proyek tidak dapat dibuka');return false}}
+  async loadLocal(id,{silent=false,userInitiated=false}={}){if(!userInitiated){console.warn('Blocked automatic project restore to editor:',id);return false}try{const data=await persistentStore.loadProjectData(id);if(!data)throw Error('missing project');model.restore(data,{timeOverride:0});history.clear();autosave.lastFingerprint=autosave.fingerprint();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}this.authorizeEditorOpen();this.showEditor();persistentStore.saveCurrent().catch(()=>{});return true}catch(e){console.warn('Project load failed:',e);if(!silent)toast('Proyek tidak dapat dibuka');return false}}
 
 }
 
@@ -11480,6 +12603,7 @@ class EditorSplitController{
      environments keep the original horizontal preview + playback toolbars
      even when a 9:16 (or taller) composition is open or the window is narrow. */
   mobile(){
+    if(document.documentElement.classList.contains('omsMobileLandscapeDesktop'))return false;
     const narrow=window.matchMedia('(max-width:899px)').matches;
     const coarse=window.matchMedia('(pointer:coarse)').matches;
     const fine=window.matchMedia('(pointer:fine)').matches;
@@ -12057,11 +13181,15 @@ class EditorSplitController{
     const main=this.main(),drawer=this.drawer();
     if(!main||!drawer)return;
     const base=this.preDrawerHeight??this.defaultBaseHeight();
-    const safeMax=this.maxPreviewWithDrawer();
-    /* In automatic mode, 9:16-or-taller projects expand the preview all the
-       way to the safe drawer boundary, leaving exactly one timeline layer
-       visible. A user-saved manual split remains authoritative. */
-    const tallAuto=this.tallPortraitComposition()&&this.projectRatio()==null&&!this.manualDuringDrawer;
+    /* V4.35 — once the user manually drags the split while a drawer/Inspector
+       is open, the manual split is authoritative for the rest of that drawer
+       session. Use the MANUAL safe limit here too. Previously autoForDrawer()
+       always called maxPreviewWithDrawer() in automatic mode, so pointerup or
+       opening a deeper Inspector page could recompute a smaller safeMax and
+       snap the canvas back upward. */
+    const manualResize=!!this.manualDuringDrawer;
+    const safeMax=this.maxPreviewWithDrawer({manualResize});
+    const tallAuto=this.tallPortraitComposition()&&this.projectRatio()==null&&!manualResize;
     const target=this.layoutPolicy.autoDrawerHeight({base,safeMax,tallAuto});
     this.applyHeight(target,{drawerSafe:true,fit:true,render:iter>=3});
 
@@ -12329,7 +13457,7 @@ class PortraitSideControlsController{
   transport(){return document.querySelector('.transport')}
   previewArea(){return document.querySelector('.previewArea')}
   timelineArea(){return document.querySelector('.timelineArea')}
-  mobile(){return !window.matchMedia('(min-width:900px)').matches}
+  mobile(){return !document.documentElement.classList.contains('omsMobileLandscapeDesktop')&&!window.matchMedia('(min-width:900px)').matches}
   layoutPreference(){
     try{return localStorage.getItem('oms_portrait_layout')==='classic'?'classic':'side'}catch(e){return'side'}
   }
@@ -12551,16 +13679,16 @@ class PlaybackClock{
     this.playbackTime=model.time;
     this.lastRenderedFrame=timeline.frameIndex(model.time);
     model.playing=true;
-    $('#playBtn').textContent='❚❚';
+    window.omsSetPlayButtonVisual?.(true);
     this.last=performance.now();
     timeline.resetRealtimeAudioMeter(false);
-    media.sync(model.time,true,false);
+    media.sync(model.time,true,false,{forceSeek:true});
     timeline.updateRealtimeAudioMeter(true);
     this.raf=requestAnimationFrame(t=>this.loop(t))
   }
   stop(){
     model.playing=false;
-    $('#playBtn').textContent='▶';
+    window.omsSetPlayButtonVisual?.(false);
     cancelAnimationFrame(this.raf);
     media.pause();
 
@@ -12588,7 +13716,7 @@ class PlaybackClock{
       this.playbackTime%=duration;
       wrapped=true;
       timeline.resetRealtimeAudioMeter(false);
-      media.sync(0,true,false)
+      media.sync(0,true,false,{forceSeek:true})
     }
 
     const nextFrame=timeline.frameIndex(this.playbackTime,'floor');
@@ -13047,7 +14175,51 @@ class ExportSessionGuard{
 }
 
 class Exporter{
-  constructor(){this.running=false;this.exportSessionGuard=new ExportSessionGuard(this)}
+  constructor(){this.running=false;this.exportSessionGuard=new ExportSessionGuard(this);this.layerSelectionPlan=null}
+  configureLayerSelection(layerIds){
+    const requested=new Set(layerIds||[]);
+    const layers=(model.layers||[]).filter(layer=>
+      requested.has(layer.id)&&!layer.hidden&&model.durationPolicy.isOutputLayer(layer)
+    );
+    if(!layers.length){this.clearLayerSelection();return null}
+    const fps=Math.max(1,+model.project?.fps||30);
+    const bounds=omsSelectedLayerExportBounds(layers,fps);
+    if(!bounds){this.clearLayerSelection();return null}
+    this.layerSelectionPlan={
+      ids:new Set(layers.map(layer=>layer.id)),
+      ...bounds
+    };
+    this.refreshLayerSelectionNotice();
+    return this.layerSelectionPlan
+  }
+  clearLayerSelection(){
+    this.layerSelectionPlan=null;
+    this.deactivateLayerSelection();
+    this.refreshLayerSelectionNotice()
+  }
+  refreshLayerSelectionNotice(){
+    const notice=$('#exportScopeNotice');
+    if(!notice)return;
+    const plan=this.layerSelectionPlan;
+    $('#exportSheet')?.classList.toggle('selectedLayerExport',!!plan);
+    notice.classList.toggle('hidden',!plan);
+    if(!plan){notice.textContent='';notice.removeAttribute('data-range-start');notice.removeAttribute('data-range-end');return}
+    const fps=Math.max(1,+model.project?.fps||30);
+    notice.dataset.rangeStart=String(plan.start);
+    notice.dataset.rangeEnd=String(plan.end);
+    notice.dataset.layerCount=String(plan.count);
+    notice.innerHTML=`<b>Ekspor ${plan.count} layer terpilih</b><small>${fmt(plan.start,fps)} → ${fmt(plan.end,fps)} • output ${fmt(plan.duration,fps)}</small>`
+  }
+  activateLayerSelection(){
+    omsExportLayerIds=this.layerSelectionPlan?new Set(this.layerSelectionPlan.ids):null;
+    return omsExportLayerIds
+  }
+  deactivateLayerSelection(){omsExportLayerIds=null}
+  exportStart(){return this.layerSelectionPlan?.start||0}
+  projectTime(relativeTime){return this.exportStart()+Math.max(0,+relativeTime||0)}
+  exportFilename(extension){
+    return safe(model.project.name)+(this.layerSelectionPlan?'_layer-terpilih':'')+'.'+extension
+  }
   projectJSON(){const data={format:'open-motion-v4',version:4,renderer:'webgl',sceneModel:'true-3d',...model.serialize()};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),safe(model.project.name)+'.openmotion.json')}
   async png(){
     const oldCameraView=model.cameraView,oldExporting=renderer.exporting;
@@ -13066,6 +14238,7 @@ class Exporter{
     }
   }
   exportDuration(){
+    if(this.layerSelectionPlan)return this.layerSelectionPlan.duration;
     // V4.26 — export follows actual content bounds, not historical project
     // duration and not keyframes that live outside their trimmed clip.
     // This prevents blank tails after shortening the last/longest layer.
@@ -13159,7 +14332,7 @@ class Exporter{
   async prepareOfflineVideoFrame(t,onlyLayerIds=null){
     const jobs=[];
     for(const l of model.layers){
-      if(l.type!=='video'||!l.video||l.hidden)continue;
+      if(l.type!=='video'||!l.video||l.hidden||!omsLayerIncludedInExport(l))continue;
       if(onlyLayerIds&&!onlyLayerIds.has(l.id))continue;
       const v=l.video,map=mediaClipMap(l,t);
       if(!map.active){try{v.pause()}catch(e){};continue}
@@ -13244,7 +14417,7 @@ class Exporter{
     const mb=await this.offlineEncoderModule();
 
     for(const l of model.layers){
-      if(l.type!=='video'||l.hidden||!l.dataUrl)continue;
+      if(l.type!=='video'||l.hidden||!l.dataUrl||!omsLayerIncludedInExport(l))continue;
 
       let input=null;
       try{
@@ -13331,7 +14504,7 @@ class Exporter{
     const jobs=[];
     for(const state of bundle.states.values()){
       const l=state.layer;
-      if(state.disposed||l.hidden)continue;
+      if(state.disposed||l.hidden||!omsLayerIncludedInExport(l))continue;
       const map=mediaClipMap(l,t);
       if(!map.active)continue;
 
@@ -13379,7 +14552,7 @@ class Exporter{
     const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
     const AC=window.AudioContext||window.webkitAudioContext;
     const layers=model.layers.filter(l=>
-      !l.hidden&&['video','audio'].includes(l.type)&&l.dataUrl&&(+l.duration||0)>0&&(l.volume??1)>0
+      !l.hidden&&omsLayerIncludedInExport(l)&&['video','audio'].includes(l.type)&&l.dataUrl&&(+l.duration||0)>0&&(l.volume??1)>0
     );
     if(!OAC||!AC||!layers.length)return null;
 
@@ -13405,9 +14578,10 @@ class Exporter{
         const map=mediaClipMap(l,+l.start||0);
         if(map.contentDuration<=1e-6)continue;
 
+        const rangeStart=this.exportStart();
         const contentStart=(+l.start||0)+map.extendIn;
-        const skipProject=Math.max(0,-contentStart);
-        const when=Math.max(0,contentStart);
+        const skipProject=Math.max(0,rangeStart-contentStart);
+        const when=Math.max(0,contentStart-rangeStart);
         const sourceOffset=map.sourceIn+skipProject*map.speed;
         const maxProjectFromSource=Math.max(0,(map.sourceOut-sourceOffset)/map.speed);
         const playDuration=Math.min(
@@ -13486,7 +14660,7 @@ class Exporter{
 
     try{
       for(const l of model.layers){
-        if(l.type!=='video'||l.hidden||!l.dataUrl)continue;
+        if(l.type!=='video'||l.hidden||!l.dataUrl||!omsLayerIncludedInExport(l))continue;
 
         const blob=await media.sourceBlobForLayer(l);
         if(!(blob instanceof Blob))throw Error(`Blob video tidak tersedia: ${l.name}`);
@@ -13574,7 +14748,7 @@ class Exporter{
     const jobs=[];
     for(const state of states.values()){
       const l=state.layer;
-      if(state.disposed||l.hidden)continue;
+      if(state.disposed||l.hidden||!omsLayerIncludedInExport(l))continue;
 
       const map=mediaClipMap(l,t);
       if(!map.active)continue;
@@ -13611,20 +14785,22 @@ class Exporter{
     const exportSize=selectedExportDimensions();
     const selected=selectedExportCodec();
     const exportDuration=this.exportDuration();
+    const exportStart=this.exportStart();
     const old=this.exportSessionGuard.snapshot();
 
     let decoderStates=null;
 
     // Block HTMLVideo/rVFC cache writers while the dedicated WebCodecs decoder
     // owns source-frame caches.
-    this.exportSessionGuard.beginOffline(active=>this.setOfflineVideoDecodeLock(active));
-
     const out=document.createElement('canvas');
     out.width=Math.max(2,exportSize.width);
     out.height=Math.max(2,exportSize.height);
     const oc=out.getContext('2d',{alpha:false,desynchronized:true});
 
     try{
+      this.activateLayerSelection();
+      this.exportSessionGuard.beginOffline(active=>this.setOfflineVideoDecodeLock(active));
+      model.time=exportStart;
       const mb=await this.offlineEncoderModule();
       const {
         Output,BufferTarget,CanvasSource,AudioBufferSource,
@@ -13718,13 +14894,14 @@ class Exporter{
       const frameDuration=1/fps;
       const totalFrames=Math.max(1,Math.ceil(exportDuration*fps));
 
-      // Prime frame 0.
-      let prepared=this.prepareExperimentalVideoFrame(0,decoderStates);
+      // Prime the first selected-range project frame; encoded timestamps still
+      // begin at zero so the downloaded clip has no blank leading section.
+      let prepared=this.prepareExperimentalVideoFrame(exportStart,decoderStates);
       prepared.catch(()=>{});
 
       for(let i=0;i<totalFrames;i++){
         const t=i/fps;
-        model.time=Math.min(t,exportDuration);
+        model.time=this.projectTime(Math.min(t,exportDuration));
 
         // Wait only for the source frame for this composition frame.
         await prepared;
@@ -13757,7 +14934,7 @@ class Exporter{
         // Open Motion and is deliberately isolated to this engine.
         if(i+1<totalFrames){
           const nextT=(i+1)/fps;
-          prepared=this.prepareExperimentalVideoFrame(nextT,decoderStates);
+          prepared=this.prepareExperimentalVideoFrame(this.projectTime(nextT),decoderStates);
           prepared.catch(()=>{});
         }else{
           prepared=Promise.resolve()
@@ -13790,13 +14967,13 @@ class Exporter{
       const ext=webm?'webm':'mp4';
       download(
         new Blob([target.buffer],{type:mime}),
-        safe(model.project.name)+'.'+ext
+        this.exportFilename(ext)
       );
 
       toast(`Eksperimental selesai • ${fps} FPS • WebCodecs pipeline`)
     }finally{
       this.disposeExperimentalVideoDecoders(decoderStates);
-
+      this.deactivateLayerSelection();
       this.exportSessionGuard.restoreOffline(old,active=>this.setOfflineVideoDecodeLock(active))
     }
   }
@@ -13814,12 +14991,11 @@ class Exporter{
       ?{id:'vp9-webm',ext:'webm',label:'VP9 WebM (Safe)'}
       :requestedCodec;
     const exportDuration=this.exportDuration();
+    const exportStart=this.exportStart();
     const platform=String(navigator.userAgentData?.platform||navigator.platform||navigator.userAgent||'');
     const isWindows=/Windows/i.test(platform);
     const old=this.exportSessionGuard.snapshot();
     let stableDecoders=null;
-
-    this.exportSessionGuard.beginOffline(active=>this.setOfflineVideoDecodeLock(active));
 
     const out=document.createElement('canvas');
     out.width=Math.max(2,exportSize.width);
@@ -13827,6 +15003,9 @@ class Exporter{
     const oc=out.getContext('2d',{alpha:false,desynchronized:false});
 
     try{
+      this.activateLayerSelection();
+      this.exportSessionGuard.beginOffline(active=>this.setOfflineVideoDecodeLock(active));
+      model.time=exportStart;
       const mb=await this.offlineEncoderModule();
       const {
         Output,BufferTarget,CanvasSource,AudioBufferSource,
@@ -13900,7 +15079,7 @@ class Exporter{
       const totalFrames=Math.max(1,Math.ceil(exportDuration*fps));
       for(let i=0;i<totalFrames;i++){
         const t=i/fps;
-        model.time=Math.min(t,exportDuration);
+        model.time=this.projectTime(Math.min(t,exportDuration));
 
         // Deterministic source-video decode: seek exact source frame first,
         // then render the composition. No frame is skipped when the device is slow.
@@ -13935,12 +15114,13 @@ class Exporter{
       if(!target.buffer)throw Error('Encoder tidak menghasilkan buffer');
       const mime=webm?'video/webm':'video/mp4';
       const ext=webm?'webm':'mp4';
-      download(new Blob([target.buffer],{type:mime}),safe(model.project.name)+'.'+ext);
+      download(new Blob([target.buffer],{type:mime}),this.exportFilename(ext));
       toast(`Ekspor frame-by-frame selesai • ${fps} FPS${forceSafeWebM?' • Safe VP9':''}`);
     }finally{
       this.disposeStableVideoDecoders(stableDecoders);
       // Re-seek media to the restored playhead only after normal cache writers
       // are enabled again. This avoids leaving the editor on the export's last frame.
+      this.deactivateLayerSelection();
       this.exportSessionGuard.restoreOffline(old,active=>this.setOfflineVideoDecodeLock(active));
     }
   }
@@ -13975,6 +15155,7 @@ class Exporter{
     const restoreAndCleanup=()=>{
       const errors=cleanup?.run()||[];
       for(const item of errors)console.warn('Realtime cleanup gagal ['+item.label+']:',item.error);
+      this.deactivateLayerSelection();
       try{this.exportSessionGuard.restoreRealtimeEditor(old)}catch(e){console.error('Pemulihan editor Realtime gagal:',e)}
       try{$('#exportProgress').style.width='0'}catch(e){}
     };
@@ -13993,7 +15174,7 @@ class Exporter{
       let outputError=null;
       try{
         const outputBlob=new Blob(chunks,{type:actualMime});
-        download(outputBlob,safe(model.project.name)+'.'+ext)
+        download(outputBlob,this.exportFilename(ext))
       }catch(e){
         terminal='failure';
         outputError=e
@@ -14025,7 +15206,10 @@ class Exporter{
     try{
       // Phase 3: all three video engines use the same canonical content bound.
       const exportDuration=this.exportDuration();
+      const exportStart=this.exportStart();
+      this.activateLayerSelection();
       cleanup=this.exportSessionGuard.beginRealtime();
+      model.time=exportStart;
 
       out=document.createElement('canvas');
       cleanup.defer(()=>{try{out?.remove()}catch(e){}},'realtime-capture-canvas');
@@ -14071,6 +15255,7 @@ class Exporter{
       const hasTimedMedia=model.layers.some(l=>
         (l.type==='video'||l.type==='audio') &&
         !l.hidden &&
+        omsLayerIncludedInExport(l) &&
         (+l.duration||0)>0
       );
 
@@ -14153,7 +15338,7 @@ class Exporter{
       let nextFrameAt=0;
       let frameSerial=0;
 
-      media.sync(0,true,false);
+      media.sync(exportStart,true,false);
 
       const pushCanvasFrame=()=>{
         // Keep extension boundaries correct without resetting currentTime every frame.
@@ -14176,7 +15361,7 @@ class Exporter{
         if(terminal!=='pending'||finishing)return;
         finishing=true;
         try{
-          model.time=exportDuration;
+          model.time=this.projectTime(exportDuration);
           pushCanvasFrame();
           $('#exportProgress').style.width='100%';
           media.pause();
@@ -14208,7 +15393,7 @@ class Exporter{
           }
 
           if(elapsed+0.5>=nextFrameAt){
-            model.time=Math.min(elapsed/1000,exportDuration);
+            model.time=this.projectTime(Math.min(elapsed/1000,exportDuration));
             pushCanvasFrame();
 
             nextFrameAt+=frameInterval;
@@ -14226,7 +15411,7 @@ class Exporter{
         }
       };
 
-      model.time=0;
+      model.time=exportStart;
       pushCanvasFrame();
       requestAnimationFrame(frame)
     }catch(e){
@@ -14235,6 +15420,20 @@ class Exporter{
   }
 }
 const exporter=new Exporter();
+
+async function openExportSheet({keepLayerSelection=false}={}){
+  if(!keepLayerSelection)exporter.clearLayerSelection();
+  $('#exportSheet').classList.remove('hidden');
+  exporter.refreshLayerSelectionNotice();
+  initExportEngineOptions();
+  refreshCodecOptions();
+  await refreshResolutionOptions()
+}
+
+function closeExportSheet(){
+  $('#exportSheet').classList.add('hidden');
+  exporter.clearLayerSelection()
+}
 
 // ------------------------------------------------------------
 // Application wiring
@@ -14348,7 +15547,7 @@ function setHomeLanguage(id){
 function openLanguageModal(){const modal=$('#languageModal');if(!modal)return;renderLanguageList();modal.classList.remove('hidden')}
 function closeLanguageModal(){const modal=$('#languageModal');if(modal)modal.classList.add('hidden')}
 
-function createProject(){const name=$('#newName').value||'Project Baru',res=+$('#newRes').value,fps=+$('#newFps').value,dur=+$('#newDur').value,bg=$('#newBg').value,bgHex=String(bg||'#ffffff').replace('#',''),rgb=parseInt(bgHex,16),lum=(((rgb>>16)&255)*.2126+((rgb>>8)&255)*.7152+(rgb&255)*.0722),titleColor=lum>145?'#111827':'#ffffff';model.reset();model.project=model.defaultProject(name,ui.newRatio,res,fps,dur,bg);model.resetEditorCamera();model.mode3d=false;model.cameraView=true;renderer.resize();history.clear();$('#newModal').classList.add('hidden');const homeFab=$('#newProjectFab');if(homeFab){homeFab.style.display='none';homeFab.style.pointerEvents='none'}ui.authorizeEditorOpen();ui.showEditor();history.push();model.addLayer('camera',{name:'Main Camera'});const title=model.addLayer('text',{text:'OPEN MOTION',name:'Title',fontSize:model.project.height*.075,y:model.project.height*.44,color:titleColor});model.anim.setKey(title,'opacity',0,0,'ease-out');model.anim.setKey(title,'opacity',.45,1,'ease-out');model.anim.setKey(title,'scaleX',0,.72,'overshoot');model.anim.setKey(title,'scaleX',.7,1,'overshoot');model.anim.setKey(title,'scaleY',0,.72,'overshoot');model.anim.setKey(title,'scaleY',.7,1,'overshoot');history.clear();ui.rebuildAll();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}persistentStore.requestDurableStorage();autosave.check(true)}
+function createProject(){const name=$('#newName').value||'Project Baru',res=+$('#newRes').value,fps=+$('#newFps').value,dur=+$('#newDur').value,bg=$('#newBg').value,bgHex=String(bg||'#ffffff').replace('#',''),rgb=parseInt(bgHex,16),lum=(((rgb>>16)&255)*.2126+((rgb>>8)&255)*.7152+(rgb&255)*.0722),titleColor=lum>145?'#111827':'#ffffff';model.reset();model.project=model.defaultProject(name,ui.newRatio,res,fps,dur,bg);model.resetEditorCamera();model.mode3d=false;model.cameraView=true;renderer.resize();history.clear();$('#newModal').classList.add('hidden');const homeFab=$('#newProjectFab');if(homeFab){homeFab.style.display='none';homeFab.style.pointerEvents='none'}ui.authorizeEditorOpen();ui.showEditor();history.push();model.addLayer('camera',{name:'Main Camera'});const title=model.addLayer('text',{text:'OPEN MOTION',name:'Title',fontSize:model.project.height*.075,y:model.project.height*.44,color:titleColor});model.anim.setKey(title,'opacity',0,0,'ease-out');model.anim.setKey(title,'opacity',.45,1,'ease-out');model.anim.setKey(title,'scaleX',0,.72,'overshoot');model.anim.setKey(title,'scaleX',.7,1,'overshoot');model.anim.setKey(title,'scaleY',0,.72,'overshoot');model.anim.setKey(title,'scaleY',.7,1,'overshoot');history.clear();ui.rebuildAll();timeline.activateInitialSecondsFit(2);try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}persistentStore.requestDurableStorage();autosave.check(true)}
 
 function canvasPointFromClient(clientX,clientY,rect){
   return {
@@ -14522,6 +15721,13 @@ $('#backHome').onclick=async()=>{await autosave.flush();try{sessionStorage.remov
 $('#toggle3d').onclick=()=>{model.mode3d=!model.mode3d;if(model.mode3d&&!model.hasActive3DLayer())toast('Aktifkan Ruang 3D pada layer atau tampilkan layer kamera');ui.syncProject();renderer.render()};
 $('#cameraView').onclick=()=>{if(model.cameraView){viewportNav.enterFromMainCamera();renderer.render()}else viewportNav.setCameraView(true)};
 $('#snapToggle').onclick=()=>{model.snap=!model.snap;ui.syncProject()};
+$('#layerActionsBtn').onclick=e=>{e.stopPropagation();ui.toggleLayerActions()};
+$('#layerActionsClose').onclick=()=>ui.closeLayerActions();
+$('#layerActionsShade').addEventListener('pointerdown',e=>{if(e.target===$('#layerActionsShade'))ui.closeLayerActions()});
+$$('#layerActionsPopup [data-layer-action]').forEach(button=>button.onclick=()=>{if(!button.disabled)ui.runLayerAction(button.dataset.layerAction)});
+window.addEventListener('resize',()=>{if(!$('#layerActionsShade').classList.contains('hidden'))ui.positionLayerActions()},{passive:true});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#layerActionsShade').classList.contains('hidden'))ui.closeLayerActions()});
+
 $('#audioToggle').onclick=()=>{
   if(!model.project)return;
 
@@ -14537,7 +15743,7 @@ $('#audioToggle').onclick=()=>{
 
   timeline.rebuild()
 };
-$('#playBtn').onclick=()=>clock.toggle();$('#jumpStart').onclick=()=>{timeline.cancelScrollFrameSettle();model.time=0;media.sync(0,false);renderer.render()};$('#jumpEnd').onclick=()=>{timeline.cancelScrollFrameSettle();model.time=timeline.snapTime(model.project.duration,'floor');media.sync(model.time,false);renderer.render()};$('#prevKey').onclick=()=>timeline.nearest(-1);$('#nextKey').onclick=()=>timeline.nearest(1);
+$('#playBtn').onclick=()=>clock.toggle();$('#jumpStart').onclick=()=>timeline.jumpBoundary(false);$('#jumpEnd').onclick=()=>timeline.jumpBoundary(true);$('#prevKey').onclick=()=>timeline.nearest(-1);$('#nextKey').onclick=()=>timeline.nearest(1);
 $('#ruler').onpointerdown=e=>{timeline.cancelScrollFrameSettle();model.time=timeline.timeFromClientX(e.clientX);media.sync(model.time,false);renderer.render()};
 // V4.24 — deterministic playback pause on manual timeline interaction.
   // Capture phase is intentional: clip/keyframe/trim handlers may stop propagation,
@@ -14548,7 +15754,7 @@ $('#timelineScroll').addEventListener('pointerdown',e=>{
 $$('#bottomTools button').forEach(b=>b.onclick=()=>ui.openTool(b.dataset.tool));$('#plusBtn').onclick=()=>{$('#drawer').classList.contains('hidden')?ui.openTool(ui.addTool||'shapes'):ui.closeDrawer()};
 $('#mediaInput').onchange=e=>media.importFiles([...e.target.files]);
 $('#viewport').ondragover=e=>{e.preventDefault();$('#viewport').classList.add('dragover')};$('#viewport').ondragleave=()=>$('#viewport').classList.remove('dragover');$('#viewport').ondrop=e=>{e.preventDefault();$('#viewport').classList.remove('dragover');media.importFiles([...e.dataTransfer.files])};
-initExportEngineOptions();$('#openExport').onclick=async()=>{$('#exportSheet').classList.remove('hidden');initExportEngineOptions();refreshCodecOptions();await refreshResolutionOptions()};$('#closeExport').onclick=()=>$('#exportSheet').classList.add('hidden');$('#exportPng').onclick=()=>exporter.png();$('#exportJson').onclick=()=>exporter.projectJSON();$('#exportXml').onclick=()=>XMLBridge.download();$('#doExport').onclick=()=>exporter.video();
+initExportEngineOptions();$('#openExport').onclick=()=>openExportSheet();$('#closeExport').onclick=()=>closeExportSheet();$('#exportPng').onclick=()=>exporter.png();$('#exportJson').onclick=()=>exporter.projectJSON();$('#exportXml').onclick=()=>XMLBridge.download();$('#doExport').onclick=()=>exporter.video();
 $('#exportRes').onchange=()=>updateResolutionEstimate();
 $('#exportFps').onchange=async()=>{await refreshResolutionOptions();updateResolutionEstimate()};
 $('#qualityRange').oninput=()=>updateResolutionEstimate();
@@ -14559,7 +15765,7 @@ $('#languageModal').onclick=e=>{if(e.target===$('#languageModal'))closeLanguageM
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#languageModal')?.classList.contains('hidden'))closeLanguageModal()});
 $('#projectSort').onchange=()=>ui.loadProjectList();
 applyHomeLanguage();
-$('#projectInput').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const text=await f.text(),isXML=/\.xml$/i.test(f.name)||/^\s*</.test(text),raw=isXML?XMLBridge.parse(text,f.name):JSON.parse(text),payload=!isXML&&['open-motion-v3','open-motion-v4'].includes(raw.format)?{project:raw.project,layers:raw.layers,selected:raw.selected,time:raw.time,mode3d:raw.mode3d,cameraView:raw.cameraView,snap:raw.snap}:raw;if(!payload.project||!Array.isArray(payload.layers))throw Error('schema');model.restore(payload);history.clear();ui.authorizeEditorOpen();ui.showEditor();toast(isXML?'XML dimigrasikan ke scene 3D':'Paket proyek dibuka')}catch(err){console.error(err);toast('File proyek/XML tidak valid')}e.target.value=''};
+$('#projectInput').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const text=await f.text(),isXML=/\.xml$/i.test(f.name)||/^\s*</.test(text),raw=isXML?XMLBridge.parse(text,f.name):JSON.parse(text),payload=!isXML&&['open-motion-v3','open-motion-v4'].includes(raw.format)?{project:raw.project,layers:raw.layers,selected:raw.selected,time:raw.time,mode3d:raw.mode3d,cameraView:raw.cameraView,snap:raw.snap}:raw;if(!payload.project||!Array.isArray(payload.layers))throw Error('schema');model.restore(payload,{timeOverride:0});history.clear();ui.authorizeEditorOpen();ui.showEditor();toast(isXML?'XML dimigrasikan ke scene 3D':'Paket proyek dibuka')}catch(err){console.error(err);toast('File proyek/XML tidak valid')}e.target.value=''};
 $('#settingsBtn').onclick=()=>{if(!model.project)return;const d=ui.drawerShell('Project & Environment',`<div class="drawerBody propPanel"><div class="true3dCard"><i>4</i><div><b>Open Motion Scene 4</b><small>WebGL • matriks 4×4 • XML interchange • satu file HTML</small></div></div><div class="propRow"><label>Nama</label><input id="projectNameEdit" value="${esc(model.project.name)}"><span></span></div><div class="colorRow"><input id="bgEdit" type="color" value="${model.project.bg}"><input value="Background" disabled></div><div class="switchRow"><span>Grid Dunia 3D</span><input id="gridEdit" type="checkbox" ${model.project.grid?'checked':''}></div><div class="propRow"><label>Playhead</label><select id="playheadModeSelect"><option value="center">Tetap di Tengah</option><option value="moving">Bergerak (Mode Lama)</option></select><span></span></div><div class="miniNote" id="playheadModeHelp">Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.</div><div class="propRow"><label>Layout 9:16</label><select id="portraitLayoutSelect"><option value="side">Samping (Baru)</option><option value="classic">Horizontal (Klasik)</option></select><span></span></div><div class="miniNote" id="portraitLayoutHelp">Khusus komposisi 9:16 atau lebih tinggi pada mobile. Pilihan ini disimpan di perangkat.</div><div class="propRow"><label>Kualitas Preview</label><select id="previewQualitySelect"><option value="auto">Otomatis</option><option value="1">Penuh — 100%</option><option value="0.75">Tinggi — 75%</option><option value="0.5">Sedang — 50%</option><option value="0.25">Rendah — 25%</option></select><span></span></div><div class="miniNote" id="previewQualityHelp">Kualitas preview hanya memengaruhi editor. Ekspor tetap memakai kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.</div><div class="miniNote">Editor Camera hanya mengubah sudut pandang kerja. PNG dan video selalu dirender melalui Main Camera tanpa grid atau gizmo editor.</div></div>`);ui.drawerMode='settings';timeline.refreshKeyframeInteractionState?.();$('#projectNameEdit').onchange=e=>{history.push();model.project.name=e.target.value;ui.syncProject()};$('#bgEdit').oninput=e=>{model.project.bg=e.target.value;renderer.render()};$('#gridEdit').onchange=e=>{model.project.grid=e.target.checked;renderer.render()};const ph=$('#playheadModeSelect');ph.value=model.project.playheadMode||'center';const updateHelp=()=>{$('#playheadModeHelp').textContent=ph.value==='center'?'Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.':'Bergerak (Mode Lama): timeline tetap pada posisi scroll dan playhead bergerak mengikuti waktu.'};updateHelp();ph.onchange=e=>{history.push();model.project.playheadMode=e.target.value;const sc=$('#timelineScroll');if(model.project.playheadMode==='moving')sc.scrollLeft=0;timeline.rebuild();renderer.render();updateHelp()};const portraitSel=$('#portraitLayoutSelect');if(portraitSel){portraitSel.value=portraitSideControls?.layoutPreference?.()||'side';portraitSel.onchange=e=>{portraitSideControls?.setLayoutPreference?.(e.target.value);const changed=portraitSideControls?.sync?.({refit:false});requestAnimationFrame(()=>{ui.fit();timeline.rebuild();if(editorSplit?.isDrawerOpen?.())editorSplit.autoForDrawer(0);else editorSplit?.scheduleFit?.({render:true});if(changed)renderer.render()})}}const previewSel=$('#previewQualitySelect'),previewHelp=$('#previewQualityHelp');if(previewSel){previewSel.value=omsPreviewQualityPreference();const updatePreviewHelp=()=>{if(previewHelp)previewHelp.textContent=`Kualitas preview editor saat ini ${omsPreviewQualityPercent()}%. Ekspor tetap kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.`};updatePreviewHelp();previewSel.onchange=e=>{omsSetPreviewQuality(e.target.value);updatePreviewHelp();toast(`Kualitas preview ${omsPreviewQualityPercent()}%`)}}};
 
 document.addEventListener('keydown',e=>{const tag=document.activeElement?.tagName;if(['INPUT','SELECT','TEXTAREA'].includes(tag))return;if(e.code==='Space'){e.preventDefault();clock.toggle()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?history.redo():history.undo()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();ui.saveLocal()}if(e.key==='Delete'&&model.selected){history.push();model.removeLayer(model.selected);ui.rebuildAll()}});
@@ -14583,7 +15789,7 @@ document.addEventListener('visibilitychange',()=>{
     if(model.playing){
       model.playing=false;
       cancelAnimationFrame(clock.raf);
-      $('#playBtn').textContent='▶';
+      window.omsSetPlayButtonVisual?.(false);
       timeline.resetRealtimeAudioMeter(true)
     }
     media.pause();
@@ -15599,6 +16805,1645 @@ Status:
 <!-- V4.18 — logical aspect snapping fixes 608×1080 vs exact 9:16 half-pixel media seams; composition-edge selection strokes are suppressed. -->
 <!-- V4.19 — WebGL interaction overlay now suppresses selection edges/handles that coincide with composition borders. -->
 <!-- V4.20 — paused timeline scrubbing coalesces video seeks so Android decoders follow the newest scroll position instead of thrashing currentTime. -->
+
+<!-- V4.29 — toolbar layer-actions popover: select-all, duplicate, copy/paste layer, and paste keyframes+effects style. -->
+
+<style id="oms-v430-mobile-landscape-desktop">
+/* =========================================================
+   V4.30 — Mobile landscape desktop workspace
+   A touch phone/tablet in landscape uses the side-by-side desktop workspace,
+   but the app instance is never reloaded. Project/model/history/media state
+   remains live while only layout ownership changes.
+   ========================================================= */
+html.omsMobileLandscapeDesktop .editorMain{
+  grid-template-columns:minmax(0,1fr) minmax(0,1.08fr)!important;
+  grid-template-rows:minmax(0,1fr)!important;
+  min-width:0!important;
+}
+html.omsMobileLandscapeDesktop .previewArea{
+  min-width:0!important;
+  min-height:0!important;
+  border-right:1px solid var(--line)!important;
+  border-bottom:0!important;
+}
+html.omsMobileLandscapeDesktop .timelineArea{
+  min-width:0!important;
+  min-height:0!important;
+  height:100%!important;
+}
+html.omsMobileLandscapeDesktop .editorSplitSlot{
+  display:none!important;
+}
+html.omsMobileLandscapeDesktop .portraitSideRail{
+  display:none!important;
+}
+html.omsMobileLandscapeDesktop .editorMain.portraitSideControls .viewport{
+  padding-left:4px!important;
+  padding-right:4px!important;
+}
+html.omsMobileLandscapeDesktop .editorMain.portraitSideControls .previewArea,
+html.omsMobileLandscapeDesktop .editorMain.portraitSideControls .timelineArea{
+  margin:0!important;
+}
+html.omsMobileLandscapeDesktop #drawer{
+  position:absolute!important;
+  left:auto!important;
+  right:0!important;
+  top:38px!important;
+  bottom:0!important;
+  width:min(100%,430px)!important;
+  height:auto!important;
+  max-height:none!important;
+  border-left:1px solid #353c52!important;
+  border-top:0!important;
+  border-radius:0!important;
+}
+html.omsMobileLandscapeDesktop #drawer.addDrawer{
+  max-height:none!important;
+}
+html.omsMobileLandscapeDesktop .plusBtn{
+  right:20px!important;
+}
+html.omsMobileLandscapeDesktop .shapeGrid{
+  grid-template-columns:repeat(6,minmax(0,1fr))!important;
+}
+/* The mobile bottom-sheet rule uses !important, so explicitly neutralize it
+   in landscape desktop mode. */
+html.omsMobileLandscapeDesktop #drawer:not(.addDrawer){
+  inset:38px 0 0 auto!important;
+  width:min(100%,430px)!important;
+  height:auto!important;
+  max-height:none!important;
+}
+</style>
+<script id="oms-v430-mobile-landscape-desktop-script">
+(()=>{
+  const root=document.documentElement;
+  let raf=0,last=null;
+
+  const isTouchLandscape=()=>{
+    let coarse=false,hoverNone=true,landscape=false;
+    try{
+      coarse=window.matchMedia('(pointer:coarse)').matches || (navigator.maxTouchPoints||0)>0;
+      hoverNone=window.matchMedia('(hover:none)').matches;
+      landscape=window.matchMedia('(orientation:landscape)').matches || window.innerWidth>window.innerHeight;
+    }catch(e){
+      coarse=(navigator.maxTouchPoints||0)>0;
+      landscape=window.innerWidth>window.innerHeight;
+    }
+    // A real touch-first landscape device gets the desktop workspace. A hybrid
+    // desktop with a mouse keeps its normal CSS desktop behavior.
+    return !!(coarse&&hoverNone&&landscape);
+  };
+
+  const relayout=(desktopLandscape)=>{
+    // Orientation is layout-only. Do not serialize/restore, recreate the model,
+    // replace the project object, or touch history stacks.
+    const keepTime=typeof model!=='undefined'?model.time:null;
+    const keepSelected=typeof model!=='undefined'?model.selected:null;
+    const keepProject=typeof model!=='undefined'?model.project:null;
+
+    if(desktopLandscape){
+      try{editorSplit?.clearManualSelectedSticky?.({restore:true})}catch(e){}
+      try{editorSplit?.stopSelectedLayerFocusSession?.({restore:true})}catch(e){}
+    }
+
+    try{portraitSideControls?.sync?.({refit:false})}catch(e){}
+
+    const main=document.querySelector('.editorMain');
+    if(main&&desktopLandscape){
+      main.classList.remove('fitCompositionLayout');
+      main.style.removeProperty('grid-template-rows');
+    }
+
+    requestAnimationFrame(()=>{
+      try{ui?.fit?.()}catch(e){}
+      try{timeline?.rebuild?.()}catch(e){}
+      try{renderer?.resize?.()}catch(e){}
+
+      // Returning to portrait while an Inspector is already open should regain
+      // the normal mobile Inspector focus rules without reopening the project.
+      if(!desktopLandscape){
+        try{
+          if(editorSplit?.isDrawerOpen?.())editorSplit?.onDrawerOpened?.(false);
+          else editorSplit?.afterFit?.();
+        }catch(e){}
+      }
+
+      // Fail closed against any layout callback accidentally navigating state.
+      if(typeof model!=='undefined'){
+        if(model.project===keepProject){
+          if(keepTime!=null)model.time=keepTime;
+          model.selected=keepSelected;
+        }
+      }
+      try{renderer?.render?.()}catch(e){}
+      try{ui?.sync?.()}catch(e){}
+    });
+  };
+
+  const sync=()=>{
+    raf=0;
+    const next=isTouchLandscape();
+    if(next===last)return;
+    last=next;
+    root.classList.toggle('omsMobileLandscapeDesktop',next);
+    root.dataset.workspaceMode=next?'desktop-landscape':'responsive';
+    relayout(next);
+  };
+
+  const schedule=()=>{
+    cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(sync);
+  };
+
+  window.addEventListener('resize',schedule,{passive:true});
+  window.addEventListener('orientationchange',schedule,{passive:true});
+  try{screen.orientation?.addEventListener?.('change',schedule)}catch(e){}
+  try{window.matchMedia('(orientation:landscape)').addEventListener?.('change',schedule)}catch(e){}
+
+  // Resolve after the original editor controllers have initialized.
+  schedule();
+})();
+</script>
+<!-- V4.30 — touch mobile landscape switches to desktop side-by-side workspace in-place; no project reload/state restore. -->
+
+<style id="oms-v431-desktop-canvas-split-menu-fit">
+/* V4.31 — mobile landscape desktop canvas split handle + layer-actions popup fit */
+html.omsMobileLandscapeDesktop .timelineArea{position:relative!important}
+#desktopCanvasSplitHandle{
+  position:absolute;
+  left:-13px;
+  top:10px;
+  width:26px;
+  height:44px;
+  border:1px solid #374055;
+  border-radius:12px;
+  background:linear-gradient(180deg,#22283a 0%,#1c2232 100%);
+  color:#aeb8cc;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:45;
+  box-shadow:0 8px 18px rgba(0,0,0,.26),0 0 0 1px rgba(255,255,255,.02);
+  touch-action:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#desktopCanvasSplitHandle:hover,
+#desktopCanvasSplitHandle:focus-visible,
+#desktopCanvasSplitHandle.dragging{
+  color:#f2f6fd;
+  border-color:#4b566e;
+  background:linear-gradient(180deg,#2a3145 0%,#21283b 100%);
+  outline:none;
+}
+#desktopCanvasSplitHandle .desktopCanvasSplitGrip{
+  position:relative;
+  width:18px;
+  height:18px;
+  transform:rotate(90deg);
+  display:block;
+}
+#desktopCanvasSplitHandle .desktopCanvasSplitGrip::before,
+#desktopCanvasSplitHandle .desktopCanvasSplitGrip::after,
+#desktopCanvasSplitHandle .desktopCanvasSplitGrip i{
+  content:"";
+  position:absolute;
+  top:1px;
+  bottom:1px;
+  width:2px;
+  border-radius:2px;
+  background:currentColor;
+  opacity:.92;
+}
+#desktopCanvasSplitHandle .desktopCanvasSplitGrip::before{left:3px}
+#desktopCanvasSplitHandle .desktopCanvasSplitGrip i{left:8px}
+#desktopCanvasSplitHandle .desktopCanvasSplitGrip::after{left:13px}
+html.omsMobileLandscapeDesktop #desktopCanvasSplitHandle{display:flex}
+
+html.omsMobileLandscapeDesktop .layerActionsPopup{
+  width:min(344px,calc(100vw - 28px))!important;
+  max-height:calc(100dvh - 24px)!important;
+  padding:7px!important;
+  border-radius:16px!important;
+}
+html.omsMobileLandscapeDesktop .layerActionsHead{
+  min-height:42px!important;
+  padding:2px 4px 7px 8px!important;
+}
+html.omsMobileLandscapeDesktop .layerActionsHead b{font-size:12px!important}
+html.omsMobileLandscapeDesktop .layerActionsHead small{font-size:7.2px!important}
+html.omsMobileLandscapeDesktop .layerActionRow{
+  min-height:50px!important;
+  grid-template-columns:42px minmax(0,1fr)!important;
+  gap:7px!important;
+  padding:6px 7px!important;
+}
+html.omsMobileLandscapeDesktop .layerActionMenuIcon{width:31px!important;height:31px!important}
+html.omsMobileLandscapeDesktop .layerActionCopy b{font-size:11px!important}
+html.omsMobileLandscapeDesktop .layerActionCopy small{font-size:7.2px!important;margin-top:2px!important}
+html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:7.2px!important;padding:4px 9px 1px!important}
+</style>
+<script id="oms-v431-desktop-canvas-split-menu-fit-script">
+(()=>{
+  const root=document.documentElement;
+  const STORAGE_KEY='omsDesktopLandscapePreviewRatio';
+  const MIN_PREVIEW=220;
+  const MIN_TIMELINE=260;
+  let handle=null;
+  let raf=0;
+  let originalPositionLayerActions=null;
+
+  const inDesktopLandscape=()=>root.classList.contains('omsMobileLandscapeDesktop');
+  const editorMain=()=>document.querySelector('.editorMain');
+  const timelineArea=()=>document.querySelector('.timelineArea');
+
+  function ensureHandle(){
+    const ta=timelineArea();
+    if(!ta)return null;
+    if(handle&&handle.isConnected)return handle;
+    handle=document.createElement('button');
+    handle.type='button';
+    handle.id='desktopCanvasSplitHandle';
+    handle.setAttribute('aria-label','Geser lebar canvas dan timeline');
+    handle.setAttribute('title','Geser untuk mengatur lebar canvas');
+    handle.innerHTML='<span class="desktopCanvasSplitGrip" aria-hidden="true"><i></i></span>';
+    ta.appendChild(handle);
+
+    let active=false,startX=0,startPreview=0;
+    const onMove=(clientX)=>{
+      const main=editorMain();
+      if(!main)return;
+      const rect=main.getBoundingClientRect();
+      const delta=clientX-startX;
+      const maxPreview=Math.max(MIN_PREVIEW,rect.width-MIN_TIMELINE);
+      const next=Math.max(MIN_PREVIEW,Math.min(maxPreview,startPreview+delta));
+      const ratio=Math.max(.26,Math.min(.74,next/Math.max(1,rect.width)));
+      try{localStorage.setItem(STORAGE_KEY,String(ratio))}catch(e){}
+      applySplit(ratio);
+    };
+    const move=(ev)=>{if(!active)return;ev.preventDefault();onMove(ev.clientX)};
+    const up=(ev)=>{
+      if(!active)return;
+      active=false;
+      handle.classList.remove('dragging');
+      try{handle.releasePointerCapture(ev.pointerId)}catch(e){}
+      window.removeEventListener('pointermove',move,true);
+      window.removeEventListener('pointerup',up,true);
+      window.removeEventListener('pointercancel',up,true);
+      try{ui?.fit?.()}catch(e){}
+      try{timeline?.rebuild?.()}catch(e){}
+      try{renderer?.resize?.()}catch(e){}
+      try{renderer?.render?.()}catch(e){}
+    };
+    handle.addEventListener('pointerdown',ev=>{
+      if(!inDesktopLandscape())return;
+      const main=editorMain();
+      if(!main)return;
+      ev.preventDefault();
+      active=true;
+      startX=ev.clientX;
+      startPreview=previewWidth(main);
+      handle.classList.add('dragging');
+      try{handle.setPointerCapture(ev.pointerId)}catch(e){}
+      window.addEventListener('pointermove',move,true);
+      window.addEventListener('pointerup',up,true);
+      window.addEventListener('pointercancel',up,true);
+    },{passive:false});
+    return handle;
+  }
+
+  function previewWidth(main){
+    const cs=getComputedStyle(main);
+    const cols=(cs.gridTemplateColumns||'').split(' ');
+    if(cols.length>=2){
+      const first=parseFloat(cols[0]);
+      if(Number.isFinite(first)&&first>0)return first;
+    }
+    const rect=main.getBoundingClientRect();
+    let ratio=.47;
+    try{ratio=parseFloat(localStorage.getItem(STORAGE_KEY))||ratio}catch(e){}
+    return rect.width*ratio;
+  }
+
+  function applySplit(ratio){
+    const main=editorMain();
+    if(!main)return;
+    if(!inDesktopLandscape()){
+      main.style.removeProperty('grid-template-columns');
+      return;
+    }
+    const rect=main.getBoundingClientRect();
+    const safeRatio=Math.max(.26,Math.min(.74,Number.isFinite(ratio)?ratio:.47));
+    const preview=Math.max(MIN_PREVIEW,Math.min(Math.max(MIN_PREVIEW,rect.width-MIN_TIMELINE),rect.width*safeRatio));
+    main.style.setProperty('grid-template-columns',`${Math.round(preview)}px minmax(0,1fr)`,'important');
+  }
+
+  function fitLayerActionsPopup(){
+    const popup=document.getElementById('layerActionsPopup');
+    if(!popup)return;
+    popup.style.left='50%';
+    popup.style.top='50%';
+    popup.style.transform='translate(-50%,-50%)';
+    popup.style.width=`${Math.min(344,window.innerWidth-28)}px`;
+    popup.style.maxHeight=`${Math.max(200,window.innerHeight-24)}px`;
+  }
+
+  function sync(){
+    // V4.41: the toolbar controller below is the sole horizontal-split owner.
+    // Do not create or run the superseded timeline-edge handle/controller.
+    const legacy=document.getElementById('desktopCanvasSplitHandle');
+    if(legacy)legacy.remove();
+    if(document.getElementById('layerActionsShade')&&!document.getElementById('layerActionsShade').classList.contains('hidden')&&inDesktopLandscape())fitLayerActionsPopup();
+  }
+
+  function schedule(){cancelAnimationFrame(raf);raf=requestAnimationFrame(sync)}
+
+  function patchLayerActionsPosition(){
+    if(typeof ui==='undefined'||!ui||originalPositionLayerActions)return;
+    originalPositionLayerActions=ui.positionLayerActions?.bind(ui);
+    if(!originalPositionLayerActions)return;
+    ui.positionLayerActions=function(){
+      if(inDesktopLandscape())return fitLayerActionsPopup();
+      const popup=document.getElementById('layerActionsPopup');
+      if(popup)popup.style.removeProperty('transform');
+      return originalPositionLayerActions();
+    };
+  }
+
+  patchLayerActionsPosition();
+  schedule();
+  window.addEventListener('resize',schedule,{passive:true});
+  window.addEventListener('orientationchange',schedule,{passive:true});
+  try{screen.orientation?.addEventListener?.('change',schedule)}catch(e){}
+  setTimeout(()=>{patchLayerActionsPosition();schedule()},0);
+})();
+</script>
+<!-- V4.31 — adds a draggable desktop-landscape canvas-width handle and makes the layer-actions popup fit on landscape mobile. -->
+<style id="oms-v432-desktop-toolbar-split-autofit">
+/* V4.32 — toolbar split handle inside transport + rotated icon + composition autofit */
+#desktopCanvasSplitHandle{display:none!important}
+html.omsMobileLandscapeDesktop .transportLeft{justify-content:flex-start!important}
+#desktopCanvasSplitToolbarBtn{
+  display:none;
+  width:24px;
+  height:32px;
+  min-width:24px;
+  border:1px solid #3b455e;
+  border-radius:12px;
+  background:linear-gradient(180deg,#232a3c 0%,#1d2435 100%);
+  color:#c3cad8;
+  align-items:center;
+  justify-content:center;
+  margin-right:6px;
+  box-shadow:0 6px 14px rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.02);
+  touch-action:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#desktopCanvasSplitToolbarBtn:hover,
+#desktopCanvasSplitToolbarBtn:focus-visible,
+#desktopCanvasSplitToolbarBtn.dragging{
+  color:#ffffff;
+  border-color:#5a6784;
+  background:linear-gradient(180deg,#2d354a 0%,#232c3f 100%);
+  outline:none;
+}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV{
+  position:relative;
+  width:14px;
+  height:16px;
+  display:block;
+}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::before,
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::after,
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV i{
+  content:"";
+  position:absolute;
+  top:1px;
+  bottom:1px;
+  width:2px;
+  border-radius:999px;
+  background:currentColor;
+  opacity:.95;
+}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::before{left:1px}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV i{left:6px}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::after{left:11px}
+html.omsMobileLandscapeDesktop #desktopCanvasSplitToolbarBtn{display:flex}
+@media(min-width:900px){
+  #desktopCanvasSplitToolbarBtn{display:flex}
+}
+
+html.omsMobileLandscapeDesktop .layerActionsPopup{
+  width:min(322px,calc(100vw - 20px))!important;
+  max-height:calc(100dvh - 12px)!important;
+  padding:6px!important;
+  border-radius:15px!important;
+}
+html.omsMobileLandscapeDesktop .layerActionsHead{min-height:38px!important;padding:1px 4px 6px 8px!important}
+html.omsMobileLandscapeDesktop .layerActionsHead b{font-size:11.5px!important}
+html.omsMobileLandscapeDesktop .layerActionsHead small{font-size:7px!important}
+html.omsMobileLandscapeDesktop .layerActionRow{
+  min-height:46px!important;
+  grid-template-columns:38px minmax(0,1fr)!important;
+  gap:6px!important;
+  padding:5px 6px!important;
+}
+html.omsMobileLandscapeDesktop .layerActionMenuIcon{width:28px!important;height:28px!important}
+html.omsMobileLandscapeDesktop .layerActionCopy b{font-size:10.6px!important}
+html.omsMobileLandscapeDesktop .layerActionCopy small{font-size:6.9px!important;margin-top:1px!important;line-height:1.25!important}
+html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;padding:4px 8px 1px!important}
+</style>
+<script id="oms-v432-desktop-toolbar-split-autofit-script">
+(()=>{
+  // V4.41 — one horizontal split controller for desktop PC and the existing
+  // mobile-landscape desktop workspace. EditorSplitController stays vertical.
+  const root=document.documentElement;
+  const STORAGE_KEY='omsDesktopCanvasSplitRatioV441A';
+  const LEGACY_STORAGE_KEY='omsDesktopLandscapePreviewRatio';
+  const MIN_PREVIEW=240;
+  const MIN_TIMELINE=320;
+  let btn=null;
+  let raf=0;
+  let fitRAF=0;
+  let mainResizeObserver=null;
+  let desktopCanvasSplitRatio=null;
+  let originalPositionLayerActions=null;
+
+  const inMobileLandscapeDesktop=()=>root.classList.contains('omsMobileLandscapeDesktop');
+  const isDesktopPC=()=>window.matchMedia('(min-width:900px)').matches;
+  const horizontalSplitEnabled=()=>isDesktopPC()||inMobileLandscapeDesktop();
+  const editorMain=()=>document.querySelector('.editorMain');
+  const transportToolbar=()=>document.querySelector('.transportBalanced');
+
+  function readRatio(){
+    if(Number.isFinite(desktopCanvasSplitRatio))return desktopCanvasSplitRatio;
+    let value=NaN;
+    try{value=parseFloat(sessionStorage.getItem(STORAGE_KEY))}catch(e){}
+    // Preserve the former mobile-landscape ratio only when that layout is active;
+    // a phone split must not become the first-run desktop-PC split.
+    if(!Number.isFinite(value)&&inMobileLandscapeDesktop()){
+      try{value=parseFloat(localStorage.getItem(LEGACY_STORAGE_KEY))}catch(e){}
+    }
+    desktopCanvasSplitRatio=Number.isFinite(value)?Math.max(.1,Math.min(.9,value)):NaN;
+    return desktopCanvasSplitRatio;
+  }
+
+  function rememberRatio(value){
+    desktopCanvasSplitRatio=Math.max(.1,Math.min(.9,value));
+    try{sessionStorage.setItem(STORAGE_KEY,String(desktopCanvasSplitRatio))}catch(e){}
+  }
+
+  function fitPopup(){
+    const popup=document.getElementById('layerActionsPopup');
+    if(!popup)return;
+    popup.style.left='50%';
+    popup.style.top='50%';
+    popup.style.transform='translate(-50%,-50%)';
+    popup.style.width=`${Math.min(322, window.innerWidth - 20)}px`;
+    popup.style.maxHeight=`${Math.max(210, window.innerHeight - 12)}px`;
+  }
+
+  function ensureToolbarHandle(){
+    const host=transportToolbar();
+    if(!host)return null;
+    if(btn&&btn.isConnected)return btn;
+    btn=document.createElement('button');
+    btn.type='button';
+    btn.id='desktopCanvasSplitToolbarBtn';
+    btn.setAttribute('aria-label','Geser lebar canvas dan timeline');
+    btn.setAttribute('title','Geser untuk mengatur lebar canvas dan timeline');
+    btn.innerHTML='<span class="desktopCanvasSplitGripV" aria-hidden="true"><i></i></span>';
+    host.appendChild(btn);
+
+    let active=false,activePointerId=null,startX=0,startPreview=0;
+    const move=(ev)=>{
+      if(!active||ev.pointerId!==activePointerId)return;
+      ev.preventDefault();
+      const main=editorMain();
+      if(!main)return;
+      const rect=main.getBoundingClientRect();
+      const delta=ev.clientX-startX;
+      const raw=startPreview+delta;
+      const next=clampPreviewPx(raw,rect.width);
+      const ratio=next/Math.max(1,rect.width);
+      applySplit(ratio,{ensureFit:false});
+      refitCanvasAfterLayout();
+    };
+    const up=(ev)=>{
+      if(!active||ev.pointerId!==activePointerId)return;
+      active=false;
+      btn.classList.remove('dragging');
+      try{btn.releasePointerCapture(ev.pointerId)}catch(e){}
+      activePointerId=null;
+      window.removeEventListener('pointermove',move,true);
+      window.removeEventListener('pointerup',up,true);
+      window.removeEventListener('pointercancel',up,true);
+      // The column width is final now. Synchronize center padding and the
+      // scrollable end immediately so a fast Jump Start/End click cannot use
+      // geometry from before the drag.
+      try{timeline?.rebuild?.()}catch(e){}
+      refitAfterLayout();
+    };
+    btn.addEventListener('pointerdown',ev=>{
+      if(!horizontalSplitEnabled())return;
+      if(ev.pointerType==='mouse'&&ev.button!==0)return;
+      if(active)return;
+      const main=editorMain();
+      if(!main)return;
+      ev.preventDefault();
+      const rect=main.getBoundingClientRect();
+      active=true;
+      activePointerId=ev.pointerId;
+      startX=ev.clientX;
+      startPreview=currentPreviewPx(rect.width);
+      btn.classList.add('dragging');
+      try{btn.setPointerCapture(ev.pointerId)}catch(e){}
+      window.addEventListener('pointermove',move,true);
+      window.addEventListener('pointerup',up,true);
+      window.addEventListener('pointercancel',up,true);
+    },{passive:false});
+    return btn;
+  }
+
+  function getProjectAspect(){
+    const p=(typeof model!=='undefined' && model && model.project)?model.project:null;
+    if(!p)return 16/9;
+    const w=Math.max(1,+p.width||1);
+    const h=Math.max(1,+p.height||1);
+    return w/h;
+  }
+
+  function clampPreviewPx(px,totalW){
+    const maxPreview=Math.max(MIN_PREVIEW, totalW - MIN_TIMELINE);
+    return Math.max(MIN_PREVIEW, Math.min(maxPreview, px));
+  }
+
+  function desiredPreviewPx(totalW){
+    const main=editorMain();
+    if(!main)return clampPreviewPx(totalW*.48,totalW);
+    const h=main.getBoundingClientRect().height || main.clientHeight || 0;
+    const aspect=getProjectAspect();
+    // Viewport is preview height minus preview toolbar, with a small padding margin.
+    const viewportH=Math.max(120,h - 44);
+    const desired=viewportH*aspect + 12;
+    return clampPreviewPx(desired,totalW);
+  }
+
+  function currentPreviewPx(totalW){
+    const savedRatio=readRatio();
+    if(Number.isFinite(savedRatio))return clampPreviewPx(totalW*savedRatio,totalW);
+    const main=editorMain();
+    if(main){
+      const cols=(getComputedStyle(main).gridTemplateColumns||'').trim().split(/\s+/);
+      if(cols.length>=2){
+        const first=parseFloat(cols[0]);
+        if(Number.isFinite(first)&&first>0)return clampPreviewPx(first,totalW);
+      }
+    }
+    return clampPreviewPx(totalW*.47,totalW);
+  }
+
+  function applySplit(ratio,{ensureFit=true}={}){
+    const main=editorMain();
+    if(!main)return;
+    if(!horizontalSplitEnabled()){
+      main.style.removeProperty('grid-template-columns');
+      return;
+    }
+    const rect=main.getBoundingClientRect();
+    if(rect.width<MIN_PREVIEW+MIN_TIMELINE)return;
+    const totalW=Math.max(1,rect.width);
+    let previewPx;
+    if(Number.isFinite(ratio))previewPx=clampPreviewPx(totalW*ratio,totalW);
+    else previewPx=currentPreviewPx(totalW);
+    // Keep the existing mobile-landscape first-fit policy. Desktop PC starts
+    // from its own CSS grid ratio and lets the canvas zoom fit inside it.
+    if(ensureFit&&inMobileLandscapeDesktop()){
+      const desired=desiredPreviewPx(totalW);
+      previewPx=Math.max(previewPx,desired);
+    }
+    previewPx=clampPreviewPx(previewPx,totalW);
+    const ratioToSave=previewPx/totalW;
+    rememberRatio(ratioToSave);
+    main.style.setProperty('grid-template-columns', `${Math.round(previewPx)}px minmax(0,1fr)`, 'important');
+    if(ensureFit)refitAfterLayout();
+  }
+
+  function refitCanvasAfterLayout(){
+    cancelAnimationFrame(fitRAF);
+    fitRAF=requestAnimationFrame(()=>{
+      fitRAF=0;
+      try{ui?.applyCompositionFitZoom?.()}catch(e){}
+      try{renderer?.resize?.()}catch(e){}
+      try{renderer?.render?.()}catch(e){}
+    });
+  }
+
+  function refitAfterLayout(){
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{
+        try{ui?.applyCompositionFitZoom?.()}catch(e){}
+        try{ui?.fit?.()}catch(e){}
+        try{timeline?.rebuild?.()}catch(e){}
+        try{renderer?.resize?.()}catch(e){}
+        try{renderer?.render?.()}catch(e){}
+      });
+    });
+  }
+
+  function patchLayerActionsPosition(){
+    if(typeof ui==='undefined'||!ui||originalPositionLayerActions)return;
+    originalPositionLayerActions=ui.positionLayerActions?.bind(ui);
+    if(!originalPositionLayerActions)return;
+    ui.positionLayerActions=function(){
+      if(inMobileLandscapeDesktop())return fitPopup();
+      const popup=document.getElementById('layerActionsPopup');
+      if(popup){
+        popup.style.removeProperty('left');
+        popup.style.removeProperty('top');
+        popup.style.removeProperty('transform');
+        popup.style.removeProperty('max-height');
+        popup.style.removeProperty('width');
+      }
+      return originalPositionLayerActions();
+    };
+  }
+
+  function sync(){
+    ensureToolbarHandle();
+    const legacy=document.getElementById('desktopCanvasSplitHandle');
+    if(legacy)legacy.style.display='none';
+    if(horizontalSplitEnabled()){
+      if(btn)btn.style.display='flex';
+      applySplit(NaN,{ensureFit:true});
+      if(inMobileLandscapeDesktop()&&document.getElementById('layerActionsShade')&&!document.getElementById('layerActionsShade').classList.contains('hidden'))fitPopup();
+    }else{
+      if(btn)btn.style.display='none';
+      const main=editorMain();
+      if(main)main.style.removeProperty('grid-template-columns');
+    }
+  }
+  function schedule(){cancelAnimationFrame(raf);raf=requestAnimationFrame(sync)}
+
+  ensureToolbarHandle();
+  patchLayerActionsPosition();
+  schedule();
+  window.addEventListener('resize',schedule,{passive:true});
+  window.addEventListener('orientationchange',schedule,{passive:true});
+  try{screen.orientation?.addEventListener?.('change',schedule)}catch(e){}
+  const modeObserver=new MutationObserver(schedule);
+  modeObserver.observe(root,{attributes:true,attributeFilter:['class']});
+  if(typeof ResizeObserver!=='undefined'){
+    const main=editorMain();
+    if(main){
+      mainResizeObserver=new ResizeObserver(entries=>{
+        if(entries.some(entry=>entry.contentRect.width>=MIN_PREVIEW+MIN_TIMELINE))schedule();
+      });
+      mainResizeObserver.observe(main);
+    }
+  }
+  window.DesktopCanvasSplitController={
+    get ratio(){return desktopCanvasSplitRatio},
+    get enabled(){return horizontalSplitEnabled()},
+    applyRatio(value){applySplit(Number(value),{ensureFit:true})}
+  };
+  setTimeout(()=>{patchLayerActionsPosition();schedule()},0);
+})();
+</script>
+<!-- V4.41 — the existing toolbar split handle now owns horizontal split on desktop PC and mobile-landscape desktop mode; session ratio only, no project serialization. -->
+<style id="oms-v433-transport-center-split-fix">
+/* V4.33 — center playback-nav around Play, keep split handle independent, and simplify its visual */
+.transportBalanced{position:relative!important}
+.transportBalanced .transportCenter{justify-content:center!important}
+.transportBalanced .transportLeft.transportLeftEmpty{
+  visibility:hidden;
+  pointer-events:none;
+}
+#transportPlaybackCluster{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  min-width:0;
+}
+#transportPlaybackCluster > button{
+  display:grid;
+  place-items:center;
+}
+/* Preserve the original vertical side-rail behavior on portrait side-controls. */
+.portraitRightRail #transportPlaybackCluster{
+  flex-direction:column;
+  gap:1px;
+}
+
+/* Desktop PC/mobile-landscape split handle: keep it in the same toolbar row but remove
+   the pill/border so only the 3 vertical bars remain visually. */
+#desktopCanvasSplitToolbarBtn{
+  position:absolute!important;
+  left:10px!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  width:18px!important;
+  min-width:18px!important;
+  height:22px!important;
+  padding:0!important;
+  margin:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#c3cad8!important;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:6;
+}
+#desktopCanvasSplitToolbarBtn:hover,
+#desktopCanvasSplitToolbarBtn:focus-visible,
+#desktopCanvasSplitToolbarBtn.dragging{
+  color:#f5f8ff!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  outline:none!important;
+}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV{
+  position:relative;
+  width:14px;
+  height:12px;
+  display:block;
+  transform:rotate(90deg);
+}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::before,
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::after,
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV i{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  height:2px;
+  border-radius:999px;
+  background:currentColor;
+  opacity:.95;
+}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::before{top:0}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV i{top:5px}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::after{top:10px}
+
+html.omsMobileLandscapeDesktop #desktopCanvasSplitToolbarBtn{
+  display:flex!important;
+}
+@media(min-width:900px){
+  #desktopCanvasSplitToolbarBtn{display:flex!important}
+}
+
+/* Give the toolbar handle its own visual slot without pushing other buttons. */
+html.omsMobileLandscapeDesktop .transportBalanced{
+  padding-left:34px!important;
+}
+html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
+  justify-content:flex-start!important;
+}
+
+/* Keep the four navigation buttons optically centered around Play on every layout. */
+.transportBalanced .transportCenter,
+.transportBalanced .transportCenter #transportPlaybackCluster{
+  width:auto;
+  max-width:100%;
+}
+</style>
+<script id="oms-v433-transport-center-split-fix-script">
+(()=>{
+  let raf=0;
+  const root=document.documentElement;
+
+  function normalizeTransport(){
+    const transport=document.querySelector('.transportBalanced');
+    if(!transport)return;
+
+    // V4.35+ owns playback/navigation placement. V4.33 is retained only for
+    // the independent desktop split handle. It must never re-parent transport
+    // buttons in response to timeline mutations, resize, or orientation.
+    const splitBtn=document.getElementById('desktopCanvasSplitToolbarBtn');
+    if(splitBtn){
+      if(splitBtn.parentElement!==transport)transport.appendChild(splitBtn);
+      const enabled=root.classList.contains('omsMobileLandscapeDesktop')||window.matchMedia('(min-width:900px)').matches;
+      splitBtn.style.display=enabled?'flex':'none';
+    }
+
+    const legacy=document.getElementById('desktopCanvasSplitHandle');
+    if(legacy)legacy.style.display='none';
+  }
+
+  function schedule(){
+    cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(normalizeTransport);
+  }
+
+  schedule();
+  window.addEventListener('resize',schedule,{passive:true});
+  window.addEventListener('orientationchange',schedule,{passive:true});
+  document.addEventListener('DOMContentLoaded',schedule,{once:true});
+  try{screen.orientation?.addEventListener?.('change',schedule)}catch(e){}
+  const mo=new MutationObserver(schedule);
+  // Only global layout-mode changes matter here. Timeline DOM churn from
+  // pinch zoom / ruler rebuild is intentionally excluded.
+  mo.observe(document.documentElement,{attributes:true,attributeFilter:['class']});
+  setTimeout(schedule,0);
+  setTimeout(schedule,120);
+})();
+</script>
+<style id="oms-v434-split-handle-3lines-fix">
+/* V4.34 — make the desktop canvas split handle show 3 vertical lines, not dots */
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV{
+  position:relative!important;
+  width:14px!important;
+  height:16px!important;
+  display:block!important;
+  transform:none!important;
+}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::before,
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::after,
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV i{
+  content:""!important;
+  position:absolute!important;
+  top:1px!important;
+  bottom:1px!important;
+  left:auto!important;
+  right:auto!important;
+  width:2px!important;
+  height:auto!important;
+  border-radius:999px!important;
+  background:currentColor!important;
+  opacity:.95!important;
+}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::before{left:1px!important}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV i{left:6px!important}
+#desktopCanvasSplitToolbarBtn .desktopCanvasSplitGripV::after{left:11px!important}
+</style>
+<style id="oms-v442-horizontal-preview-min-content-fix">
+/* V4.42 — A narrow horizontal preview must use the real split-column width.
+   The preview toolbar's min-content width previously expanded #viewport beyond
+   .previewArea, so fit zoom measured an invisible area behind the timeline. */
+.editorMain .previewArea{
+  min-width:0!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  overflow:hidden;
+}
+.editorMain .previewArea > .viewport{
+  min-width:0!important;
+  width:100%!important;
+  max-width:100%!important;
+}
+.editorMain .previewArea > .previewTools{
+  min-width:0!important;
+  width:100%!important;
+  max-width:100%!important;
+  overflow:hidden;
+}
+.editorMain .previewArea > .previewTools .grow,
+.editorMain .previewArea > .previewTools .zoomCtl{
+  min-width:0;
+}
+.editorMain .previewArea > .previewTools .zoomCtl{
+  flex:0 1 100px;
+}
+.editorMain .previewArea > .previewTools .zoomCtl input{
+  min-width:0;
+  max-width:78px;
+}
+</style>
+<style id="oms-v444-desktop-add-drawer-bottom-dock">
+/* V4.44 — desktop Add Hub is a real row below the timeline instead of a
+   430px right overlay. Inspector/property drawers deliberately keep their
+   existing right-side layout. Mobile landscape desktop mode is unchanged. */
+@media (min-width:900px){
+  html:not(.omsMobileLandscapeDesktop) .timelineArea:has(> #drawer.addDrawer:not(.hidden)){
+    grid-template-rows:38px minmax(0,1fr) clamp(220px,30dvh,300px)!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer{
+    position:relative!important;
+    left:auto!important;
+    right:auto!important;
+    top:auto!important;
+    bottom:auto!important;
+    grid-column:1!important;
+    grid-row:3!important;
+    align-self:stretch!important;
+    width:100%!important;
+    min-width:0!important;
+    height:100%!important;
+    max-height:none!important;
+    overflow:hidden!important;
+    border-left:0!important;
+    border-top:1px solid #353c52!important;
+    border-radius:0!important;
+    box-shadow:0 -10px 24px rgba(0,0,0,.24)!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubTabs{
+    flex:0 0 auto;
+    width:100%;
+    min-width:0;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubTab{
+    flex:1 1 0;
+    min-width:76px;
+    white-space:nowrap;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubBody{
+    flex:1 1 auto;
+    min-width:0;
+    min-height:0;
+    width:100%;
+    overflow:auto;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .mediaDrop{
+    width:calc(100% - 8px);
+    max-width:none;
+    margin:4px;
+  }
+}
+</style>
+<style id="oms-v445-desktop-bottom-drawers-compact-add-hub">
+/* V4.45 — both desktop drawer families are docked below the timeline.
+   Add Hub uses a compact, fixed-fit layout so its own body never needs a
+   vertical scrollbar. Inspector keeps internal scrolling for long editors. */
+@media (min-width:900px){
+  html:not(.omsMobileLandscapeDesktop) .timelineArea:has(> #drawer.addDrawer:not(.hidden)){
+    grid-template-rows:38px minmax(0,1fr) clamp(260px,34dvh,320px)!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea:has(> #drawer:not(.hidden):not(.addDrawer)){
+    grid-template-rows:38px minmax(0,1fr) clamp(260px,38dvh,380px)!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer:not(.hidden){
+    position:relative!important;
+    left:auto!important;
+    right:auto!important;
+    top:auto!important;
+    bottom:auto!important;
+    grid-column:1!important;
+    grid-row:3!important;
+    align-self:stretch!important;
+    width:100%!important;
+    min-width:0!important;
+    height:100%!important;
+    max-height:none!important;
+    overflow:hidden!important;
+    border-left:0!important;
+    border-top:1px solid #353c52!important;
+    border-radius:0!important;
+    box-shadow:0 -10px 24px rgba(0,0,0,.24)!important;
+  }
+
+  /* Inspector and property editors: header stays fixed, long content scrolls
+     inside the drawer without covering the timeline above. */
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer:not(.addDrawer) > .drawerHead{
+    flex:0 0 42px!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer:not(.addDrawer) > .drawerBody{
+    flex:1 1 auto!important;
+    min-width:0!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+
+  /* Add Hub: compact header and a body whose children fit its available row. */
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubTabs{
+    flex:0 0 50px!important;
+    width:100%!important;
+    min-width:0!important;
+    height:50px!important;
+    padding:0 4px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubTab{
+    flex:1 1 0!important;
+    min-width:76px!important;
+    height:50px!important;
+    padding:5px 4px 4px!important;
+    font-size:7.5px!important;
+    white-space:nowrap!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubTab span{
+    margin-bottom:3px!important;
+    font-size:18px!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubBody{
+    flex:1 1 auto!important;
+    display:flex!important;
+    flex-direction:column!important;
+    min-width:0!important;
+    min-height:0!important;
+    width:100%!important;
+    padding:7px!important;
+    overflow:hidden!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubTitle{
+    flex:0 0 27px!important;
+    min-height:27px!important;
+    padding:0 2px 5px!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubClose{
+    width:27px!important;
+    min-width:27px!important;
+    height:27px!important;
+    padding:0!important;
+    border-radius:8px!important;
+    font-size:16px!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .shapeGrid{
+    flex:1 1 auto!important;
+    min-width:0!important;
+    min-height:0!important;
+    height:auto!important;
+    padding:0!important;
+    display:grid!important;
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    grid-template-rows:repeat(2,minmax(0,1fr))!important;
+    gap:6px!important;
+    overflow:hidden!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .shapeGrid:has([data-obj]){
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    grid-template-rows:minmax(0,1fr)!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .shapeGrid:has([data-template]){
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    grid-template-rows:minmax(0,1fr)!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .shapeItem{
+    min-width:0!important;
+    min-height:0!important;
+    width:100%!important;
+    height:100%!important;
+    padding:2px!important;
+    border-radius:8px!important;
+    font-size:20px!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .mediaDrop{
+    flex:1 1 auto!important;
+    min-width:0!important;
+    min-height:0!important;
+    width:100%!important;
+    height:auto!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:8px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    overflow:hidden!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .mediaDrop button{
+    margin-top:7px!important;
+    padding:6px 12px!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubBody > .miniNote{
+    flex:0 0 auto!important;
+    margin-top:4px!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubBody > .drawerBody{
+    flex:1 1 auto!important;
+    min-width:0!important;
+    min-height:0!important;
+    padding:0!important;
+    display:grid!important;
+    place-items:center!important;
+    overflow:hidden!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea > #drawer.addDrawer .addHubBody > .drawerBody .createBtn{
+    width:min(88%,320px)!important;
+    height:32px!important;
+    margin:0!important;
+  }
+}
+</style>
+<style id="oms-v435-play-anchored-transport">
+/* V4.40 — the visible playhead is the authoritative X anchor for Play/Pause
+   and the four navigation controls. Timeline DOM mutations remain isolated. */
+.transportBalanced{position:relative!important}
+.transportBalanced .transportCenter{justify-content:center!important;position:relative;z-index:5}
+.transportBalanced .transportLeft.omsPlayAnchorEmpty{
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+.transportBalanced > button.omsPlayheadAnchoredControl{
+  position:absolute!important;
+  margin:0!important;
+  padding:0!important;
+  display:grid!important;
+  place-items:center!important;
+  line-height:0!important;
+  z-index:5!important;
+  transform:translate(-50%,-50%)!important;
+}
+.transportBalanced > #playBtn.omsPlayheadAnchoredControl{z-index:6!important}
+#transportPlaybackCluster:empty{display:none!important}
+</style>
+<script id="oms-v435-play-anchored-transport-script">
+(()=>{
+  class TransportGeometryController{
+    constructor(){
+      this.navIds=['jumpStart','prevKey','nextKey','jumpEnd'];
+      this.raf=0;
+      this.verifyRaf=0;
+      this.layoutCount=0;
+      this.lastReason='initial';
+      this.lastDiagnostics=null;
+      this.rootObserver=null;
+      this.resizeObserver=null;
+      this.boundResize=()=>this.schedule('resize');
+      this.boundOrientation=()=>this.schedule('orientation');
+      this.install();
+    }
+
+    clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+    centerX(rect){return rect.left+rect.width/2}
+    centerY(rect){return rect.top+rect.height/2}
+    rect(el){
+      const r=el.getBoundingClientRect();
+      return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height,cx:this.centerX(r),cy:this.centerY(r)}
+    }
+    transport(){return document.querySelector('.transportBalanced')}
+    vertical(transport){return !!transport?.closest('.portraitRightRail')}
+
+    clearInlineControl(el){
+      if(!el)return;
+      el.classList.remove('omsPlayAnchoredNav','omsPlayheadAnchoredControl');
+      ['left','top','right','bottom','position','transform','z-index'].forEach(p=>el.style.removeProperty(p));
+    }
+
+    ensureDock(transport){
+      let dock=document.getElementById('transportRightDock');
+      if(!dock){
+        dock=document.createElement('div');
+        dock.id='transportRightDock';
+        dock.className='transportRightDock';
+      }
+      if(dock.parentElement!==transport)transport.appendChild(dock);
+      return dock;
+    }
+
+    arrangeRightDock(transport,right,vertical){
+      const dock=this.ensureDock(transport);
+      const audio=document.getElementById('audioToggle');
+      const actions=document.getElementById('layerActionsBtn');
+      if(vertical){
+        if(audio&&audio.parentElement!==right)right.appendChild(audio);
+        if(actions&&actions.parentElement!==right)right.appendChild(actions);
+        dock.style.display='none';
+        right.classList.remove('omsRightDockDetached');
+        return dock;
+      }
+      if(audio&&audio.parentElement!==dock)dock.appendChild(audio);
+      if(actions&&actions.parentElement!==dock)dock.appendChild(actions);
+      dock.style.display='flex';
+      right.classList.add('omsRightDockDetached');
+      return dock;
+    }
+
+    restorePortraitSideRail(transport,left,center,right,play,nav){
+      nav.forEach(el=>this.clearInlineControl(el));
+      this.clearInlineControl(play);
+      const [jumpStart,prevKey,nextKey,jumpEnd]=nav;
+      if(jumpStart&&jumpStart.parentElement!==left)left.appendChild(jumpStart);
+      if(prevKey&&prevKey.parentElement!==left)left.appendChild(prevKey);
+      if(play&&play.parentElement!==center)center.appendChild(play);
+      if(nextKey&&nextKey.parentElement!==right)right.prepend(nextKey);
+      if(jumpEnd&&jumpEnd.parentElement!==right){
+        if(nextKey?.nextSibling)right.insertBefore(jumpEnd,nextKey.nextSibling);
+        else right.prepend(jumpEnd);
+      }
+      left.classList.remove('omsPlayAnchorEmpty');
+    }
+
+    renderedScale(el,rect){
+      const sx=rect.width/Math.max(1,el.offsetWidth||rect.width);
+      const sy=rect.height/Math.max(1,el.offsetHeight||rect.height);
+      return{x:Number.isFinite(sx)&&sx>0?sx:1,y:Number.isFinite(sy)&&sy>0?sy:1}
+    }
+
+    writeControl(el,left,top){
+      el.style.setProperty('left',`${left}px`,'important');
+      el.style.setProperty('top',`${top}px`,'important');
+      el.style.setProperty('right','auto','important');
+      el.style.setProperty('bottom','auto','important');
+    }
+
+    correctRenderedCenters(controls,targets,scale){
+      let corrected=false;
+      controls.forEach((el,i)=>{
+        const r=el.getBoundingClientRect();
+        const delta=targets[i]-(r.left+r.width/2);
+        if(Math.abs(delta)<.001)return;
+        const current=parseFloat(el.style.left)||0;
+        el.style.setProperty('left',`${current+delta/scale.x}px`,'important');
+        corrected=true;
+      });
+      return corrected;
+    }
+
+    visibleGeometry(el){
+      const svg=el?.querySelector('svg');
+      const paths=[...(svg?.querySelectorAll('path')||[])];
+      if(!svg)return null;
+      const sr=this.rect(svg);
+      if(!paths.length)return{svg:sr,visible:null};
+      const rects=paths.map(p=>p.getBoundingClientRect());
+      const visible={
+        left:Math.min(...rects.map(r=>r.left)),right:Math.max(...rects.map(r=>r.right)),
+        top:Math.min(...rects.map(r=>r.top)),bottom:Math.max(...rects.map(r=>r.bottom))
+      };
+      visible.width=visible.right-visible.left;
+      visible.height=visible.bottom-visible.top;
+      visible.cx=visible.left+visible.width/2;
+      visible.cy=visible.top+visible.height/2;
+      return{svg:sr,visible}
+    }
+
+    markLayout(transport){
+      this.layoutCount++;
+      transport.dataset.omsTransportController='geometry';
+      transport.dataset.omsTransportLayoutCount=String(this.layoutCount);
+      transport.dataset.omsTransportLayoutReason=this.lastReason;
+    }
+
+    diagnostics(){
+      const playhead=document.getElementById('playhead');
+      const play=document.getElementById('playBtn');
+      const nav=this.navIds.map(id=>document.getElementById(id));
+      if(!playhead||!play||nav.some(el=>!el))return null;
+      const ph=this.rect(playhead),pr=this.rect(play),nr=nav.map(el=>this.rect(el));
+      const geometry=Object.fromEntries([play,...nav].map(el=>[el.id,this.visibleGeometry(el)]));
+      return{
+        layoutCount:this.layoutCount,
+        reason:this.lastReason,
+        devicePixelRatio:window.devicePixelRatio||1,
+        playhead:ph,
+        controls:Object.fromEntries([[play.id,pr],...nav.map((el,i)=>[el.id,nr[i]])]),
+        deltas:{
+          play:pr.cx-ph.cx,
+          nearLeft:ph.cx-nr[1].cx,nearRight:nr[2].cx-ph.cx,
+          nearSymmetry:(ph.cx-nr[1].cx)-(nr[2].cx-ph.cx),
+          farLeft:ph.cx-nr[0].cx,farRight:nr[3].cx-ph.cx,
+          farSymmetry:(ph.cx-nr[0].cx)-(nr[3].cx-ph.cx)
+        },
+        geometry,
+        parents:Object.fromEntries([play,...nav].map(el=>[el.id,el.parentElement?.className||el.parentElement?.id||null]))
+      }
+    }
+
+    arrange(){
+      this.raf=0;
+      const transport=this.transport();
+      const left=transport?.querySelector('.transportLeft');
+      const center=transport?.querySelector('.transportCenter');
+      const right=transport?.querySelector('.transportRight');
+      const play=document.getElementById('playBtn');
+      const playhead=document.getElementById('playhead');
+      const timelineArea=document.querySelector('.timelineArea');
+      const nav=this.navIds.map(id=>document.getElementById(id));
+      if(!transport||!left||!center||!right||!play||!playhead||!timelineArea||nav.some(el=>!el))return;
+
+      const vertical=this.vertical(transport);
+      this.arrangeRightDock(transport,right,vertical);
+      if(vertical){
+        this.restorePortraitSideRail(transport,left,center,right,play,nav);
+        this.markLayout(transport);
+        this.lastDiagnostics=this.diagnostics();
+        return;
+      }
+
+      // Hidden editors have zero-sized layout boxes. ResizeObserver will wake
+      // this controller when the real toolbar becomes measurable again.
+      const preTR=transport.getBoundingClientRect();
+      const preAR=timelineArea.getBoundingClientRect();
+      if(preTR.width<2||preTR.height<2||preAR.width<2||preAR.height<2)return;
+
+      [play,...nav].forEach(el=>{
+        if(el.parentElement!==transport)transport.appendChild(el);
+        el.classList.add('omsPlayheadAnchoredControl');
+      });
+      nav.forEach(el=>el.classList.add('omsPlayAnchoredNav'));
+      left.classList.add('omsPlayAnchorEmpty');
+
+      const cluster=document.getElementById('transportPlaybackCluster');
+      if(cluster&&cluster!==center&&cluster.children.length===0)cluster.style.display='none';
+
+      const tr=transport.getBoundingClientRect();
+      const phr=playhead.getBoundingClientRect();
+      if(!tr.width||!tr.height||!Number.isFinite(phr.left))return;
+      const scale=this.renderedScale(transport,tr);
+      const anchorViewportX=phr.left+phr.width/2;
+      const anchorLocalX=(anchorViewportX-tr.left)/scale.x;
+      const anchorLocalY=(tr.height/2)/scale.y;
+
+      // Independent controls only limit available room. They never define center.
+      const split=document.getElementById('desktopCanvasSplitToolbarBtn');
+      let leftSafeViewport=tr.left+8*scale.x;
+      if(split&&getComputedStyle(split).display!=='none'){
+        const sr=split.getBoundingClientRect();
+        leftSafeViewport=Math.max(leftSafeViewport,sr.right+6*scale.x);
+      }
+      const dock=document.getElementById('transportRightDock');
+      const dr=dock?.getBoundingClientRect();
+      let rightSafeViewport=tr.right-8*scale.x;
+      if(dr&&dr.width>0&&dr.height>0)rightSafeViewport=Math.min(rightSafeViewport,dr.left-6*scale.x);
+
+      const sideRoomLocal=Math.max(58,Math.min(
+        (anchorViewportX-leftSafeViewport)/scale.x,
+        (rightSafeViewport-anchorViewportX)/scale.x
+      ));
+      const buttonW=Math.max(30,nav[0].getBoundingClientRect().width/scale.x||34);
+      const maxFar=Math.max(54,sideRoomLocal-buttonW/2-3);
+      const far=this.clamp(88,54,maxFar);
+      const near=Math.min(46,Math.max(32,far*.52));
+
+      const controls=[play,...nav];
+      const localPositions=[anchorLocalX,anchorLocalX-far,anchorLocalX-near,anchorLocalX+near,anchorLocalX+far];
+      controls.forEach((el,i)=>this.writeControl(el,localPositions[i],anchorLocalY));
+
+      // Close the loop using actual rendered button centers. This resolves the
+      // browser's 1/64 CSS-pixel quantization without a device-specific offset.
+      const targets=[anchorViewportX,anchorViewportX-far*scale.x,anchorViewportX-near*scale.x,anchorViewportX+near*scale.x,anchorViewportX+far*scale.x];
+      this.correctRenderedCenters(controls,targets,scale);
+      this.correctRenderedCenters(controls,targets,scale);
+
+      this.markLayout(transport);
+      cancelAnimationFrame(this.verifyRaf);
+      this.verifyRaf=requestAnimationFrame(()=>{this.lastDiagnostics=this.diagnostics()});
+    }
+
+    schedule(reason='layout'){
+      this.lastReason=reason;
+      cancelAnimationFrame(this.raf);
+      this.raf=requestAnimationFrame(()=>requestAnimationFrame(()=>this.arrange()));
+    }
+
+    install(){
+      window.addEventListener('resize',this.boundResize,{passive:true});
+      window.addEventListener('orientationchange',this.boundOrientation,{passive:true});
+      try{screen.orientation?.addEventListener?.('change',this.boundOrientation)}catch(e){}
+      document.addEventListener('DOMContentLoaded',()=>this.schedule('dom-ready'),{once:true});
+
+      const observedTransport=this.transport();
+      if(observedTransport&&'ResizeObserver' in window){
+        this.resizeObserver=new ResizeObserver(entries=>{
+          const box=entries?.[0]?.contentRect;
+          if(box&&box.width>1&&box.height>1)this.schedule('transport-resize');
+        });
+        this.resizeObserver.observe(observedTransport);
+      }
+
+      // Only global layout-mode changes are observed. Timeline/ruler/track/time
+      // mutations are deliberately outside this controller's wake-up graph.
+      this.rootObserver=new MutationObserver(()=>this.schedule('layout-mode'));
+      this.rootObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class']});
+
+      this.schedule('initial');
+      setTimeout(()=>this.schedule('initial-visible'),120);
+      setTimeout(()=>this.schedule('initial-settled'),360);
+    }
+  }
+
+  window.TransportGeometryController=TransportGeometryController;
+  window.omsTransportGeometryController=new TransportGeometryController();
+  window.omsMeasureTransportGeometry=()=>window.omsTransportGeometryController?.diagnostics?.();
+})();
+</script>
+<!-- V4.40 — Play/Pause and the four transport navigation buttons are anchored to the rendered playhead X; timeline mutations remain isolated. -->
+<style id="oms-v436-right-dock-audio-layer-actions">
+/* V4.36 — Music + Layer Actions use the toolbar's right padding as their anchor. */
+.transportBalanced{position:relative!important}
+#transportRightDock{
+  position:absolute;
+  right:7px;
+  top:50%;
+  transform:translateY(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:2px;
+  z-index:7;
+  pointer-events:auto;
+}
+#transportRightDock > button{
+  flex:0 0 auto;
+  margin:0!important;
+}
+/* The original right group still exists for compatibility, but Music and
+   Layer Actions no longer participate in its flex width. */
+.transportBalanced .transportRight.omsRightDockDetached{
+  min-width:0!important;
+}
+/* Preserve the established vertical rail behavior for true portrait side mode. */
+.portraitRightRail #transportRightDock{display:none!important}
+</style>
+<script id="oms-v436-right-dock-audio-layer-actions-script">
+(()=>{
+  // V4.41 — right-dock ownership moved into TransportGeometryController.
+  // Keep this legacy hook inert except for one startup scheduling request.
+  window.omsTransportGeometryController?.schedule('right-dock-ready');
+})();
+</script>
+<!-- V4.36 — Music and Layer Actions are right-docked from toolbar right padding; Play-centered navigation remains independent. -->
+<!-- V4.39 — transport visibility anchor fix: hidden editor state no longer leaves absolute nav controls unpositioned; ResizeObserver wakes layout only when the toolbar becomes measurable. -->
+
+<style id="oms-v435-svg-transport-icons">
+/* V4.40 — geometrically mirrored SVG transport icons. Keyframe paths are
+   shifted within the 28px viewBox so their stroke-length optical centroid is x=14. */
+.transportNavSvgBtn{
+  display:grid!important;
+  place-items:center!important;
+  line-height:0!important;
+}
+.transportNavSvg{
+  width:28px;
+  height:24px;
+  display:block;
+  overflow:visible;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.75;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  vector-effect:non-scaling-stroke;
+  pointer-events:none;
+}
+/* Right-side icons are mirrored inside SVG geometry, not with CSS transforms,
+   so Android rasterization uses the same viewBox coordinate system. */
+/* Same optical box on both sides of the playhead anchor across mobile and desktop. */
+#prevKey .transportNavSvg,#nextKey .transportNavSvg{width:29px;height:24px}
+#jumpStart .transportNavSvg,#jumpEnd .transportNavSvg{width:25px;height:24px}
+</style>
+<!-- V4.40 — keyframe SVGs use optically centered geometry and internal mirroring; no CSS mirror transform is used. -->
+<style id="oms-v437-svg-play-center-fix">
+/* V4.40 — Play/Pause use controlled SVG geometry; their button center is
+   positioned directly on the rendered playhead by the transport controller. */
+#playBtn{
+  display:grid!important;
+  place-items:center!important;
+  line-height:0!important;
+}
+#playBtn .transportPlaySvg{
+  width:24px;
+  height:24px;
+  display:block;
+  overflow:visible;
+  pointer-events:none;
+}
+#playBtn .transportPlaySvg.play path{
+  fill:currentColor;
+  stroke:none;
+}
+#playBtn .transportPlaySvg.pause path{
+  fill:none;
+  stroke:currentColor;
+  stroke-width:3;
+  stroke-linecap:round;
+  vector-effect:non-scaling-stroke;
+}
+</style>
+<script id="oms-v437-svg-play-center-fix-script">
+(()=>{
+  const PLAY_SVG='<svg class="transportPlaySvg play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4L20 12L8 20Z"/></svg>';
+  const PAUSE_SVG='<svg class="transportPlaySvg pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5V19M16 5V19"/></svg>';
+
+  window.omsSetPlayButtonVisual=function omsSetPlayButtonVisual(playing){
+    const btn=document.getElementById('playBtn');
+    if(!btn)return;
+    btn.innerHTML=playing?PAUSE_SVG:PLAY_SVG;
+    btn.setAttribute('aria-label',playing?'Jeda':'Putar');
+    btn.setAttribute('title',playing?'Jeda':'Putar');
+    btn.dataset.playVisual=playing?'pause':'play';
+  };
+
+  // Triangle vertices are chosen so their centroid is exactly x=12, the
+  // center of the 24x24 viewBox: (8 + 8 + 20) / 3 = 12.
+  // V4.40 then places that button center on the rendered playhead X.
+  const sync=()=>window.omsSetPlayButtonVisual?.(!!(typeof model!=='undefined'&&model.playing));
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync,{once:true});
+  else sync();
+  setTimeout(sync,0);
+})();
+</script>
+<!-- V4.40 — Play/Pause SVG centroid is centered and the button itself is aligned to the rendered playhead. -->
+<!-- V4.40 — playhead-anchored transport + optically centered keyframe SVGs; preserves V4.38/V4.39 anti-flicker isolation. -->
+<style id="oms-v448-layer-visibility-eye">
+/* V4.48 — The existing timeline visibility control is now an eye button.
+   Hidden layers remain selectable/editable, but their row is visibly subdued. */
+.track .eye{
+  width:25px;
+  height:25px;
+  display:grid;
+  place-items:center;
+  color:#8f9bb3;
+  cursor:pointer;
+  border-radius:5px;
+  transition:color .14s ease,background-color .14s ease;
+}
+.track .eye:hover{color:#d8dfef;background:rgba(255,255,255,.055)}
+.track .eye:focus-visible{outline:1px solid var(--accent);outline-offset:-2px}
+.trackEyeSvg{
+  width:15px;
+  height:15px;
+  display:block;
+  overflow:visible;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.75;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  pointer-events:none;
+}
+.trackEyeSlash{stroke-width:2.1}
+.track.layerHidden .trackName,
+.track.layerHidden .lock{opacity:.52}
+.track.layerHidden .trackLane{opacity:.46}
+.track.layerHidden .eye{color:#68738a}
+.track .trackName,
+.track .lock,
+.track .trackLane{transition:opacity .14s ease}
+@media (prefers-reduced-motion:reduce){
+  .track .eye,.track .trackName,.track .lock,.track .trackLane{transition:none}
+}
+</style>
+<!-- V4.48 — Eye/eye-slash layer visibility control + subdued hidden timeline row. -->
+<style id="oms-v449-selected-layer-export">
+/* V4.49 — persistent multi-select affordance and selected-layer export range. */
+.layerActionsBtn.selectionMode{
+  color:var(--accent)!important;
+  background:rgba(101,226,194,.12)!important;
+  box-shadow:inset 0 0 0 1px rgba(101,226,194,.38);
+}
+.layerActionMenuIcon.exportSelection::before{
+  left:4px;
+  top:7px;
+  width:24px;
+  height:20px;
+  border-color:#8c98b1;
+  background:#252a3e;
+}
+.layerActionMenuIcon.exportSelection::after{display:none}
+.layerActionMenuIcon.exportSelection i{
+  position:absolute;
+  z-index:3;
+  right:1px;
+  top:0;
+  width:18px;
+  height:18px;
+  display:grid;
+  place-items:center;
+  border-radius:6px;
+  color:#10201c;
+  background:var(--accent);
+  box-shadow:0 0 0 2px #252a3e;
+  font-size:12px;
+  font-style:normal;
+  font-weight:850;
+}
+.trackHead.multiSel{
+  background:linear-gradient(90deg,rgba(101,226,194,.18),rgba(58,74,101,.48))!important;
+  box-shadow:inset 3px 0 0 var(--accent),inset 0 0 0 1px rgba(101,226,194,.22);
+}
+.trackHead{
+  grid-template-columns:25px minmax(0,1fr)!important;
+}
+.trackHead .lock{
+  display:none!important;
+}
+.trackHead.layer-select-armed{
+  background:linear-gradient(90deg,rgba(101,226,194,.15),rgba(34,43,56,.96))!important;
+  box-shadow:inset 3px 0 0 rgba(101,226,194,.72);
+}
+.clip.multiSel{
+  outline:2px solid rgba(126,234,209,.95);
+  outline-offset:1px;
+  filter:brightness(1.08) saturate(1.08);
+}
+.exportScopeNotice{
+  display:grid;
+  gap:3px;
+  margin:0 0 10px;
+  padding:10px 12px;
+  border:1px solid rgba(101,226,194,.38);
+  border-radius:10px;
+  color:#dffaf3;
+  background:rgba(40,112,94,.16);
+}
+.exportScopeNotice.hidden{display:none!important}
+.exportScopeNotice b{font-size:11px}
+.exportScopeNotice small{font-size:9px;color:#8fe6cf;line-height:1.35}
+.exportSheet.selectedLayerExport .nonVideoExportOption{display:none}
+</style>
+<!-- V4.50 — long-press layer-header multi-select, hidden legacy lock affordance, and strict selected-only media export routing. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
@@ -15609,4 +18454,5 @@ Status:
 <!-- V4.26 — project/export duration now shrinks to the furthest real content layer after trim/move/speed/delete; control layers and out-of-clip keyframes no longer create blank export tails. -->
 <!-- V4.27 — keyframes are Inspector-gated; long-press drag routes to the originating Inspector control via an extensible keyframe-origin metadata/resolver contract for current and future features/effects. -->
 <!-- V4.28 — keyframe-origin routing is group-aware: overlapping same-frame Transform axes restore the full X/Y/Z Position or Rotation selection instead of whichever diamond wins DOM hit-testing. -->
+<!-- V4.47 — mouse-wheel zoom is ruler-only; exact transport/recall sync and stale-decode rejection keep duplicate media frame-aligned. -->
 </html>
