@@ -9876,7 +9876,8 @@ class UIController{
       const start=Math.max(0,+layer.start||0);
       const duration=Math.max(frame,+layer.duration||frame);
       const end=start+duration;
-      const context=t<start-frame*.45?'before':t>end+frame*.45?'after':'inside';
+      const margin=frame*.45;
+      const context=t<=start+margin?'before':t>=end-margin?'after':'inside';
       return{layer,start,duration,context}
     }).filter(item=>item.context!=='inside');
     if(!candidates.length){toast('Playhead masih berada pada layer terpilih');return false}
@@ -9907,7 +9908,15 @@ class UIController{
     const margin=(1/fps)*.45;
     const inside=layers.some(layer=>t>layer.start+margin&&t<layer.start+layer.duration-margin);
     const earliest=Math.min(...layers.map(layer=>Math.max(0,+layer.start||0)));
-    const side=t<earliest?'before':'after';
+    const edgeCandidates=layers.flatMap(layer=>{
+      const start=Math.max(0,+layer.start||0);
+      const end=start+Math.max(1/fps,+layer.duration||1/fps);
+      const edges=[];
+      if(t<=start+margin)edges.push({side:'before',distance:Math.abs(start-t)});
+      if(t>=end-margin)edges.push({side:'after',distance:Math.abs(t-end)});
+      return edges
+    }).sort((a,b)=>a.distance-b.distance||(a.side==='before'?-1:1));
+    const side=edgeCandidates[0]?.side||(t<=earliest+margin?'before':'after');
     return{fps,t,margin,inside,side,signature:`${layers.length}:${inside?'inside':'outside:'+side}`}
   }
 
@@ -15990,12 +15999,36 @@ $('#audioToggle').onclick=()=>{
 };
 $('#playBtn').onclick=()=>clock.toggle();$('#jumpStart').onclick=()=>timeline.jumpBoundary(false);$('#jumpEnd').onclick=()=>timeline.jumpBoundary(true);$('#prevKey').onclick=()=>timeline.nearest(-1);$('#nextKey').onclick=()=>timeline.nearest(1);
 $('#ruler').onpointerdown=e=>{timeline.cancelScrollFrameSettle();model.time=timeline.timeFromClientX(e.clientX);media.sync(model.time,false);renderer.render()};
-// V4.24 — deterministic playback pause on manual timeline interaction.
-  // Capture phase is intentional: clip/keyframe/trim handlers may stop propagation,
-  // so the playback clock must stop BEFORE any child gesture starts.
-$('#timelineScroll').addEventListener('pointerdown',e=>{
-  if(model.playing)clock.stop()
-},{capture:true,passive:true});
+// V4.55 — a light timeline tap must not pause playback. Keep this listener in
+// capture phase so clip/keyframe/trim gestures cannot hide their pointermove,
+// but stop the clock only after the pointer has become a real drag.
+{
+  const timelineScroll=$('#timelineScroll');
+  const playbackDragPointers=new Map();
+  const dragThreshold=8;
+
+  timelineScroll.addEventListener('pointerdown',e=>{
+    playbackDragPointers.set(e.pointerId,{
+      x:e.clientX,
+      y:e.clientY,
+      moved:false
+    });
+  },{capture:true,passive:true});
+
+  timelineScroll.addEventListener('pointermove',e=>{
+    const gesture=playbackDragPointers.get(e.pointerId);
+    if(!gesture||gesture.moved)return;
+
+    if(Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y)<dragThreshold)return;
+    gesture.moved=true;
+    if(model.playing)clock.stop();
+  },{capture:true,passive:true});
+
+  const endPlaybackDrag=e=>playbackDragPointers.delete(e.pointerId);
+  timelineScroll.addEventListener('pointerup',endPlaybackDrag,{capture:true,passive:true});
+  timelineScroll.addEventListener('pointercancel',endPlaybackDrag,{capture:true,passive:true});
+  timelineScroll.addEventListener('lostpointercapture',endPlaybackDrag,{capture:true,passive:true});
+}
 $$('#bottomTools button').forEach(b=>b.onclick=()=>ui.openTool(b.dataset.tool));$('#plusBtn').onclick=()=>{$('#drawer').classList.contains('hidden')?ui.openTool(ui.addTool||'shapes'):ui.closeDrawer()};
 $('#mediaInput').onchange=e=>media.importFiles([...e.target.files]);
 $('#viewport').ondragover=e=>{e.preventDefault();$('#viewport').classList.add('dragover')};$('#viewport').ondragleave=()=>$('#viewport').classList.remove('dragover');$('#viewport').ondrop=e=>{e.preventDefault();$('#viewport').classList.remove('dragover');media.importFiles([...e.dataTransfer.files])};
@@ -18866,7 +18899,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
 <!-- V4.22 — adds a real third export engine: Experimental. It keeps dedicated WebCodecs source decoders alive across frames and overlaps decode of N+1 with encoding of N. Stabil Presisi is unchanged. -->
 <!-- V4.23 — Stable Presisi only: deterministic WebCodecs source-frame decoder plus strict HTML fallback validation prevents ±1–2 frame oscillation. Experimental and Realtime engines are unchanged. -->
-<!-- V4.24 — any manual timeline pointer interaction pauses playback in capture phase; horizontal scroll fallback covers wheel/trackpad paths. -->
+<!-- V4.55 — light timeline taps keep playback running; capture-phase drag detection pauses only after real movement, while horizontal wheel/trackpad scrolling keeps the V4.24 fallback. -->
 <!-- V4.25 — hardens timeline pointer ownership after keyframe moves, prevents interrupted pinch zoom from being persisted, and self-recovers the legacy exact-minimum stuck zoom state. -->
 <!-- V4.26 — project/export duration now shrinks to the furthest real content layer after trim/move/speed/delete; control layers and out-of-clip keyframes no longer create blank export tails. -->
 <!-- V4.27 — keyframes are Inspector-gated; long-press drag routes to the originating Inspector control via an extensible keyframe-origin metadata/resolver contract for current and future features/effects. -->
