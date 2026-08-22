@@ -4863,8 +4863,18 @@ class MediaManager{
     this.exportDest=null;
     try{this.audioCtx.resume().catch(()=>{})}catch(e){}
   }
-  pause(){
-    this.sync(model.time,false);
+  pause({sync=true}={}){
+    if(sync){
+      this.sync(model.time,false)
+    }else{
+      // Timeline scrub start: stop the live media clocks without queuing a
+      // random-access decode for the old playhead. The first coalesced scroll
+      // frame below will request only the newest visible timeline position.
+      for(const l of model.layers){
+        const el=l.video||l.audio;
+        if(el&&!el.paused){try{el.pause()}catch(e){}}
+      }
+    }
     this.restorePlaybackAudio();
   }
   releaseTransientCaches(){
@@ -6260,6 +6270,8 @@ class TimelineController{
     this.manualScrollActive=false;
     this.scrollSettleTimer=0;
     this.lastScrollLeft=0;
+    this.scrollScrubRAF=0;
+    this.pendingScrollScrubTime=Number.NaN;
     this.longPressMs=280;
     this.longPressSlop=28;
     this.suppressClickUntil=0;
@@ -6383,6 +6395,7 @@ class TimelineController{
   resetTransientTimelineGesture({restoreInterruptedPinch=false}={}){
     // This method only clears transient interaction ownership. It never changes
     // keyframes, trims, layer order, or project time.
+    this.cancelScrollScrubPreview();
     return this.transientGestures.reset({
       restoreInterruptedPinch,
       currentPx:this.px,
@@ -6400,6 +6413,7 @@ class TimelineController{
   }
 
   disposeTransientTimelineGesture(){
+    this.cancelScrollScrubPreview();
     return this.transientGestures.dispose({
       onPinchClass:()=>$('.timelineArea')?.classList.remove('timeline-pinching'),
       onZoomBadge:()=>this.updateZoomBadge()
@@ -6577,7 +6591,32 @@ class TimelineController{
   }
 
   cancelScrollFrameSettle(){
+    this.cancelScrollScrubPreview();
     return this.transientGestures.cancelScrollFrameSettle()
+  }
+
+  cancelScrollScrubPreview(){
+    if(this.scrollScrubRAF)cancelAnimationFrame(this.scrollScrubRAF);
+    this.scrollScrubRAF=0;
+    this.pendingScrollScrubTime=Number.NaN
+  }
+
+  scheduleScrollScrubPreview(time){
+    this.pendingScrollScrubTime=+time;
+    if(this.scrollScrubRAF)return;
+
+    this.scrollScrubRAF=requestAnimationFrame(()=>{
+      this.scrollScrubRAF=0;
+      const target=this.pendingScrollScrubTime;
+      this.pendingScrollScrubTime=Number.NaN;
+      if(!model.project||!this.isCentered()||model.playing||!Number.isFinite(target))return;
+
+      // At most one decode/render request per display frame. Multiple Android
+      // scroll samples collapse to the newest playhead time instead of making
+      // the decoder chase every intermediate pixel.
+      media.sync(target,false);
+      renderer.render()
+    })
   }
 
   scheduleScrollFrameSettle(){
@@ -6604,6 +6643,7 @@ class TimelineController{
       const target=time*this.px;
       model.time=time;
       this.manualScrollActive=false;
+      this.cancelScrollScrubPreview();
       media.sync(model.time,false);
 
       if(Math.abs(sc.scrollLeft-target)>.01){
@@ -8003,9 +8043,9 @@ class TimelineController{
     // change scrollLeft without a pointerdown. A user-driven horizontal timeline
     // movement while playing must always pause before the scrub changes time.
     if(horizontalChanged&&model.playing){
-      try{clock.stop()}catch(e){
+      try{clock.stop({syncMedia:false,renderDecay:false})}catch(e){
         model.playing=false;
-        media.pause()
+        media.pause({sync:false})
       }
     }
 
@@ -8014,9 +8054,10 @@ class TimelineController{
       const t=this.snapTime(sc.scrollLeft/this.px);
       if(Math.abs(t-model.time)<.0000001)return;
       model.time=t;
-      // In centered mode horizontal swipe is direct timeline scrubbing.
-      media.sync(model.time,false);
-      renderer.render();
+      // In centered mode horizontal swipe is direct timeline scrubbing. Keep
+      // model time responsive, but coalesce decoder/render work to one request
+      // per display frame; the settle pass performs the final exact sync.
+      this.scheduleScrollScrubPreview(model.time);
     }else{
       // In moving-playhead mode scrolling only pans/navigates the timeline;
       // it does not change current time.
@@ -13912,16 +13953,16 @@ class PlaybackClock{
     timeline.updateRealtimeAudioMeter(true);
     this.raf=requestAnimationFrame(t=>this.loop(t))
   }
-  stop(){
+  stop({syncMedia=true,renderDecay=true}={}){
     model.playing=false;
     window.omsSetPlayButtonVisual?.(false);
     cancelAnimationFrame(this.raf);
-    media.pause();
+    media.pause({sync:syncMedia});
 
     const decay=()=>{
       if(model.playing)return;
       timeline.updateRealtimeAudioMeter(false);
-      renderer.render();
+      if(renderDecay)renderer.render();
       if((timeline.audioMeterLevel||0)>.012 || (timeline.audioMeterPeak||0)>.012){
         this.raf=requestAnimationFrame(decay);
       }
@@ -16021,7 +16062,7 @@ $('#ruler').onpointerdown=e=>{timeline.cancelScrollFrameSettle();model.time=time
 
     if(Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y)<dragThreshold)return;
     gesture.moved=true;
-    if(model.playing)clock.stop();
+    if(model.playing)clock.stop({syncMedia:false,renderDecay:false});
   },{capture:true,passive:true});
 
   const endPlaybackDrag=e=>playbackDragPointers.delete(e.pointerId);
@@ -18900,6 +18941,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 <!-- V4.22 — adds a real third export engine: Experimental. It keeps dedicated WebCodecs source decoders alive across frames and overlaps decode of N+1 with encoding of N. Stabil Presisi is unchanged. -->
 <!-- V4.23 — Stable Presisi only: deterministic WebCodecs source-frame decoder plus strict HTML fallback validation prevents ±1–2 frame oscillation. Experimental and Realtime engines are unchanged. -->
 <!-- V4.55 — light timeline taps keep playback running; capture-phase drag detection pauses only after real movement, while horizontal wheel/trackpad scrolling keeps the V4.24 fallback. -->
+<!-- V4.56 — mobile timeline scrub pauses without decoding the old playhead, coalesces scroll samples to one latest frame per RAF, and performs one exact settle sync. -->
 <!-- V4.25 — hardens timeline pointer ownership after keyframe moves, prevents interrupted pinch zoom from being persisted, and self-recovers the legacy exact-minimum stuck zoom state. -->
 <!-- V4.26 — project/export duration now shrinks to the furthest real content layer after trim/move/speed/delete; control layers and out-of-clip keyframes no longer create blank export tails. -->
 <!-- V4.27 — keyframes are Inspector-gated; long-press drag routes to the originating Inspector control via an extensible keyframe-origin metadata/resolver contract for current and future features/effects. -->
