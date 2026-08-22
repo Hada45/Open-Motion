@@ -4553,7 +4553,7 @@ class MediaManager{
     if(state?.unsupported)return null;
     if(state?.initializing)return state.initializing;
 
-    state=state||{id:l.id,ready:false,unsupported:false,busy:false,latestTarget:Number.NaN,latestSerial:0,requestSerial:0,disposed:false};
+    state=state||{id:l.id,ready:false,unsupported:false,busy:false,latestTarget:Number.NaN,latestSerial:0,requestSerial:0,interactiveScrubActive:false,disposed:false};
     state.requestSerial=Number.isFinite(state.requestSerial)?state.requestSerial:0;
     state.latestSerial=Number.isFinite(state.latestSerial)?state.latestSerial:state.requestSerial;
     this.scrubDecodeStates.set(l.id,state);
@@ -4618,10 +4618,14 @@ class MediaManager{
           break
         }
         if(state.disposed)break;
-        // A layer move or newer scrub may have replaced this request while the
-        // decoder was working. Never let that obsolete frame overwrite the
-        // newly aligned frame cache.
-        if(result&&requestSerial===state.requestSerial)this.commitDecodedScrubCanvas(l,result,target);
+        // A layer move or exact final seek may replace this request while the
+        // decoder is working. Exact mode rejects that obsolete result.
+        // During a live finger scrub the decoder can finish slightly behind the
+        // newest requested timestamp. Showing that freshly decoded intermediate
+        // frame is smoother than holding an old image until the finger stops.
+        // Exact/final seeks disable interactiveScrubActive, so an obsolete decode
+        // can never overwrite the frame requested on release.
+        if(result&&(requestSerial===state.requestSerial||state.interactiveScrubActive))this.commitDecodedScrubCanvas(l,result,target);
         // latestTarget may have been replaced many times while decoding; only
         // the newest requested timestamp is decoded next (no backlog).
       }
@@ -4632,22 +4636,24 @@ class MediaManager{
     }
   }
 
-  queueSmartPausedVideoPreview(l,target){
+  queueSmartPausedVideoPreview(l,target,{interactive=false}={}){
     if(!l?.video)return false;
     let state=this.scrubDecodeStates.get(l.id);
     if(state?.ready&&!state.disposed){
+      state.interactiveScrubActive=!!interactive;
       state.requestSerial=(Number.isFinite(state.requestSerial)?state.requestSerial:0)+1;
       state.latestSerial=state.requestSerial;
       state.latestTarget=+target;
       this.pumpWebCodecsScrub(l,state);
       return true
     }
-    if(state?.unsupported)return this.queuePausedVideoSeek(l,target);
+    if(state?.unsupported){state.interactiveScrubActive=!!interactive;return this.queuePausedVideoSeek(l,target)}
 
     // First use: keep the old HTMLVideo preview responsive while the WebCodecs
     // backend initializes in parallel. Subsequent scrub events switch to the
     // dedicated decoder as soon as it is ready.
-    state=state||{id:l.id,ready:false,unsupported:false,busy:false,latestTarget:+target,latestSerial:0,requestSerial:0,disposed:false};
+    state=state||{id:l.id,ready:false,unsupported:false,busy:false,latestTarget:+target,latestSerial:0,requestSerial:0,interactiveScrubActive:!!interactive,disposed:false};
+    state.interactiveScrubActive=!!interactive;
     state.requestSerial=(Number.isFinite(state.requestSerial)?state.requestSerial:0)+1;
     state.latestSerial=state.requestSerial;
     state.latestTarget=+target;
@@ -4663,6 +4669,7 @@ class MediaManager{
     this.cancelPausedVideoSeek(l);
     const state=l?.id&&this.scrubDecodeStates.get(l.id);
     if(state){
+      state.interactiveScrubActive=false;
       state.requestSerial=(Number.isFinite(state.requestSerial)?state.requestSerial:0)+1;
       state.latestSerial=state.requestSerial;
       state.latestTarget=Number.NaN
@@ -4685,7 +4692,7 @@ class MediaManager{
     return this.pausedSeeks.cancel(l)
   }
 
-  sync(t,playing=false,muted=false,{forceSeek=false}={}){
+  sync(t,playing=false,muted=false,{forceSeek=false,interactiveScrub=false}={}){
     // Hard synchronization is reserved for explicit transport actions:
     // play start, scrub/seek, loop wrap, trim edits, and stop. During normal
     // playback use tick() below so Android's decoder is not repeatedly flushed.
@@ -4716,7 +4723,7 @@ class MediaManager{
           // V4.21: use random-access WebCodecs preview when available; until it
           // initializes (or on unsupported codecs), retain V4.20 coalesced
           // HTMLVideo seeking as the automatic fallback.
-          didSeek=this.queueSmartPausedVideoPreview(l,map.mediaTime);
+          didSeek=this.queueSmartPausedVideoPreview(l,map.mediaTime,{interactive:interactiveScrub});
         }else{
           if(l.video)this.cancelSmartPausedVideoPreview(l);
           if(forceSeek||Math.abs(el.currentTime-map.mediaTime)>tolerance){
@@ -4729,7 +4736,7 @@ class MediaManager{
         // An explicit paused alignment also requests the exact WebCodecs frame.
         // Request serials reject a decode started before the layer was moved.
         if(l.video&&!playing&&forceSeek){
-          didSeek=this.queueSmartPausedVideoPreview(l,map.mediaTime)||didSeek
+          didSeek=this.queueSmartPausedVideoPreview(l,map.mediaTime,{interactive:false})||didSeek
         }
 
         if(Math.abs((+el.playbackRate||1)-map.speed)>.001)el.playbackRate=map.speed;
@@ -5494,7 +5501,7 @@ const Mat4={
 
 class WebGLRenderer{
   constructor(projectModel,canvas){
-    this.model=projectModel;this.canvas=canvas;this.fallback=null;this.domInteraction=null;this.interactionCache=null;this.exporting=false;this.textures=new Map();this.imageWatch=new WeakSet();this.overlay=$('#interactionAbove');this.interactionLayer=$('#interactionLayer');
+    this.model=projectModel;this.canvas=canvas;this.fallback=null;this.domInteraction=null;this.interactionCache=null;this.exporting=false;this.interactivePreviewScale=1;this.textures=new Map();this.imageWatch=new WeakSet();this.overlay=$('#interactionAbove');this.interactionLayer=$('#interactionLayer');
     bus.on('layer:disposed',id=>this.disposeTexture(id));
     bus.on('layer:texture-release',id=>this.disposeTexture(id));
     bus.on('model:reset',()=>this.disposeAllTextures());
@@ -5549,11 +5556,32 @@ class WebGLRenderer{
     const data=[],point=(a,b)=>{const st=Math.sin(a);return[.5*st*Math.cos(b),.5*Math.cos(a),.5*st*Math.sin(b)]},push=p=>{const n=[p[0]*2,p[1]*2,p[2]*2];data.push(...p,...n)};
     for(let y=0;y<lat;y++){const a0=y/lat*Math.PI,a1=(y+1)/lat*Math.PI;for(let x=0;x<lon;x++){const b0=x/lon*Math.PI*2,b1=(x+1)/lon*Math.PI*2,q0=point(a0,b0),q1=point(a1,b0),q2=point(a1,b1),q3=point(a0,b1);push(q0);push(q1);push(q2);push(q0);push(q2);push(q3)}}return this.makeMeshBuffer(data)
   }
+  applyPreviewBufferScale(scale=this.interactivePreviewScale){
+    if(this.fallback||!model.project)return false;
+    const safeScale=this.exporting?1:clamp(+scale||1,.2,1);
+    const width=Math.max(1,Math.round(model.project.width*safeScale));
+    const height=Math.max(1,Math.round(model.project.height*safeScale));
+    const changed=this.canvas.width!==width||this.canvas.height!==height;
+    if(changed){
+      this.canvas.width=width;
+      this.canvas.height=height;
+      if(this.interactionLayer){this.interactionLayer.width=width;this.interactionLayer.height=height}
+      if(this.overlay){this.overlay.width=width;this.overlay.height=height}
+    }
+    this.gl.viewport(0,0,width,height);
+    return changed
+  }
+  setInteractivePreviewScale(scale=1){
+    if(this.fallback)return false;
+    this.interactivePreviewScale=clamp(+scale||1,.2,1);
+    return this.applyPreviewBufferScale(this.interactivePreviewScale)
+  }
   resize(){
     if(this.fallback)return this.fallback.resize();if(!model.project)return;
-    this.canvas.width=Math.max(1,model.project.width);this.canvas.height=Math.max(1,model.project.height);this.gl.viewport(0,0,this.canvas.width,this.canvas.height);
-    if(this.interactionLayer){this.interactionLayer.width=this.canvas.width;this.interactionLayer.height=this.canvas.height;this.interactionLayer.style.display='none'}
-    if(this.overlay){this.overlay.width=this.canvas.width;this.overlay.height=this.canvas.height;this.overlay.style.display='block';this.overlay.style.transform='none'}
+    this.interactivePreviewScale=1;
+    this.applyPreviewBufferScale(1);
+    if(this.interactionLayer){this.interactionLayer.style.display='none'}
+    if(this.overlay){this.overlay.style.display='block';this.overlay.style.transform='none'}
     $('#canvasWrap')?.classList.remove('compositing')
   }
   orbitTargetWorld(cam,t=model.time){
@@ -5811,6 +5839,11 @@ class WebGLRenderer{
   render(){
     if(this.fallback){this.fallback.exporting=this.exporting;this.fallback.render();this.domInteraction=this.fallback.domInteraction;return}
     if(!model.project)return;
+
+    // Exports and still captures always restore the full project framebuffer.
+    // Interactive timeline scrubbing may temporarily use a smaller buffer.
+    if(this.exporting)this.interactivePreviewScale=1;
+    this.applyPreviewBufferScale(this.interactivePreviewScale);
 
     this.pruneTextures();
     const gl=this.gl;
@@ -6271,6 +6304,10 @@ class TimelineController{
     this.scrollSettleTimer=0;
     this.lastScrollLeft=0;
     this.scrollScrubRAF=0;
+    this.scrollScrubTimer=0;
+    this.scrollScrubLastFlush=0;
+    this.scrollScrubActive=false;
+    this.scrollScrubInterval=0;
     this.pendingScrollScrubTime=Number.NaN;
     this.longPressMs=280;
     this.longPressSlop=28;
@@ -6595,28 +6632,77 @@ class TimelineController{
     return this.transientGestures.cancelScrollFrameSettle()
   }
 
-  cancelScrollScrubPreview(){
-    if(this.scrollScrubRAF)cancelAnimationFrame(this.scrollScrubRAF);
+  mobileScrubPreviewScale(){
+    const touchLayout=matchMedia('(pointer: coarse)').matches||document.documentElement.classList.contains('omsMobileLandscapeDesktop');
+    if(!model.project||!touchLayout)return 1;
+    const projectLong=Math.max(+model.project.width||1,+model.project.height||1);
+    const rect=renderer.canvas?.getBoundingClientRect?.();
+    const displayLong=Math.max(+rect?.width||0,+rect?.height||0);
+    const memory=Number(navigator.deviceMemory)||4;
+    const bufferCap=memory<=3?420:540;
+    const targetLong=Math.min(bufferCap,Math.max(240,displayLong||bufferCap));
+    return clamp(targetLong/projectLong,.25,1)
+  }
+
+  beginScrollScrubPreview(){
+    if(this.scrollScrubActive)return;
+    this.scrollScrubActive=true;
+    this.scrollScrubLastFlush=0;
+    const scale=this.mobileScrubPreviewScale();
+    this.scrollScrubInterval=scale<.999?1000/15:0;
+    // Resizing a canvas clears its framebuffer. Draw the current cached frame
+    // once at the temporary mobile resolution before the decoder catches up.
+    if(renderer.setInteractivePreviewScale?.(scale))renderer.render()
+  }
+
+  hasActiveScrubVideo(time){
+    return model.layers.some(l=>l.type==='video'&&l.video&&!l.hidden&&omsLayerIncludedInExport(l)&&mediaClipMap(l,time).active)
+  }
+
+  flushScrollScrubPreview(){
     this.scrollScrubRAF=0;
-    this.pendingScrollScrubTime=Number.NaN
+    const target=this.pendingScrollScrubTime;
+    this.pendingScrollScrubTime=Number.NaN;
+    if(!model.project||!this.isCentered()||model.playing||!Number.isFinite(target))return;
+
+    this.scrollScrubLastFlush=performance.now();
+    const stamp=fmt(target,model.project.fps);
+    $('#previewTime').textContent=stamp;
+    $('#timeRead').textContent=stamp;
+    this.updatePlayhead();
+    media.sync(target,false,false,{interactiveScrub:true});
+    // Video frames repaint from the decoder's video:frame event. Rendering here
+    // would repeat a full composition with the stale frame that was cached before
+    // the asynchronous seek. Non-video projects still need an immediate repaint.
+    if(!this.hasActiveScrubVideo(target))renderer.render()
+  }
+
+  cancelScrollScrubPreview({restoreScale=true}={}){
+    if(this.scrollScrubRAF)cancelAnimationFrame(this.scrollScrubRAF);
+    if(this.scrollScrubTimer)clearTimeout(this.scrollScrubTimer);
+    this.scrollScrubRAF=0;
+    this.scrollScrubTimer=0;
+    this.scrollScrubLastFlush=0;
+    this.pendingScrollScrubTime=Number.NaN;
+    const wasActive=this.scrollScrubActive;
+    this.scrollScrubActive=false;
+    this.scrollScrubInterval=0;
+    if(restoreScale&&wasActive)renderer.setInteractivePreviewScale?.(1)
   }
 
   scheduleScrollScrubPreview(time){
     this.pendingScrollScrubTime=+time;
-    if(this.scrollScrubRAF)return;
+    this.beginScrollScrubPreview();
+    if(this.scrollScrubRAF||this.scrollScrubTimer)return;
 
-    this.scrollScrubRAF=requestAnimationFrame(()=>{
-      this.scrollScrubRAF=0;
-      const target=this.pendingScrollScrubTime;
-      this.pendingScrollScrubTime=Number.NaN;
-      if(!model.project||!this.isCentered()||model.playing||!Number.isFinite(target))return;
-
-      // At most one decode/render request per display frame. Multiple Android
-      // scroll samples collapse to the newest playhead time instead of making
-      // the decoder chase every intermediate pixel.
-      media.sync(target,false);
-      renderer.render()
-    })
+    const elapsed=performance.now()-this.scrollScrubLastFlush;
+    const delay=Math.max(0,this.scrollScrubInterval-elapsed);
+    const queueFrame=()=>{
+      this.scrollScrubTimer=0;
+      this.scrollScrubRAF=requestAnimationFrame(()=>this.flushScrollScrubPreview())
+    };
+    if(delay>4)this.scrollScrubTimer=setTimeout(queueFrame,delay);
+    else queueFrame()
   }
 
   scheduleScrollFrameSettle(){
@@ -6644,7 +6730,12 @@ class TimelineController{
       model.time=time;
       this.manualScrollActive=false;
       this.cancelScrollScrubPreview();
-      media.sync(model.time,false);
+      const activeVideo=this.hasActiveScrubVideo(model.time);
+      // Restoring the full-size canvas clears its pixels. Repaint the newest
+      // decoded scrub frame first, then request the exact release frame. The
+      // exact decoder completion owns the next video repaint.
+      if(activeVideo)renderer.render();
+      media.sync(model.time,false,false,{interactiveScrub:false});
 
       if(Math.abs(sc.scrollLeft-target)>.01){
         this.syncingScroll=true;
@@ -6656,7 +6747,7 @@ class TimelineController{
           this.updateRulerLabels()
         })
       }
-      renderer.render()
+      if(!activeVideo)renderer.render()
     };
 
     this.scrollSettleTimer=setTimeout(settle,105)
@@ -18934,7 +19025,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   }
 }
 </style>
-<!-- V4.54 local preview — arrange buttons share the time-button surface; sequence uses three filled stepped clips. -->
+<!-- V4.57 local preview — 15 FPS newest-target mobile scrub decoding and temporary low-resolution preview framebuffer. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
@@ -18942,6 +19033,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 <!-- V4.23 — Stable Presisi only: deterministic WebCodecs source-frame decoder plus strict HTML fallback validation prevents ±1–2 frame oscillation. Experimental and Realtime engines are unchanged. -->
 <!-- V4.55 — light timeline taps keep playback running; capture-phase drag detection pauses only after real movement, while horizontal wheel/trackpad scrolling keeps the V4.24 fallback. -->
 <!-- V4.56 — mobile timeline scrub pauses without decoding the old playhead, coalesces scroll samples to one latest frame per RAF, and performs one exact settle sync. -->
+<!-- V4.57 — interactive mobile scrubbing displays useful decoded intermediate frames, avoids stale duplicate composition renders, caps seek cadence at 15 FPS, and restores full framebuffer quality after settle/export. -->
 <!-- V4.25 — hardens timeline pointer ownership after keyframe moves, prevents interrupted pinch zoom from being persisted, and self-recovers the legacy exact-minimum stuck zoom state. -->
 <!-- V4.26 — project/export duration now shrinks to the furthest real content layer after trim/move/speed/delete; control layers and out-of-clip keyframes no longer create blank export tails. -->
 <!-- V4.27 — keyframes are Inspector-gated; long-press drag routes to the originating Inspector control via an extensible keyframe-origin metadata/resolver contract for current and future features/effects. -->
