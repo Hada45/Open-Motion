@@ -3430,6 +3430,21 @@ const cameraDepthOfFieldBlurPx=(cam,depth,frameHeight=1080)=>{
 };
 const safe=s=>String(s||'open-motion').replace(/[^a-z0-9_\-]+/gi,'_');
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const BLEND_MODE_GROUPS=[
+  {id:'normal',label:'Normal',modes:[['source-over','Normal']]},
+  {id:'darken',label:'Gelapkan',modes:[['multiply','Multiply'],['darken','Darken'],['color-burn','Color Burn']]},
+  {id:'lighten',label:'Cerahkan',modes:[['screen','Screen'],['lighten','Lighten'],['color-dodge','Color Dodge'],['lighter','Add']]},
+  {id:'contrast',label:'Kontras',modes:[['overlay','Overlay'],['soft-light','Soft Light'],['hard-light','Hard Light']]},
+  {id:'difference',label:'Perbedaan',modes:[['difference','Difference'],['exclusion','Exclusion']]},
+  {id:'color',label:'Warna',modes:[['hue','Hue'],['saturation','Saturation'],['color','Color'],['luminosity','Luminosity']]}
+];
+const BLEND_MODE_VALUES=new Set(BLEND_MODE_GROUPS.flatMap(group=>group.modes.map(mode=>mode[0])));
+const normalizeBlendMode=value=>BLEND_MODE_VALUES.has(String(value||''))?String(value):'source-over';
+const blendModeLabel=value=>BLEND_MODE_GROUPS.flatMap(group=>group.modes).find(mode=>mode[0]===normalizeBlendMode(value))?.[1]||'Normal';
+const blendModeIndex=value=>({
+  'source-over':0,multiply:1,darken:2,'color-burn':3,screen:4,lighten:5,'color-dodge':6,lighter:7,
+  overlay:8,'soft-light':9,'hard-light':10,difference:11,exclusion:12,hue:13,saturation:14,color:15,luminosity:16
+})[normalizeBlendMode(value)]||0;
 const uid=(()=>{let n=0;return p=>`${p}_${Date.now().toString(36)}_${++n}`})();
 const download=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
 const fileDataURL=file=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file)});
@@ -5390,7 +5405,7 @@ class Renderer{
     this.drawEditorOverlays();
     this.finishFrameUI();
   }
-  applyEffects(l){const e=l.effects||{},dof=this.depthOfFieldBlur(l),blur=Math.max(0,+e.blur||0)+dof;this.ctx.filter=`blur(${blur.toFixed(2)}px) brightness(${e.brightness??100}%) contrast(${e.contrast??100}%) saturate(${e.saturate??100}%) hue-rotate(${e.hue||0}deg)`;this.ctx.globalCompositeOperation=l.blend||'source-over'}
+  applyEffects(l){const e=l.effects||{},dof=this.depthOfFieldBlur(l),blur=Math.max(0,+e.blur||0)+dof;this.ctx.filter=`blur(${blur.toFixed(2)}px) brightness(${e.brightness??100}%) contrast(${e.contrast??100}%) saturate(${e.saturate??100}%) hue-rotate(${e.hue||0}deg)`;this.ctx.globalCompositeOperation=normalizeBlendMode(l.blend)}
   drawLayer(l){if(!omsLayerIncludedInExport(l)||['audio','camera'].includes(l.type))return;if(l.type==='mesh'){this.drawMesh(l);return}if(l.type==='null'){this.drawNull(l);return}
     const p=model.effective(l),use3d=this.layerUses3D(l);let sx=p.x,sy=p.y,depthScale=1,rot=p.rotation+p.rotZ;
     if(use3d){const q=this.project(p.x,p.y,p.z);if(!q)return;sx=q.x;sy=q.y;depthScale=q.scale}
@@ -5550,7 +5565,57 @@ class WebGLRenderer{
     this.lp={pos:gl.getAttribLocation(this.lineProgram,'aPosition'),mvp:gl.getUniformLocation(this.lineProgram,'uMVP'),color:gl.getUniformLocation(this.lineProgram,'uColor')};
     this.quadBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.quadBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-.5,.5,0,0,0,-.5,-.5,0,0,1,.5,-.5,0,1,1,-.5,.5,0,0,0,.5,-.5,0,1,1,.5,.5,0,1,0]),gl.STATIC_DRAW);
     this.lineBuffer=gl.createBuffer();this.meshes={cube:this.makeCube(),sphere:this.makeSphere(18,28)};
+    this.initBlendCompositor();
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthFunc(gl.LEQUAL)
+  }
+  initBlendCompositor(){
+    const gl=this.gl;
+    this.blendProgram=this.program(
+      `attribute vec2 aPosition;varying vec2 vUV;void main(){vUV=aPosition*.5+.5;gl_Position=vec4(aPosition,0.0,1.0);}`,
+      `precision mediump float;varying vec2 vUV;uniform sampler2D uBackdrop;uniform sampler2D uSource;uniform float uMode;
+      float hue2rgb(float p,float q,float t){if(t<0.0)t+=1.0;if(t>1.0)t-=1.0;if(t<1.0/6.0)return p+(q-p)*6.0*t;if(t<.5)return q;if(t<2.0/3.0)return p+(q-p)*(2.0/3.0-t)*6.0;return p;}
+      vec3 rgb2hsl(vec3 c){float mx=max(c.r,max(c.g,c.b)),mn=min(c.r,min(c.g,c.b)),h=0.0,s=0.0,l=(mx+mn)*.5,d=mx-mn;if(d>.00001){s=l>.5?d/(2.0-mx-mn):d/(mx+mn);if(mx==c.r)h=(c.g-c.b)/d+(c.g<c.b?6.0:0.0);else if(mx==c.g)h=(c.b-c.r)/d+2.0;else h=(c.r-c.g)/d+4.0;h/=6.0;}return vec3(h,s,l);}
+      vec3 hsl2rgb(vec3 hsl){if(hsl.y<.00001)return vec3(hsl.z);float q=hsl.z<.5?hsl.z*(1.0+hsl.y):hsl.z+hsl.y-hsl.z*hsl.y,p=2.0*hsl.z-q;return vec3(hue2rgb(p,q,hsl.x+1.0/3.0),hue2rgb(p,q,hsl.x),hue2rgb(p,q,hsl.x-1.0/3.0));}
+      vec3 burn(vec3 s,vec3 d){return 1.0-min(vec3(1.0),(1.0-d)/max(s,vec3(.0001)));}
+      vec3 dodge(vec3 s,vec3 d){return min(vec3(1.0),d/max(1.0-s,vec3(.0001)));}
+      vec3 blendMode(vec3 s,vec3 d){
+        if(uMode<.5)return s;
+        if(uMode<1.5)return s*d;
+        if(uMode<2.5)return min(s,d);
+        if(uMode<3.5)return burn(s,d);
+        if(uMode<4.5)return 1.0-(1.0-s)*(1.0-d);
+        if(uMode<5.5)return max(s,d);
+        if(uMode<6.5)return dodge(s,d);
+        if(uMode<7.5)return min(vec3(1.0),s+d);
+        if(uMode<8.5)return mix(2.0*s*d,1.0-2.0*(1.0-s)*(1.0-d),step(vec3(.5),d));
+        if(uMode<9.5)return (1.0-2.0*s)*d*d+2.0*s*d;
+        if(uMode<10.5)return mix(2.0*s*d,1.0-2.0*(1.0-s)*(1.0-d),step(vec3(.5),s));
+        if(uMode<11.5)return abs(d-s);
+        if(uMode<12.5)return s+d-2.0*s*d;
+        vec3 sh=rgb2hsl(s),dh=rgb2hsl(d);
+        if(uMode<13.5)return hsl2rgb(vec3(sh.x,dh.y,dh.z));
+        if(uMode<14.5)return hsl2rgb(vec3(dh.x,sh.y,dh.z));
+        if(uMode<15.5)return hsl2rgb(vec3(sh.x,sh.y,dh.z));
+        return hsl2rgb(vec3(dh.x,dh.y,sh.z));
+      }
+      void main(){vec4 d=texture2D(uBackdrop,vUV),s=texture2D(uSource,vUV);vec3 b=clamp(blendMode(s.rgb,d.rgb),0.0,1.0);gl_FragColor=vec4(mix(d.rgb,b,s.a),1.0);}`
+    );
+    this.bp={pos:gl.getAttribLocation(this.blendProgram,'aPosition'),backdrop:gl.getUniformLocation(this.blendProgram,'uBackdrop'),source:gl.getUniformLocation(this.blendProgram,'uSource'),mode:gl.getUniformLocation(this.blendProgram,'uMode')};
+    this.blendBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.blendBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+    const makeTexture=()=>{const texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return texture};
+    this.blendBackdropTexture=makeTexture();this.blendSourceTexture=makeTexture();this.blendFramebuffer=gl.createFramebuffer();this.blendTargetWidth=0;this.blendTargetHeight=0
+  }
+  ensureBlendTargets(){
+    const gl=this.gl,w=this.canvas.width,h=this.canvas.height;if(this.blendTargetWidth===w&&this.blendTargetHeight===h)return;
+    for(const texture of [this.blendBackdropTexture,this.blendSourceTexture]){gl.bindTexture(gl.TEXTURE_2D,texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null)}
+    gl.bindFramebuffer(gl.FRAMEBUFFER,this.blendFramebuffer);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,this.blendSourceTexture,0);gl.bindFramebuffer(gl.FRAMEBUFFER,null);this.blendTargetWidth=w;this.blendTargetHeight=h
+  }
+  drawBlendedPlane(l,stackNormalOffset=0){
+    const gl=this.gl;this.ensureBlendTargets();gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.blendBackdropTexture);gl.copyTexSubImage2D(gl.TEXTURE_2D,0,0,0,0,0,this.canvas.width,this.canvas.height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,this.blendFramebuffer);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.disable(gl.BLEND);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+    this._blendSourcePass=true;try{this.drawPlane(l,stackNormalOffset)}finally{this._blendSourcePass=false}
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.disable(gl.BLEND);gl.useProgram(this.blendProgram);gl.bindBuffer(gl.ARRAY_BUFFER,this.blendBuffer);gl.enableVertexAttribArray(this.bp.pos);gl.vertexAttribPointer(this.bp.pos,2,gl.FLOAT,false,8,0);
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.blendBackdropTexture);gl.uniform1i(this.bp.backdrop,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,this.blendSourceTexture);gl.uniform1i(this.bp.source,1);gl.uniform1f(this.bp.mode,blendModeIndex(l.blend));gl.drawArrays(gl.TRIANGLES,0,6);gl.activeTexture(gl.TEXTURE0);gl.enable(gl.BLEND);gl.blendEquation(gl.FUNC_ADD);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA)
   }
   makeMeshBuffer(data){const gl=this.gl,b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);return{buffer:b,count:data.length/6}}
   makeCube(){
@@ -5677,10 +5742,10 @@ class WebGLRenderer{
     const e=this.textureEntry(l),signature=this.textureSignature(l);if(signature!==e.signature){this.paintTexture(l,e);e.signature=signature}
     if(l.type==='image'&&l.img&&!l.img.complete&&!this.imageWatch.has(l)){this.imageWatch.add(l);l.img.addEventListener('load',()=>{const q=this.textures.get(l.id);if(q)q.signature=null;this.render()},{once:true})}return e.texture
   }
-  applyBlend(l){const gl=this.gl;if(l.blend==='lighter'||l.blend==='screen')gl.blendFunc(gl.SRC_ALPHA,gl.ONE);else if(l.blend==='multiply')gl.blendFunc(gl.DST_COLOR,gl.ONE_MINUS_SRC_ALPHA);else gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA)}
+  applyBlend(l){const gl=this.gl,mode=normalizeBlendMode(l.blend);gl.blendEquation(gl.FUNC_ADD);if(mode==='lighter')gl.blendFunc(gl.SRC_ALPHA,gl.ONE);else if(mode==='screen'||mode==='color-dodge'||mode==='lighten')gl.blendFunc(gl.SRC_ALPHA,gl.ONE);else if(mode==='multiply'||mode==='color-burn'||mode==='darken')gl.blendFunc(gl.DST_COLOR,gl.ONE_MINUS_SRC_ALPHA);else gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA)}
   drawPlane(l,stackNormalOffset=0){
     if(!omsLayerIncludedInExport(l))return;
-    const gl=this.gl,use3d=this.layerUses3D(l),texture=this.ensureTexture(l),world=this.worldMatrix(l,model.time,new Set(),use3d);
+    const gl=this.gl,use3d=this.layerUses3D(l),blend=normalizeBlendMode(l.blend);if(!this._blendSourcePass&&!use3d&&blend!=='source-over')return this.drawBlendedPlane(l,stackNormalOffset);const texture=this.ensureTexture(l),world=this.worldMatrix(l,model.time,new Set(),use3d);
     let renderWorld=world;
 
     if(use3d&&stackNormalOffset){
@@ -10876,7 +10941,7 @@ class UIController{
     if(name==='parallax'){model.mode3d=true;[-420,0,420].forEach((z,i)=>{model.addLayer('shape',{shape:'rect',name:'Parallax '+(i+1),space3d:true,z,x:model.project.width*(.3+i*.2),y:model.project.height*(.38+i*.13),w:model.project.width*.34,h:model.project.height*.14,color:['#6ca8ff','#27d3b5','#ff907c'][i]})})}
     if(name==='camera'){model.mode3d=true;const c=model.addLayer('camera'),t0=c.start,t1=t0+c.duration,z=c.z;model.anim.setKey(c,'z',t0,z,'ease-in-out');model.anim.setKey(c,'z',t1,z*.55,'ease-in-out');model.anim.setKey(c,'roll',t0,0,'ease-in-out');model.anim.setKey(c,'roll',t1,3,'ease-in-out')}
     this.rebuildAll();this.openInspectorRoot()}
-  openInspectorRoot(){const l=model.selectedLayer();if(!l){this.closeDrawer();return}this.drawerMode='root';timeline.refreshKeyframeInteractionState?.();const ins=(id,ico,txt,extra='')=>`<button class="insBtn" data-ins="${id}" ${extra}><span>${ico}</span>${txt}</button>`;const mediaTools=(l.type==='video'||l.type==='audio')?this.mediaQuickHTML(l):this.layerQuickHTML(l);const isRelinkable=['image','video','audio'].includes(l.type);const relinkTile=isRelinkable?ins('relink','↻','Tautkan Ulang','id="omsInspectorRelinkBtn" aria-label="Tautkan ulang media"'):'';const html=`<div class="drawerBody"><div class="propTitle">${esc(l.name)} ${model.layer3DEnabled(l)?'<span class="badge3d">TRUE 3D</span>':''}</div>${mediaTools}<div class="inspectorGrid">${ins('move','✥','Transform')}${ins('color','◉','Warna & Fill')}${ins('effects','✦','Efek')}${ins('mask','⬡','Mask')}${l.type==='text'?ins('text','T','Edit Teks'):''}${l.type==='shape'?ins('shape','◇','Edit Bentuk'):''}${ins('keys','⌁','Keyframes')}${ins('hier','◎','Scene Graph')}${ins('three','◇','Ruang 3D')}${relinkTile}</div><div style="height:10px"></div><button id="deleteLayer" class="createBtn" style="background:#3b1e2a;color:#ff91a6">HAPUS LAYER</button></div>`;this.drawerShell('Inspector',html);$$('[data-ins]').forEach(b=>b.onclick=()=>{if(b.dataset.ins==='relink'){openRelinkMenu(l);return}this.openInspector(b.dataset.ins)});this.bindMediaQuick(l);$('#deleteLayer').onclick=()=>{history.push();for(const camera of model.layers.filter(x=>x.type==='camera'&&x.orbitTargetId===l.id))this.cameraOrbitDisable(camera);model.removeLayer(l.id);this.closeDrawer();this.rebuildAll()}}
+  openInspectorRoot(){const l=model.selectedLayer();if(!l){this.closeDrawer();return}this.drawerMode='root';timeline.refreshKeyframeInteractionState?.();const ins=(id,ico,txt,extra='')=>`<button class="insBtn" data-ins="${id}" ${extra}><span>${ico}</span>${txt}</button>`;const mediaTools=(l.type==='video'||l.type==='audio')?this.mediaQuickHTML(l):this.layerQuickHTML(l);const isRelinkable=['image','video','audio'].includes(l.type);const isBlendable=!['audio','camera','null'].includes(l.type);const blendTile=isBlendable?ins('blend','◒','Blending & Opacity','aria-label="Buka Blending dan Opacity"'):'';const relinkTile=isRelinkable?ins('relink','↻','Tautkan Ulang','id="omsInspectorRelinkBtn" aria-label="Tautkan ulang media"'):'';const html=`<div class="drawerBody"><div class="propTitle">${esc(l.name)} ${model.layer3DEnabled(l)?'<span class="badge3d">TRUE 3D</span>':''}</div>${mediaTools}<div class="inspectorGrid">${ins('move','✥','Transform')}${ins('color','◉','Warna & Fill')}${blendTile}${ins('effects','✦','Efek')}${ins('mask','⬡','Mask')}${l.type==='text'?ins('text','T','Edit Teks'):''}${l.type==='shape'?ins('shape','◇','Edit Bentuk'):''}${ins('keys','⌁','Keyframes')}${ins('hier','◎','Scene Graph')}${ins('three','◇','Ruang 3D')}${relinkTile}</div><div style="height:10px"></div><button id="deleteLayer" class="createBtn" style="background:#3b1e2a;color:#ff91a6">HAPUS LAYER</button></div>`;this.drawerShell('Inspector',html);$$('[data-ins]').forEach(b=>b.onclick=()=>{if(b.dataset.ins==='relink'){openRelinkMenu(l);return}this.openInspector(b.dataset.ins)});this.bindMediaQuick(l);$('#deleteLayer').onclick=()=>{history.push();for(const camera of model.layers.filter(x=>x.type==='camera'&&x.orbitTargetId===l.id))this.cameraOrbitDisable(camera);model.removeLayer(l.id);this.closeDrawer();this.rebuildAll()}}
   mediaQuickContext(l){
     const frame=1/Math.max(1,timeline.projectFPS?.()||model.project?.fps||30);
     const t=+model.time||0,start=Math.max(0,+l.start||0),end=start+Math.max(0,+l.duration||0);
@@ -11075,8 +11140,14 @@ class UIController{
     root.querySelectorAll('[data-delkey]').forEach(element=>this.keyframeParameterVisual(element,graphProp))
   }
   row(label,prop,value,key=true,step='.01'){return `<div class="propRow"><label>${label}</label><input data-prop="${prop}" type="number" step="${step}" value="${Number(value??0).toFixed(step==='1'?0:2)}">${key?`<button class="diamond ${model.anim.hasKeyAt(model.selectedLayer(),prop,model.time)?'on':''}" data-key="${prop}" data-kf-visual-prop="${prop}">◇</button>`:'<span></span>'}</div>`}
+  blendingOpacityHTML(l){
+    const current=normalizeBlendMode(l.blend),opacity=Math.round(clamp(model.prop(l,'opacity'),0,1)*100),modeButton=(value,label)=>{const cssMode=value==='source-over'?'normal':value==='lighter'?'screen':value;return `<button type="button" class="blendModeBtn ${current===value?'active':''}" data-blend-mode="${value}" aria-pressed="${current===value}" title="${esc(label)}"><span class="blendModeSwatch"><i></i><i style="mix-blend-mode:${cssMode}"></i></span><span class="blendModeName">${esc(label)}</span><span class="blendModeCheck">✓</span></button>`};
+    const categories=BLEND_MODE_GROUPS.map(group=>{const open=group.modes.some(mode=>mode[0]===current);return `<section class="blendCategory ${open?'open':''}" data-blend-category="${group.id}"><button type="button" class="blendCategoryHead" data-blend-toggle><span class="blendCategoryArrow">›</span><b>${esc(group.label)}</b><small>${group.modes.length} mode</small></button><div class="blendModeGrid">${group.modes.map(mode=>modeButton(mode[0],mode[1])).join('')}</div></section>`}).join('');
+    return `<div class="drawerBody blendOpacityPanel"><section class="blendOpacityCard"><div class="blendOpacityHeading"><div><b>Opacity</b><small>Transparansi layer pada frame ini</small></div><button class="diamond ${model.anim.hasKeyAt(l,'opacity',model.time)?'on':''}" data-key="opacity" data-kf-visual-prop="opacity" aria-label="Keyframe opacity">◇</button></div><div class="blendOpacityControl"><span class="blendOpacityIcon">◐</span><input id="blendOpacityRange" type="range" min="0" max="100" step="1" value="${opacity}" aria-label="Opacity layer"><label><input id="blendOpacityNumber" type="number" min="0" max="100" step="1" value="${opacity}" aria-label="Nilai opacity"><span>%</span></label></div><div class="blendOpacityPresets">${[0,25,50,75,100].map(value=>`<button type="button" data-opacity-preset="${value}" class="${opacity===value?'active':''}">${value}%</button>`).join('')}</div></section><div class="blendCurrent"><span>Mode aktif</span><b id="blendCurrentLabel">${esc(blendModeLabel(current))}</b></div><div class="blendCategories">${categories}</div><div class="miniNote">Blending dihitung terhadap seluruh layer di bawahnya. Opacity dapat diberi keyframe dan tetap digunakan pada preview maupun ekspor.</div></div>`
+  }
   openInspector(type){const l=model.selectedLayer();if(!l)return;this.drawerMode=type;timeline.refreshKeyframeInteractionState?.();let html='';if(type==='move')html=this.transformHTML(l);
-    else if(type==='color')html=`<div class="drawerBody propPanel"><div class="colorRow"><input id="fillColor" type="color" value="${l.color||'#ffffff'}"><input id="fillHex" type="text" value="${l.color||'#ffffff'}"></div><div class="propRow"><label>Blend</label><select id="blend"><option value="source-over">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option><option value="overlay">Overlay</option><option value="lighter">Add</option><option value="difference">Difference</option></select><span></span></div>${this.row('Stroke','strokeWidth',l.strokeWidth||0,false,'1')}</div>`;
+    else if(type==='color')html=`<div class="drawerBody propPanel"><div class="colorRow"><input id="fillColor" type="color" value="${l.color||'#ffffff'}"><input id="fillHex" type="text" value="${l.color||'#ffffff'}"></div>${this.row('Stroke','strokeWidth',l.strokeWidth||0,false,'1')}<div class="miniNote">Opacity dan mode komposit kini tersedia di menu Blending & Opacity.</div></div>`;
+    else if(type==='blend')html=this.blendingOpacityHTML(l);
     else if(type==='effects'){const e=l.effects||{};html=`<div class="drawerBody propPanel">${this.row('Blur','effects.blur',e.blur||0,false,'1')}${this.row('Brightness','effects.brightness',e.brightness??100,false,'1')}${this.row('Contrast','effects.contrast',e.contrast??100,false,'1')}${this.row('Saturation','effects.saturate',e.saturate??100,false,'1')}${this.row('Hue','effects.hue',e.hue||0,false,'1')}</div>`}
     else if(type==='mask'){html=`<div class="drawerBody propPanel"><div class="switchRow"><span>Aktifkan Mask</span><input id="maskEnabled" type="checkbox" ${l.mask?.enabled?'checked':''}></div><div class="propRow"><label>Tipe</label><select id="maskType"><option value="rect">Rectangle</option><option value="ellipse">Ellipse</option></select><span></span></div></div>`}
     else if(type==='text'){html=`<div class="drawerBody propPanel"><div class="propRow"><label>Teks</label><input id="textValue" value="${esc(l.text)}"><span></span></div>${this.row('Font Size','fontSize',l.fontSize,false,'1')}<div class="propRow"><label>Weight</label><select id="fontWeight"><option>400</option><option>500</option><option>600</option><option>700</option><option>800</option><option>900</option></select><span></span></div></div>`}
@@ -11084,7 +11155,7 @@ class UIController{
     else if(type==='hier'){html=this.hierarchyHTML(l)}
     else if(type==='keys'){this.openGraphEditor();return}
     else if(type==='three')html=this.threeHTML(l);
-    this.drawerShell(type==='move'?'Transform':type==='three'?'True 3D & Camera':type==='hier'?'Scene Graph / Parenting':type==='keys'?'Keyframes':'Properti',html);
+    this.drawerShell(type==='move'?'Transform':type==='blend'?'Blending & Opacity':type==='three'?'True 3D & Camera':type==='hier'?'Scene Graph / Parenting':type==='keys'?'Keyframes':'Properti',html);
     if(type==='move'){
       $('#drawer').classList.add('transformDrawer');
       $('#drawer').classList.toggle('transformEaseDrawer',!!this.transformEaseEditorOpen);
@@ -12955,7 +13026,18 @@ class UIController{
       inp.onblur=()=>{inp._historyPending=false}
     });
     $$('[data-key]').forEach(b=>b.onclick=()=>{history.push();const p=b.dataset.key,val=p.includes('.')?this.getNested(l,p):model.prop(l,p);model.anim.toggleKey(l,p,model.time,+val||0);b.classList.toggle('on');timeline.rebuild();renderer.render()});
-    if(type==='color'){const set=v=>{l.color=v;$('#fillHex').value=v;renderer.render()};$('#fillColor').oninput=e=>set(e.target.value);$('#fillHex').onchange=e=>{history.push();set(e.target.value)};$('#blend').value=l.blend||'source-over';$('#blend').onchange=e=>{history.push();l.blend=e.target.value;renderer.render()}}
+    if(type==='color'){const set=v=>{l.color=v;$('#fillHex').value=v;renderer.render()};$('#fillColor').oninput=e=>set(e.target.value);$('#fillHex').onchange=e=>{history.push();set(e.target.value)}}
+    if(type==='blend'){
+      const range=$('#blendOpacityRange'),number=$('#blendOpacityNumber');let opacityHistoryPending=false;
+      const checkpoint=()=>{if(!opacityHistoryPending){history.push();opacityHistoryPending=true}};
+      const applyOpacity=raw=>{const percent=clamp(Math.round(Number(raw)||0),0,100);this.setTransformValue(l,'opacity',percent/100);if(range)range.value=percent;if(number)number.value=percent;$$('[data-opacity-preset]').forEach(button=>button.classList.toggle('active',+button.dataset.opacityPreset===percent));editorInvalidation.requestRender('blend-opacity')};
+      const commitOpacity=()=>{opacityHistoryPending=false;timeline.rebuild();renderer.render()};
+      if(range){range.onpointerdown=checkpoint;range.onfocus=checkpoint;range.oninput=e=>{checkpoint();applyOpacity(e.target.value)};range.onchange=commitOpacity;range.onblur=()=>{opacityHistoryPending=false}}
+      if(number){number.onfocus=checkpoint;number.onpointerdown=checkpoint;number.oninput=e=>{checkpoint();applyOpacity(e.target.value)};number.onchange=commitOpacity;number.onblur=()=>{opacityHistoryPending=false}}
+      $$('[data-opacity-preset]').forEach(button=>button.onclick=()=>{history.push();applyOpacity(button.dataset.opacityPreset);opacityHistoryPending=false;timeline.rebuild();renderer.render()});
+      $$('[data-blend-toggle]').forEach(button=>button.onclick=()=>button.closest('.blendCategory')?.classList.toggle('open'));
+      $$('[data-blend-mode]').forEach(button=>button.onclick=()=>{const mode=normalizeBlendMode(button.dataset.blendMode);if(mode===normalizeBlendMode(l.blend))return;history.push();l.blend=mode;$$('[data-blend-mode]').forEach(item=>{const active=item.dataset.blendMode===mode;item.classList.toggle('active',active);item.setAttribute('aria-pressed',String(active))});const label=$('#blendCurrentLabel');if(label)label.textContent=blendModeLabel(mode);button.closest('.blendCategory')?.classList.add('open');renderer.render();toast(`Blending: ${blendModeLabel(mode)}`)})
+    }
     if(type==='mask'){$('#maskEnabled').onchange=e=>{history.push();l.mask.enabled=e.target.checked;renderer.render()};$('#maskType').value=l.mask.type;$('#maskType').onchange=e=>{history.push();l.mask.type=e.target.value;renderer.render()}}
     if(type==='text'){$('#textValue').oninput=e=>{l.text=e.target.value;renderer.render()};$('#fontWeight').value=l.fontWeight;$('#fontWeight').onchange=e=>{history.push();l.fontWeight=+e.target.value;renderer.render()}}
     if(type==='shape'){$('#shapeType').value=l.shape;$('#shapeType').onchange=e=>{history.push();l.shape=e.target.value;renderer.render()}}
@@ -14638,7 +14720,7 @@ const XMLBridge={
     const oldProject=model.project;model.project=project;const layers=[];
     try{
       for(const el of candidates){const type=this.layerType(el),transform=el.querySelector(':scope > transform,:scope > keyable-transform,:scope > properties')||el,appearance=el.querySelector(':scope > appearance,:scope > style')||el,effectNode=el.querySelector(':scope > effects')||el,maskNode=el.querySelector(':scope > mask')||el,mediaNode=el.querySelector(':scope > source,:scope > media-source')||el,fillNode=el.querySelector(':scope > fillColor,:scope > fill-color'),meshRaw=String(this.attr(el,['mesh','geometry','subtype','type'],'')).toLowerCase(),sourceRef=this.attr(el,['fillVideo','fillImage','src','source','url','data'],this.attr(mediaNode,['src','source','url','data'],'')),mediaDef=mediaByUri.get(sourceRef),opt={name:this.attr(el,['name','label','title'],this.attr(mediaDef||el,['filename','title'],type==='camera'?'Kamera XML':'Layer XML'))};if(type==='shape')opt.shape=this.shapeName(this.attr(el,['shape','geometry','subtype','s'],'rect'));if(type==='mesh')opt.mesh=meshRaw.includes('sphere')?'sphere':'cube';if(type==='text')opt.text=this.attr(el,['text','value'],el.querySelector(':scope > content')?.textContent||'Text');if(['image','video','audio'].includes(type)&&/^data:/i.test(sourceRef))opt.dataUrl=sourceRef;
-        const startRaw=this.attr(el,['start','startTime','in'],0),endRaw=this.attr(el,['end','endTime','out'],null),start=isAM?(parseFloat(startRaw)||0)/1000:this.seconds(startRaw,0),end=endRaw==null?null:(isAM?(parseFloat(endRaw)||0)/1000:this.seconds(endRaw,0)),layerDuration=end!=null&&end>start?end-start:this.seconds(this.attr(el,['duration','length'],duration),duration),sizeNode=el.querySelector(':scope > property[name="size"],:scope > size'),pathNode=el.querySelector(':scope > path'),declaredSize=this.values(this.attr(sizeNode||el,['value'],null),[]),pathSize=this.pathSize(this.attr(pathNode||el,['d'],''),[this.num(mediaDef||el,['width'],0),this.num(mediaDef||el,['height'],0)]),l=model.defaultLayer(type,opt),baseW=declaredSize[0]||pathSize[0]||l.w,baseH=declaredSize[1]||pathSize[1]||l.h,x=this.num(transform,['x','positionX','locationX'],width/2),y=this.num(transform,['y','positionY','locationY'],height/2);l._xmlSourceId=this.attr(el,['id','uuid','layerId'],l.id);if(sourceRef&&!/^data:/i.test(sourceRef))l.sourceRef=sourceRef;Object.assign(l,{transformSpace:String(this.attr(el,['transformSpace','movementSpace'],this.attr(transform,['transformSpace','movementSpace'],'local'))).toLowerCase()==='world'?'world':'local',x,y,z:this.num(transform,['z','positionZ','locationZ'],0),w:Math.max(1,this.num(appearance,['width','w'],baseW)),h:Math.max(1,this.num(appearance,['height','h'],baseH)),rotation:this.num(transform,['rotation','angle'],0),rotX:this.num(transform,['rotationX','rotX'],0),rotY:this.num(transform,['rotationY','rotY'],0),rotZ:this.num(transform,['rotationZ','rotZ'],0),scaleX:this.num(transform,['scaleX','sx'],1),scaleY:this.num(transform,['scaleY','sy'],1),scaleZ:this.num(transform,['scaleZ','sz'],1),opacity:this.num(transform,['opacity','alpha'],1),color:this.color(this.attr(appearance,['color','fill','fillColor'],this.attr(fillNode||el,['value'],l.color)),l.color),stroke:this.color(this.attr(appearance,['stroke','strokeColor'],l.stroke),l.stroke),strokeWidth:this.num(appearance,['strokeWidth'],l.strokeWidth||0),radius:this.num(appearance,['radius','cornerRadius'],l.radius||0),start,duration:Math.max(.001,layerDuration)});const amTransform=this.applyAMTransform(l,transform,start,l.duration);if(!amTransform){if(Math.abs(l.scaleX)>10)l.scaleX/=100;if(Math.abs(l.scaleY)>10)l.scaleY/=100;if(Math.abs(l.scaleZ)>10)l.scaleZ/=100}if(Math.abs(l.opacity)>1)l.opacity/=100;
+        const startRaw=this.attr(el,['start','startTime','in'],0),endRaw=this.attr(el,['end','endTime','out'],null),start=isAM?(parseFloat(startRaw)||0)/1000:this.seconds(startRaw,0),end=endRaw==null?null:(isAM?(parseFloat(endRaw)||0)/1000:this.seconds(endRaw,0)),layerDuration=end!=null&&end>start?end-start:this.seconds(this.attr(el,['duration','length'],duration),duration),sizeNode=el.querySelector(':scope > property[name="size"],:scope > size'),pathNode=el.querySelector(':scope > path'),declaredSize=this.values(this.attr(sizeNode||el,['value'],null),[]),pathSize=this.pathSize(this.attr(pathNode||el,['d'],''),[this.num(mediaDef||el,['width'],0),this.num(mediaDef||el,['height'],0)]),l=model.defaultLayer(type,opt),baseW=declaredSize[0]||pathSize[0]||l.w,baseH=declaredSize[1]||pathSize[1]||l.h,x=this.num(transform,['x','positionX','locationX'],width/2),y=this.num(transform,['y','positionY','locationY'],height/2);l._xmlSourceId=this.attr(el,['id','uuid','layerId'],l.id);if(sourceRef&&!/^data:/i.test(sourceRef))l.sourceRef=sourceRef;Object.assign(l,{transformSpace:String(this.attr(el,['transformSpace','movementSpace'],this.attr(transform,['transformSpace','movementSpace'],'local'))).toLowerCase()==='world'?'world':'local',x,y,z:this.num(transform,['z','positionZ','locationZ'],0),w:Math.max(1,this.num(appearance,['width','w'],baseW)),h:Math.max(1,this.num(appearance,['height','h'],baseH)),rotation:this.num(transform,['rotation','angle'],0),rotX:this.num(transform,['rotationX','rotX'],0),rotY:this.num(transform,['rotationY','rotY'],0),rotZ:this.num(transform,['rotationZ','rotZ'],0),scaleX:this.num(transform,['scaleX','sx'],1),scaleY:this.num(transform,['scaleY','sy'],1),scaleZ:this.num(transform,['scaleZ','sz'],1),opacity:this.num(transform,['opacity','alpha'],1),blend:normalizeBlendMode(this.attr(appearance,['blend','blendMode','composite'],l.blend)),color:this.color(this.attr(appearance,['color','fill','fillColor'],this.attr(fillNode||el,['value'],l.color)),l.color),stroke:this.color(this.attr(appearance,['stroke','strokeColor'],l.stroke),l.stroke),strokeWidth:this.num(appearance,['strokeWidth'],l.strokeWidth||0),radius:this.num(appearance,['radius','cornerRadius'],l.radius||0),start,duration:Math.max(.001,layerDuration)});const amTransform=this.applyAMTransform(l,transform,start,l.duration);if(!amTransform){if(Math.abs(l.scaleX)>10)l.scaleX/=100;if(Math.abs(l.scaleY)>10)l.scaleY/=100;if(Math.abs(l.scaleZ)>10)l.scaleZ/=100}if(Math.abs(l.opacity)>1)l.opacity/=100;
         l.effects={blur:this.num(effectNode,['blur'],l.effects.blur),brightness:this.num(effectNode,['brightness'],l.effects.brightness),contrast:this.num(effectNode,['contrast'],l.effects.contrast),saturate:this.num(effectNode,['saturate','saturation'],l.effects.saturate),hue:this.num(effectNode,['hue'],l.effects.hue)};l.mask={enabled:String(this.attr(maskNode,['enabled'],l.mask.enabled)).toLowerCase()==='true',type:this.attr(maskNode,['type'],l.mask.type),feather:this.num(maskNode,['feather'],l.mask.feather),invert:String(this.attr(maskNode,['invert'],l.mask.invert)).toLowerCase()==='true'};
         if(type==='text'){l.fontSize=this.num(appearance,['fontSize'],l.fontSize);l.fontWeight=this.num(appearance,['fontWeight'],l.fontWeight);l.fontFamily=this.attr(appearance,['fontFamily'],l.fontFamily);l.align=this.attr(appearance,['align','textAlign'],l.align)}if(['video','audio'].includes(type)){l.volume=this.num(mediaNode,['volume'],l.volume??1);l.playbackRate=this.num(mediaNode,['playbackRate','speed'],l.playbackRate??1);l.sourceIn=this.seconds(this.attr(mediaNode,['sourceIn','in'],l.sourceIn||0),l.sourceIn||0);const out=this.attr(mediaNode,['sourceOut','out'],null);if(out!=null&&out!=='')l.sourceOut=this.seconds(out,0);l.mediaExtendIn=Math.max(0,this.seconds(this.attr(mediaNode,['extendIn','mediaExtendIn','holdIn'],0),0));l.mediaExtendOut=Math.max(0,this.seconds(this.attr(mediaNode,['extendOut','mediaExtendOut','holdOut'],0),0))}
         if(type==='camera'){l.x=this.num(transform,['x','positionX','locationX'],0);l.y=this.num(transform,['y','positionY','locationY'],0);l.yaw=this.num(transform,['yaw','rotationY'],0);l.pitch=this.num(transform,['pitch','rotationX'],0);l.roll=this.num(transform,['roll','rotationZ'],0);l.orbitEnabled=String(this.attr(el,['orbitEnabled','orbitConstraint'],'false')).toLowerCase()==='true';l._orbitTargetRef=this.attr(el,['orbitTargetId','orbitTarget','targetLayer'],null);l.orbitAzimuth=this.num(transform,['orbitAzimuth','azimuth'],this.num(el,['orbitAzimuth','azimuth'],0));l.orbitElevation=this.num(transform,['orbitElevation','elevation'],this.num(el,['orbitElevation','elevation'],0));l.orbitDistance=Math.max(.001,this.num(transform,['orbitDistance','ropeDistance'],this.num(el,['orbitDistance','ropeDistance'],l.orbitDistance)));l.fov=this.num(el,['fov','fieldOfView'],55);const importedFocal=this.num(el,['focalLength','focalLengthMm'],NaN),importedZoom=this.num(el,['zoom','cameraZoom'],NaN);if(Number.isFinite(importedFocal)&&importedFocal>0)l.fov=cameraFovFromFocal(importedFocal);else if(!this.attr(el,['fov','fieldOfView'],null)&&Number.isFinite(importedZoom)&&importedZoom>0)l.fov=cameraFovFromZoom(importedZoom);l.focalLength=cameraFocalFromFov(l.fov);l.zoom=cameraZoomFromFov(l.fov);l.projection=this.attr(el,['projection'],'perspective');l.near=this.num(el,['near','nearClip'],1);l.far=this.num(el,['far','farClip'],50000);l.orthoSize=this.num(el,['orthoSize','orthographicSize'],height)}this.readKeyframes(el,l);const explicit3d=this.attr(el,['space3d','threeD','enable3d'],null),key3d=['z','rotX','rotY','scaleZ'].some(prop=>(l.kf?.[prop]||[]).length);if(['camera','mesh'].includes(type))l.space3d=true;else if(explicit3d!=null)l.space3d=String(explicit3d).toLowerCase()==='true';else l.space3d=key3d||Math.abs(+l.z||0)>.001||Math.abs(+l.rotX||0)>.001||Math.abs(+l.rotY||0)>.001;layers.push(l)
@@ -14652,7 +14734,7 @@ const XMLBridge={
   toXML(){
     const p=model.project,lines=[`<?xml version="1.0" encoding="UTF-8"?>`,`<open-motion version="4" xmlns:om="https://openmotion.local/schema/4">`,`  <scene name="${this.xmlEscape(p.name)}" width="${p.width}" height="${p.height}" fps="${p.fps}" duration="${p.duration}s" background="${this.xmlEscape(p.bg)}" renderer="webgl">`];
     for(const l of [...model.layers].reverse()){const attrs=[`id="${this.xmlEscape(l.id)}"`,`type="${this.xmlEscape(l.type)}"`,`name="${this.xmlEscape(l.name)}"`,`start="${+l.start||0}s"`,`duration="${+l.duration||0}s"`,`transformSpace="${l.transformSpace==='world'?'world':'local'}"`,`space3d="${model.layer3DEnabled(l)}"`];if(l.parentId)attrs.push(`parentId="${this.xmlEscape(l.parentId)}"`);if(l.type==='camera'){const xmlLensMode=cameraLensModeValue(l),xmlFocal=xmlLensMode==='free'?(+l.focalLength||cameraFocalFromFov(+l.fov||55)):cameraFocalFromFov(+l.fov||55),xmlZoom=['digital','free'].includes(xmlLensMode)?(+l.digitalZoom||1):cameraZoomFromFov(+l.fov||55);attrs.push(`projection="${this.xmlEscape(l.projection||'perspective')}"`,`fov="${+l.fov||55}"`,`focalLength="${xmlFocal}"`,`zoom="${xmlZoom}"`,`lensMode="${this.xmlEscape(xmlLensMode)}"`,`primeFocalLength="${+l.primeFocalLength||cameraFocalFromFov(+l.fov||55)}"`,`digitalBaseFocalLength="${+l.digitalBaseFocalLength||cameraFocalFromFov(+l.fov||55)}"`,`digitalZoom="${+l.digitalZoom||1}"`,`near="${+l.near||1}"`,`far="${+l.far||50000}"`,`orthoSize="${+l.orthoSize||p.height}"`,`orbitEnabled="${!!l.orbitEnabled}"`);if(l.orbitTargetId)attrs.push(`orbitTargetId="${this.xmlEscape(l.orbitTargetId)}"`)}if(l.type==='mesh')attrs.push(`mesh="${this.xmlEscape(l.mesh||'cube')}"`,`depth="${+l.depth||+l.w||1}"`);if(l.type==='shape')attrs.push(`shape="${this.xmlEscape(l.shape||'rect')}"`);if(l.type==='text')attrs.push(`text="${this.xmlEscape(l.text||'')}"`);if(['image','video','audio'].includes(l.type)&&l.dataUrl)attrs.push(`source="${this.xmlEscape(l.dataUrl)}"`);
-      const e=l.effects||{},m=l.mask||{},camera=l.type==='camera',rx=camera?(+l.pitch||0):(+l.rotX||0),ry=camera?(+l.yaw||0):(+l.rotY||0),rz=camera?(+l.roll||0):(+l.rotZ||0),rotation=camera?rz:(+l.rotation||0),cameraEuler=camera?` pitch="${rx}" yaw="${ry}" roll="${rz}" orbitAzimuth="${+l.orbitAzimuth||0}" orbitElevation="${+l.orbitElevation||0}" orbitDistance="${Math.max(.001,+l.orbitDistance||1)}"`:'';lines.push(`    <layer ${attrs.join(' ')}>`);lines.push(`      <transform x="${+l.x||0}" y="${+l.y||0}" z="${+l.z||0}" scaleX="${l.scaleX??1}" scaleY="${l.scaleY??1}" scaleZ="${l.scaleZ??1}" rotation="${rotation}" rotationX="${rx}" rotationY="${ry}" rotationZ="${rz}"${cameraEuler} opacity="${l.opacity??1}"/>`);lines.push(`      <appearance width="${+l.w||0}" height="${+l.h||0}" color="${this.xmlEscape(l.color||'#ffffff')}" stroke="${this.xmlEscape(l.stroke||'#ffffff')}" strokeWidth="${+l.strokeWidth||0}" radius="${+l.radius||0}" fontSize="${+l.fontSize||0}" fontWeight="${+l.fontWeight||0}" fontFamily="${this.xmlEscape(l.fontFamily||'system-ui')}" align="${this.xmlEscape(l.align||'center')}"/>`);lines.push(`      <effects blur="${+e.blur||0}" brightness="${e.brightness??100}" contrast="${e.contrast??100}" saturate="${e.saturate??100}" hue="${+e.hue||0}"/>`);lines.push(`      <mask enabled="${!!m.enabled}" type="${this.xmlEscape(m.type||'rect')}" feather="${+m.feather||0}" invert="${!!m.invert}"/>`);if(['video','audio'].includes(l.type))lines.push(`      <source volume="${l.volume??1}" playbackRate="${l.playbackRate??1}" sourceIn="${+l.sourceIn||0}s" sourceOut="${Number.isFinite(l.sourceOut)?l.sourceOut:''}" extendIn="${Math.max(0,+l.mediaExtendIn||0)}s" extendOut="${Math.max(0,+l.mediaExtendOut||0)}s"/>`);const keys=this.keysXML(l);if(keys)lines.push(keys.trimStart());lines.push(`    </layer>`)
+      const e=l.effects||{},m=l.mask||{},camera=l.type==='camera',rx=camera?(+l.pitch||0):(+l.rotX||0),ry=camera?(+l.yaw||0):(+l.rotY||0),rz=camera?(+l.roll||0):(+l.rotZ||0),rotation=camera?rz:(+l.rotation||0),cameraEuler=camera?` pitch="${rx}" yaw="${ry}" roll="${rz}" orbitAzimuth="${+l.orbitAzimuth||0}" orbitElevation="${+l.orbitElevation||0}" orbitDistance="${Math.max(.001,+l.orbitDistance||1)}"`:'';lines.push(`    <layer ${attrs.join(' ')}>`);lines.push(`      <transform x="${+l.x||0}" y="${+l.y||0}" z="${+l.z||0}" scaleX="${l.scaleX??1}" scaleY="${l.scaleY??1}" scaleZ="${l.scaleZ??1}" rotation="${rotation}" rotationX="${rx}" rotationY="${ry}" rotationZ="${rz}"${cameraEuler} opacity="${l.opacity??1}"/>`);lines.push(`      <appearance width="${+l.w||0}" height="${+l.h||0}" color="${this.xmlEscape(l.color||'#ffffff')}" blend="${this.xmlEscape(normalizeBlendMode(l.blend))}" stroke="${this.xmlEscape(l.stroke||'#ffffff')}" strokeWidth="${+l.strokeWidth||0}" radius="${+l.radius||0}" fontSize="${+l.fontSize||0}" fontWeight="${+l.fontWeight||0}" fontFamily="${this.xmlEscape(l.fontFamily||'system-ui')}" align="${this.xmlEscape(l.align||'center')}"/>`);lines.push(`      <effects blur="${+e.blur||0}" brightness="${e.brightness??100}" contrast="${e.contrast??100}" saturate="${e.saturate??100}" hue="${+e.hue||0}"/>`);lines.push(`      <mask enabled="${!!m.enabled}" type="${this.xmlEscape(m.type||'rect')}" feather="${+m.feather||0}" invert="${!!m.invert}"/>`);if(['video','audio'].includes(l.type))lines.push(`      <source volume="${l.volume??1}" playbackRate="${l.playbackRate??1}" sourceIn="${+l.sourceIn||0}s" sourceOut="${Number.isFinite(l.sourceOut)?l.sourceOut:''}" extendIn="${Math.max(0,+l.mediaExtendIn||0)}s" extendOut="${Math.max(0,+l.mediaExtendOut||0)}s"/>`);const keys=this.keysXML(l);if(keys)lines.push(keys.trimStart());lines.push(`    </layer>`)
     }
     lines.push('  </scene>','</open-motion>');return lines.join('\n')
   },
@@ -19235,7 +19317,52 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
     overflow-y:hidden!important;
   }
 }
+.blendOpacityPanel{display:flex;flex-direction:column;gap:8px;padding:9px;background:#171b29}
+.blendOpacityCard,.blendCurrent,.blendCategory{border:1px solid #30384d;background:#202638;border-radius:10px;overflow:hidden}
+.blendOpacityCard{padding:10px}
+.blendOpacityHeading{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.blendOpacityHeading>div{flex:1;min-width:0}
+.blendOpacityHeading b{display:block;color:#edf2fb;font-size:11px}
+.blendOpacityHeading small{display:block;color:#818ca3;font-size:8px;margin-top:2px}
+.blendOpacityControl{display:grid;grid-template-columns:24px minmax(0,1fr) 64px;align-items:center;gap:8px}
+.blendOpacityIcon{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#151a27;color:var(--accent);font-size:16px}
+.blendOpacityControl input[type=range]{min-width:0;width:100%}
+.blendOpacityControl label{height:32px;border:1px solid #394259;border-radius:8px;background:#111622;display:grid;grid-template-columns:1fr auto;align-items:center;padding:0 7px;color:#8d98ad}
+.blendOpacityControl label:focus-within{border-color:var(--accent)}
+.blendOpacityControl input[type=number]{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#eef3fb;text-align:right;font:700 12px/1 system-ui;-moz-appearance:textfield}
+.blendOpacityControl input[type=number]::-webkit-inner-spin-button,.blendOpacityControl input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.blendOpacityPresets{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px}
+.blendOpacityPresets button{height:25px;border:1px solid #343d53;border-radius:6px;background:#181e2d;color:#8f9ab0;font-size:8px}
+.blendOpacityPresets button.active{border-color:var(--accent);background:#1c3436;color:#9cf4de}
+.blendCurrent{min-height:34px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.blendCurrent span{color:#808ba1;font-size:8px;text-transform:uppercase;letter-spacing:.55px}
+.blendCurrent b{color:var(--accent);font-size:10px}
+.blendCategories{display:grid;gap:6px}
+.blendCategoryHead{width:100%;height:34px;border:0;background:transparent;color:#d9e0ed;display:grid;grid-template-columns:14px 1fr auto;align-items:center;text-align:left;padding:0 9px}
+.blendCategoryHead b{font-size:10px}
+.blendCategoryHead small{color:#77839a;font-size:7px}
+.blendCategoryArrow{font-size:18px;color:#8591a8;transform-origin:center;transition:transform .14s ease}
+.blendCategory.open .blendCategoryArrow{transform:rotate(90deg);color:var(--accent)}
+.blendModeGrid{display:none;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding:0 7px 8px}
+.blendCategory.open .blendModeGrid{display:grid}
+.blendModeBtn{position:relative;min-width:0;min-height:63px;border:1px solid #353e55;border-radius:8px;background:#252b3f;color:#9ca7bb;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:5px 3px}
+.blendModeBtn:active,.blendModeBtn:focus-visible{border-color:var(--accent);outline:none}
+.blendModeBtn.active{border-color:var(--accent);background:#1d3437;color:#dffcf4;box-shadow:inset 0 -2px 0 var(--accent)}
+.blendModeSwatch{position:relative;display:block;width:36px;height:25px}
+.blendModeSwatch i{position:absolute;width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,.32)}
+.blendModeSwatch i:first-child{left:1px;top:2px;background:linear-gradient(135deg,#705bd6 0 48%,#f0ba55 49% 100%)}
+.blendModeSwatch i:last-child{right:1px;top:0;background:linear-gradient(135deg,#40d6b6 0 48%,#df557e 49% 100%)}
+.blendModeName{max-width:100%;font-size:7.5px;line-height:1.1;white-space:normal;text-align:center}
+.blendModeCheck{display:none;position:absolute;right:4px;top:3px;color:var(--accent);font-size:8px}
+.blendModeBtn.active .blendModeCheck{display:block}
+@media(max-width:390px){
+  .blendOpacityPanel{padding:7px;gap:6px}.blendOpacityCard{padding:8px}.blendModeGrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:0 5px 6px}.blendModeBtn{min-height:58px;padding:4px 2px}.blendModeSwatch{transform:scale(.9)}.blendModeName{font-size:7px}
+}
+@media(min-width:900px){
+  .blendModeGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.blendModeBtn{min-height:68px}.blendOpacityPanel{padding:12px}
+}
 </style>
+<!-- V4.62 — dedicated Blending & Opacity Inspector with keyframeable opacity, grouped compositing modes, WebGL backdrop compositing, and XML persistence. -->
 <!-- V4.61 — selected timeline layers move horizontally as a frame-aligned group, reorder vertically as a stable block, and suppress Android native text-selection callouts. -->
 </body>
 
