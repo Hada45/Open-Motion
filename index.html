@@ -5927,7 +5927,7 @@ class TimelineTransientGestureLifecycle{
   static facadeProperties=[
     'drag','reorderSession','syncingScroll','scrollRelease','manualScrollActive','scrollSettleTimer','lastScrollLeft',
     'suppressClickUntil','pinching','pinch','pendingPinchPx','pinchRAF','timelinePointers','emptyPan',
-    'keyframeGesture','keyframeAssistPan','trimGesture','trimAssistPan',
+    'keyframeGesture','keyframeAssistPan','trimGesture','trimAssistPan','multiLayerGesture',
     'edgeAutoScrollRAF','edgeAutoScrollSession','edgeAutoScrollLastTs',
     'momentumRAF','momentumAxis','momentumVelocity','momentumLastTime'
   ];
@@ -5937,7 +5937,7 @@ class TimelineTransientGestureLifecycle{
     this.manualScrollActive=false;this.scrollSettleTimer=0;this.lastScrollLeft=0;this.suppressClickUntil=0;
     this.pinching=false;this.pinch=null;this.pendingPinchPx=null;this.pinchRAF=0;
     this.timelinePointers=new Map();this.emptyPan=null;
-    this.keyframeGesture=null;this.keyframeAssistPan=null;this.trimGesture=null;this.trimAssistPan=null;
+    this.keyframeGesture=null;this.keyframeAssistPan=null;this.trimGesture=null;this.trimAssistPan=null;this.multiLayerGesture=null;
     this.edgeAutoScrollRAF=0;this.edgeAutoScrollSession=null;this.edgeAutoScrollLastTs=0;
     this.momentumRAF=0;this.momentumAxis=null;this.momentumVelocity=0;this.momentumLastTime=0
   }
@@ -5984,7 +5984,7 @@ class TimelineTransientGestureLifecycle{
     this.pinching=false;this.pinch=null;this.pendingPinchPx=null;
     this.timelinePointers.clear();this.emptyPan=null;
     this.keyframeGesture=null;this.keyframeAssistPan=null;
-    this.trimGesture=null;this.trimAssistPan=null;
+    this.trimGesture=null;this.trimAssistPan=null;this.multiLayerGesture=null;
     onPinchClass?.(false);onZoomBadge?.();
     return restoredPx
   }
@@ -7888,6 +7888,20 @@ class TimelineController{
     this.syncProjectZoom();
     this._keyframeLaneSignature=this.keyframeLaneStateSignature();
     const tracks=$('#tracks'),ruler=$('#ruler'),sc=$('#timelineScroll');
+    if(!tracks.dataset.omsNativeSelectionBlocked){
+      tracks.dataset.omsNativeSelectionBlocked='1';
+      const blockNativeSelection=e=>{
+        if(!e.target?.closest?.('.track,.trackHead,.trackLane,.clip'))return;
+        e.preventDefault();
+        e.stopPropagation()
+      };
+      // Android may still show its native Copy/Select menu even with CSS
+      // user-select:none. Suppress the native selection/callout only inside the
+      // timeline rows; inputs and editable Inspector text remain unaffected.
+      tracks.addEventListener('contextmenu',blockNativeSelection,{capture:true});
+      tracks.addEventListener('selectstart',blockNativeSelection,{capture:true});
+      tracks.addEventListener('dragstart',blockNativeSelection,{capture:true})
+    }
     tracks.innerHTML='';
     ruler.innerHTML='';
 
@@ -7926,7 +7940,11 @@ class TimelineController{
       };
       head.onpointerdown=e=>{
         if(e.target.closest('.eye,.lock'))return;
-        if(ui?.layerMultiSelectMode||e.ctrlKey||e.metaKey)return;
+        if(ui?.layerMultiSelectMode){
+          if(ui.layerMultiSelectedIds?.has?.(l.id))this.reorderPointerDown(e,l,tr,head);
+          return
+        }
+        if(e.ctrlKey||e.metaKey)return;
         // V4.50: holding the layer header enters additive layer selection
         // without opening Inspector. Reorder remains available from the lane.
         this.layerSelectionPointerDown(e,l,head)
@@ -7955,7 +7973,9 @@ class TimelineController{
         }
       };
       lane.onpointerdown=e=>{
-        if(e.target===lane&&(!ui?.drawerMode||ui.drawerMode==='root'))this.reorderPointerDown(e,l,tr,lane)
+        if(e.target!==lane)return;
+        const multiSelected=ui?.layerMultiSelectMode&&ui.layerMultiSelectedIds?.has?.(l.id);
+        if(!ui?.drawerMode||ui.drawerMode==='root'||multiSelected)this.reorderPointerDown(e,l,tr,lane)
       };
 
       const clip=document.createElement('div');
@@ -7979,7 +7999,11 @@ class TimelineController{
         renderer.render()
       };
       clip.onpointerdown=e=>{
-        if(ui?.layerMultiSelectMode||e.ctrlKey||e.metaKey)return;
+        if(ui?.layerMultiSelectMode){
+          if(ui.layerMultiSelectedIds?.has?.(l.id))this.multiLayerTimePointerDown(e,l,clip);
+          return
+        }
+        if(e.ctrlKey||e.metaKey)return;
         this.clipPointerDown(e,l,clip)
       };
       lane.appendChild(clip);
@@ -8398,6 +8422,157 @@ class TimelineController{
     marker.addEventListener('pointerup',finish);
     marker.addEventListener('pointercancel',finish);
     marker.addEventListener('lostpointercapture',finish,{once:true});
+  }
+
+  // V4.61 — move every selected layer in time as one frame-aligned group.
+  // Selection membership and relative offsets never change during this gesture.
+  multiLayerTimePointerDown(e,anchor,clip){
+    if(e.target?.closest?.('.trim'))return;
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    if(this.multiLayerGesture||this.pinching)return;
+
+    const ids=new Set(ui?.layerMultiSelectedIds||[]);
+    if(!ids.has(anchor.id)||anchor.locked)return;
+    const layers=(model.layers||[]).filter(layer=>ids.has(layer.id)&&!layer.locked);
+    if(!layers.length)return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    const pointerId=e.pointerId;
+    try{clip.setPointerCapture(pointerId)}catch(err){}
+
+    const sc=$('#timelineScroll');
+    const startX=e.clientX,startY=e.clientY;
+    const scrollStart=sc.scrollLeft,scrollStartTop=sc.scrollTop;
+    const panMotion=this.makePanTracker(startX,startY);
+    const stationarySlop=8;
+    const fps=Math.max(1,this.projectFPS());
+    const snapshots=layers.map(layer=>({
+      layer,
+      start:+layer.start||0,
+      keyTimes:new Map(Object.values(layer.kf||{}).flatMap(arr=>arr.map(key=>[key.id,+key.t||0])))
+    }));
+    const earliestStart=Math.min(...snapshots.map(item=>item.start));
+    let mode='hold'; // hold | panX | panY | move
+    let ended=false,latestX=startX;
+    let moveBaseX=startX,moveBaseScrollLeft=scrollStart;
+    let edgeScrollSession=null,splitGestureSuspended=false;
+
+    this.multiLayerGesture={pointerId,kind:'time'};
+    clip.classList.add('longpress-ready');
+
+    const rowFor=id=>[...document.querySelectorAll('#tracks .track')]
+      .find(row=>row.dataset.layerId===id);
+    const updateLayerDOM=item=>{
+      const row=rowFor(item.layer.id);
+      const layerClip=row?.querySelector('.clip');
+      if(layerClip)layerClip.style.left=(this.centerPad()+item.layer.start*this.px)+'px';
+      row?.querySelectorAll('.kf[data-kf-id]').forEach(marker=>{
+        const keyId=marker.dataset.kfId;
+        let keyTime=null;
+        for(const arr of Object.values(item.layer.kf||{})){
+          const key=arr.find(candidate=>candidate.id===keyId);
+          if(key){keyTime=key.t;break}
+        }
+        if(Number.isFinite(keyTime))marker.style.left=(this.centerPad()+keyTime*this.px-3)+'px'
+      })
+    };
+    const applyMove=clientX=>{
+      if(mode!=='move'||ended)return;
+      latestX=Number.isFinite(clientX)?clientX:latestX;
+      const scrollDelta=sc.scrollLeft-moveBaseScrollLeft;
+      let delta=(latestX-moveBaseX+scrollDelta)/Math.max(this.px,.001);
+      if(model.snap)delta=Math.round(delta*fps)/fps;
+      delta=Math.max(-earliestStart,delta);
+      for(const item of snapshots){
+        item.layer.start=item.start+delta;
+        for(const arr of Object.values(item.layer.kf||{})){
+          for(const key of arr){
+            const base=item.keyTimes.get(key.id);
+            if(Number.isFinite(base))key.t=Math.max(0,base+delta)
+          }
+        }
+        updateLayerDOM(item)
+      }
+      editorInvalidation.requestRender('multi-layer-time-drag')
+    };
+    const activateMove=()=>{
+      if(ended||mode!=='hold'||this.pinching)return;
+      mode='move';
+      history.push();
+      ui.layerMultiFocusId=anchor.id;
+      this.suppressClickUntil=performance.now()+700;
+      try{editorSplit?.beginTimelineLayerGesture?.();splitGestureSuspended=true}catch(err){}
+      moveBaseX=latestX;
+      moveBaseScrollLeft=sc.scrollLeft;
+      for(const item of snapshots)rowFor(item.layer.id)?.querySelector('.clip')?.classList.add('dragging-time');
+      clip.classList.remove('longpress-ready');
+      edgeScrollSession={
+        getClientX:()=>latestX,
+        isActive:()=>!ended&&mode==='move',
+        isBlocked:()=>this.pinching,
+        onScroll:()=>applyMove(latestX),
+        allowHeadroom:true
+      };
+      this.startEdgeAutoScroll(edgeScrollSession);
+      if(navigator.vibrate)navigator.vibrate(20)
+    };
+    const timer=setTimeout(activateMove,this.longPressMs);
+    const move=ev=>{
+      if(ev.pointerId!==pointerId)return;
+      ev.preventDefault();
+      if(this.pinching)return;
+      let x=ev.clientX,y=ev.clientY;
+      try{
+        const samples=ev.getCoalescedEvents?.();
+        if(samples?.length){const last=samples[samples.length-1];x=last.clientX;y=last.clientY}
+      }catch(err){}
+      latestX=x;
+      if(mode==='hold'||mode==='panX'||mode==='panY')this.updatePanTracker(panMotion,x,y);
+      if(mode==='hold'){
+        const dx=x-startX,dy=y-startY;
+        if(Math.hypot(dx,dy)<=stationarySlop)return;
+        clearTimeout(timer);
+        mode=Math.abs(dy)>Math.abs(dx)?'panY':'panX';
+        clip.classList.remove('longpress-ready');
+        this.suppressClickUntil=performance.now()+500
+      }
+      if(mode==='panX')sc.scrollLeft=Math.max(0,scrollStart-(x-startX));
+      else if(mode==='panY')sc.scrollTop=clamp(scrollStartTop-(y-startY),0,Math.max(0,sc.scrollHeight-sc.clientHeight));
+      else if(mode==='move')applyMove(x)
+    };
+    const finish=ev=>{
+      if(ev?.pointerId!==pointerId||ended)return;
+      clearTimeout(timer);
+      if(mode==='move'&&Number.isFinite(ev?.clientX))applyMove(ev.clientX);
+      ended=true;
+      if(edgeScrollSession)this.stopEdgeAutoScroll(edgeScrollSession);
+      clip.classList.remove('longpress-ready');
+      for(const item of snapshots)rowFor(item.layer.id)?.querySelector('.clip')?.classList.remove('dragging-time');
+      if(mode==='move'){
+        this.suppressClickUntil=performance.now()+500;
+        const durationChanged=model.syncProjectDurationToContent('multi-layer-time-drag');
+        if(!durationChanged)this.rebuild();
+        media.sync(model.time,false);
+        renderer.render()
+      }else if(mode==='panX'||mode==='panY'){
+        this.suppressClickUntil=performance.now()+350;
+        this.updatePlayhead();
+        this.startTimelineMomentum(mode==='panX'?'x':'y',mode==='panX'?panMotion.vx:panMotion.vy)
+      }
+      if(splitGestureSuspended){
+        splitGestureSuspended=false;
+        try{editorSplit?.endTimelineLayerGesture?.()}catch(err){}
+      }
+      this.multiLayerGesture=null;
+      try{if(clip.hasPointerCapture(pointerId))clip.releasePointerCapture(pointerId)}catch(err){}
+      clip.removeEventListener('pointermove',move);
+      clip.removeEventListener('pointerup',finish);
+      clip.removeEventListener('pointercancel',finish)
+    };
+    clip.addEventListener('pointermove',move,{passive:false});
+    clip.addEventListener('pointerup',finish);
+    clip.addEventListener('pointercancel',finish)
   }
 
   // V3.87 — strict multi-touch pointer ownership for trim + keyframe drags.
@@ -8839,7 +9014,11 @@ class TimelineController{
   }
 
   reorderPointerDown(e,l,row,handle){
-    if(ui?.drawerMode&&ui.drawerMode!=='root')return;
+    const multiIds=(ui?.layerMultiSelectMode&&ui.layerMultiSelectedIds?.has?.(l.id))
+      ?new Set((model.layers||[]).filter(layer=>ui.layerMultiSelectedIds.has(layer.id)&&!layer.locked).map(layer=>layer.id))
+      :null;
+    const multiReorder=!!multiIds?.size;
+    if(ui?.drawerMode&&ui.drawerMode!=='root'&&!(multiReorder&&ui.drawerMode==='multi'))return;
     if(l.locked||this.reorderSession)return;
     if(e.button!==undefined&&e.button!==0)return;
 
@@ -8873,7 +9052,7 @@ class TimelineController{
           'reorder-target-after',
           'reorder-hover'
         );
-        if(clearTransforms&&r!==this.reorderSession?.row){
+        if(clearTransforms&&!this.reorderSession?.rows?.includes(r)){
           r.classList.remove('reorder-shift');
           r.style.removeProperty('--reorder-shift-y');
         }
@@ -8886,7 +9065,8 @@ class TimelineController{
       active=true;
       try{editorSplit?.beginTimelineLayerGesture?.();splitGestureSuspended=true}catch(err){}
       history.push();
-      model.selected=l.id;
+      if(multiReorder)ui.layerMultiFocusId=l.id;
+      else model.selected=l.id;
       this.suppressClickUntil=performance.now()+700;
 
       const rows=allTrackRows();
@@ -8903,14 +9083,21 @@ class TimelineController{
           bottom:rect.bottom
         }
       });
+      const layerIds=multiReorder?multiIds:new Set([l.id]);
+      const sourceRows=baseRows.filter(meta=>layerIds.has(meta.layerId));
 
-      row.classList.add('reorder-source');
-      row.style.setProperty('--reorder-drag-y','0px');
+      sourceRows.forEach(meta=>{
+        meta.row.classList.add('reorder-source');
+        meta.row.style.setProperty('--reorder-drag-y','0px')
+      });
       handle.classList.remove('reorder-armed');
 
       this.reorderSession={
+        multi:multiReorder,
         layerId:l.id,
+        layerIds,
         row,
+        rows:sourceRows.map(meta=>meta.row),
         grabOffsetY:startY-rowRect.top,
         sourceTop:rowRect.top,
         sourceHeight:rowRect.height,
@@ -8933,10 +9120,10 @@ class TimelineController{
       const sourceBaseTop=s.sourceTop+scrollDelta;
       const dragTop=clientY-s.grabOffsetY;
       const dragDelta=dragTop-sourceBaseTop;
-      s.row.style.setProperty('--reorder-drag-y',`${dragDelta}px`);
+      s.rows.forEach(sourceRow=>sourceRow.style.setProperty('--reorder-drag-y',`${dragDelta}px`));
       s.lastPointerY=clientY;
 
-      const reduced=s.baseRows.filter(meta=>meta.layerId!==s.layerId);
+      const reduced=s.baseRows.filter(meta=>!s.layerIds.has(meta.layerId));
       let insertAt=0;
       for(;insertAt<reduced.length;insertAt++){
         const meta=reduced[insertAt];
@@ -8949,16 +9136,20 @@ class TimelineController{
       s.dropBeforeId=null;
       s.dropAfterId=null;
 
-      // Close the old slot and open the new one with compositor-only transforms.
-      for(const meta of reduced){
-        let dy=0;
-        if(insertAt<s.sourceIndex){
-          if(meta.index>=insertAt&&meta.index<s.sourceIndex)dy=s.sourceHeight;
-        }else if(insertAt>s.sourceIndex){
-          if(meta.index>s.sourceIndex&&meta.index<=insertAt)dy=-s.sourceHeight;
+      // The existing single-row animation closes its old slot. A selected
+      // group may be non-contiguous, so it uses one shared floating transform
+      // plus a destination marker instead of misleading per-row gap shifts.
+      if(!s.multi){
+        for(const meta of reduced){
+          let dy=0;
+          if(insertAt<s.sourceIndex){
+            if(meta.index>=insertAt&&meta.index<s.sourceIndex)dy=s.sourceHeight;
+          }else if(insertAt>s.sourceIndex){
+            if(meta.index>s.sourceIndex&&meta.index<=insertAt)dy=-s.sourceHeight;
+          }
+          meta.row.classList.add('reorder-shift');
+          meta.row.style.setProperty('--reorder-shift-y',`${dy}px`)
         }
-        meta.row.classList.add('reorder-shift');
-        meta.row.style.setProperty('--reorder-shift-y',`${dy}px`);
       }
 
       if(!reduced.length)return;
@@ -8977,10 +9168,10 @@ class TimelineController{
     const cleanupVisuals=()=>{
       const s=this.reorderSession;
       clearIndicators({clearTransforms:true});
-      if(s?.row){
-        s.row.classList.remove('reorder-source');
-        s.row.style.removeProperty('--reorder-drag-y');
-      }
+      (s?.rows||[]).forEach(sourceRow=>{
+        sourceRow.classList.remove('reorder-source');
+        sourceRow.style.removeProperty('--reorder-drag-y')
+      });
       allTrackRows().forEach(r=>{
         r.classList.remove('reorder-shift');
         r.style.removeProperty('--reorder-shift-y');
@@ -9044,8 +9235,24 @@ class TimelineController{
 
       const s=this.reorderSession;
       if(s){
-        const from=model.layers.findIndex(x=>x.id===s.layerId);
-        if(from>=0){
+        if(s.multi){
+          const moving=model.layers.filter(layer=>s.layerIds.has(layer.id));
+          if((s.dropBeforeId||s.dropAfterId)&&moving.length){
+            const stationary=model.layers.filter(layer=>!s.layerIds.has(layer.id));
+            let insertAt=stationary.length;
+            if(s.dropBeforeId){
+              const idx=stationary.findIndex(layer=>layer.id===s.dropBeforeId);
+              insertAt=idx<0?stationary.length:idx
+            }else if(s.dropAfterId){
+              const idx=stationary.findIndex(layer=>layer.id===s.dropAfterId);
+              insertAt=idx<0?stationary.length:idx+1
+            }
+            const ordered=[...stationary.slice(0,insertAt),...moving,...stationary.slice(insertAt)];
+            model.layers.splice(0,model.layers.length,...ordered)
+          }
+        }else{
+          const from=model.layers.findIndex(x=>x.id===s.layerId);
+          if(from>=0){
           const [moving]=model.layers.splice(from,1);
           let insertAt=model.layers.length;
 
@@ -9061,6 +9268,7 @@ class TimelineController{
           }
 
           model.layers.splice(insertAt,0,moving);
+          }
         }
 
         cleanupVisuals();
@@ -13192,6 +13400,8 @@ class EditorSplitController{
       }else if(restoreFocus||this.canStartSelectedLayerFocusSession()){
         this.startSelectedLayerFocusSession();
         this.ensureLayerGroupVisible();
+      }else if(this.ui?.drawerMode==='multi'){
+        this.ensureLayerGroupVisible()
       }
     });
   }
@@ -19026,7 +19236,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   }
 }
 </style>
-<!-- V4.60 local preview — multi-layer selection pins the most recently selected timeline row above its toolbar. -->
+<!-- V4.61 — selected timeline layers move horizontally as a frame-aligned group, reorder vertically as a stable block, and suppress Android native text-selection callouts. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
