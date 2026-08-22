@@ -7831,7 +7831,7 @@ class TimelineController{
         if(ui?.layerMultiSelectMode||e.ctrlKey||e.metaKey){
           ui?.toggleLayerMultiSelection?.(l.id);e.stopPropagation();return
         }
-        ui?.clearLayerMultiSelection?.();model.selected=l.id;this.rebuild();ui.openInspectorRoot();renderer.render()
+        ui?.prepareSingleLayerSelection?.();model.selected=l.id;this.rebuild();ui.openInspectorRoot();renderer.render()
       };
       head.onpointerdown=e=>{
         if(e.target.closest('.eye,.lock'))return;
@@ -7881,7 +7881,7 @@ class TimelineController{
         if(ui?.layerMultiSelectMode||e.ctrlKey||e.metaKey){
           ui?.toggleLayerMultiSelection?.(l.id);return
         }
-        ui?.clearLayerMultiSelection?.();
+        ui?.prepareSingleLayerSelection?.();
         model.selected=l.id;
         this.rebuild();
         ui.openInspectorRoot();
@@ -7985,6 +7985,7 @@ class TimelineController{
       }
     }
     this.updateKeyframePlayheadState();
+    ui?.refreshMultiSelectionToolsContext?.();
   }
 
   onScroll(){
@@ -9652,8 +9653,35 @@ class UIController{
     const had=this.layerMultiSelectedIds.size>0;
     this.layerMultiSelectedIds.clear();
     this.layerMultiSelectMode=false;
+    this._multiSelectionToolSignature='';
     this.syncLayerMultiSelectModeUI();
     return had
+  }
+
+  prepareSingleLayerSelection(){
+    // V4.52 — a completed multi-select session must not consume the next
+    // ordinary tap. Clear both the persistent IDs and the long-press click
+    // suppression before the single-layer click continues into Inspector.
+    this.layerMultiSelectMode=false;
+    this.layerMultiSelectedIds.clear();
+    this._multiSelectionToolSignature='';
+    if(timeline)timeline.suppressClickUntil=0;
+    if(this.drawerMode==='multi')this.closeDrawer({preserveLayerMultiSelection:true});
+    this.syncLayerMultiSelectModeUI()
+  }
+
+  finishLayerMultiSelection({announce=true}={}){
+    const count=this.layerMultiSelectedIds.size;
+    this.layerMultiSelectMode=false;
+    this.layerMultiSelectedIds.clear();
+    this._multiSelectionToolSignature='';
+    if(timeline)timeline.suppressClickUntil=0;
+    if(this.drawerMode==='multi')this.closeDrawer({preserveLayerMultiSelection:true});
+    this.syncLayerMultiSelectModeUI();
+    timeline.rebuild();
+    renderer.render();
+    if(announce)toast(count?'Pemilihan beberapa layer ditutup':'Mode pilih layer selesai');
+    return true
   }
 
   syncLayerMultiSelectModeUI(){
@@ -9677,13 +9705,8 @@ class UIController{
 
   beginLayerMultiSelection(){
     if(this.layerMultiSelectMode){
-      this.layerMultiSelectMode=false;
       this.closeLayerActions();
-      this.syncLayerMultiSelectModeUI();
-      timeline.rebuild();
-      renderer.render();
-      toast('Mode pilih layer selesai • pilihan tetap dipertahankan');
-      return true
+      return this.finishLayerMultiSelection()
     }
     // Starting a new selection session must not inherit stale IDs from a
     // previous session; otherwise an old video/audio layer can leak into a
@@ -9693,7 +9716,7 @@ class UIController{
     model.selected=null;
     this.layerMultiSelectMode=true;
     this.closeLayerActions();
-    this.closeDrawer();
+    if(this.drawerMode!=='multi')this.closeDrawer({preserveLayerMultiSelection:true});
     this.syncLayerMultiSelectModeUI();
     timeline.rebuild();
     renderer.render();
@@ -9707,10 +9730,11 @@ class UIController{
     this.layerMultiSelectMode=true;
     this.layerMultiSelectedIds.add(layerId);
     this.closeLayerActions();
-    this.closeDrawer();
+    this.closeDrawer({preserveLayerMultiSelection:true});
     this.syncLayerMultiSelectModeUI();
     timeline.rebuild();
     renderer.render();
+    this.openLayerMultiSelectionTools();
     toast(`${this.layerMultiSelectedIds.size} layer dipilih • klik layer lain untuk menambah`);
     return true
   }
@@ -9724,11 +9748,191 @@ class UIController{
     else if(previousSingle!==layerId)this.layerMultiSelectedIds.add(layerId);
     else if(this.layerMultiSelectedIds.has(layerId))this.layerMultiSelectedIds.delete(layerId);
     else this.layerMultiSelectedIds.add(layerId);
-    this.closeDrawer();
+    if(this.drawerMode!=='multi')this.closeDrawer({preserveLayerMultiSelection:true});
     this.syncLayerMultiSelectModeUI();
     timeline.rebuild();
     renderer.render();
+    if(this.layerMultiSelectedIds.size)this.openLayerMultiSelectionTools();
+    else if(this.drawerMode==='multi')this.closeDrawer({preserveLayerMultiSelection:true});
     toast(this.layerMultiSelectedIds.size?`${this.layerMultiSelectedIds.size} layer dipilih`:'Belum ada layer dipilih')
+  }
+
+  multiSelectedLayers(){
+    const ids=this.layerMultiSelectedIds;
+    return (model.layers||[]).filter(layer=>ids.has(layer.id))
+  }
+
+  shiftLayerTimeline(layer,newStart){
+    const fps=Math.max(1,timeline.projectFPS?.()||model.project?.fps||30);
+    const oldStart=Math.max(0,+layer.start||0);
+    const target=Math.max(0,Math.round(Math.max(0,+newStart||0)*fps)/fps);
+    const delta=target-oldStart;
+    if(Math.abs(delta)<1e-7)return false;
+    layer.start=target;
+    // Keyframe times are project-absolute in Open Motion, therefore every key
+    // follows the clip by the exact same delta. Source in/out and duration stay
+    // untouched so media remains frame-identical after arranging.
+    for(const keys of Object.values(layer.kf||{})){
+      if(!Array.isArray(keys))continue;
+      for(const key of keys)if(Number.isFinite(+key.t))key.t=Math.max(0,+key.t+delta);
+      keys.sort((a,b)=>a.t-b.t)
+    }
+    return true
+  }
+
+  finishMultiLayerTimeEdit(message){
+    model.syncProjectDurationToContent();
+    media.sync(model.time,false,false,{forceSeek:true});
+    timeline.rebuild();
+    renderer.render();
+    this.openLayerMultiSelectionTools();
+    if(message)toast(message)
+  }
+
+  arrangeSelectedLayers(mode){
+    const layers=this.multiSelectedLayers();
+    if(layers.length<2){toast('Pilih minimal dua layer untuk disusun');return false}
+    const fps=Math.max(1,timeline.projectFPS?.()||model.project?.fps||30);
+    const snap=value=>Math.max(0,Math.round(value*fps)/fps);
+    const earliest=Math.min(...layers.map(layer=>Math.max(0,+layer.start||0)));
+    const latest=Math.max(...layers.map(layer=>Math.max(0,+layer.start||0)+Math.max(0,+layer.duration||0)));
+    const targets=new Map();
+
+    if(mode==='align-start'){
+      for(const layer of layers)targets.set(layer.id,snap(earliest))
+    }else if(mode==='sequence'){
+      // The reference icon reads bottom-left to top-right: the bottom selected
+      // timeline row goes first, then rows above it, with no temporal gaps.
+      let cursor=snap(earliest);
+      for(const layer of layers.slice().reverse()){
+        targets.set(layer.id,cursor);
+        cursor=snap(cursor+Math.max(1/fps,+layer.duration||0))
+      }
+    }else if(mode==='align-end'){
+      for(const layer of layers)targets.set(layer.id,snap(latest-Math.max(0,+layer.duration||0)))
+    }else return false;
+
+    const changed=layers.some(layer=>Math.abs((targets.get(layer.id)??layer.start)-(+layer.start||0))>1e-7);
+    if(!changed){toast('Layer sudah tersusun pada posisi tersebut');return false}
+    history.push();
+    for(const layer of layers)this.shiftLayerTimeline(layer,targets.get(layer.id));
+    const labels={
+      'align-start':'Awal layer terpilih disejajarkan',
+      sequence:'Layer disusun berurutan dari bawah ke atas',
+      'align-end':'Akhir layer terpilih disejajarkan'
+    };
+    this.finishMultiLayerTimeEdit(labels[mode]);
+    return true
+  }
+
+  trimSelectedLayersAtPlayhead(mode){
+    const fps=Math.max(1,timeline.projectFPS?.()||model.project?.fps||30);
+    const t=timeline.snapTime?timeline.snapTime(model.time):model.time;
+    const margin=(1/fps)*.45;
+    const eligible=this.multiSelectedLayers().filter(layer=>t>layer.start+margin&&t<layer.start+layer.duration-margin);
+    if(!eligible.length){toast('Playhead tidak berada di dalam layer terpilih');return false}
+    history.push();
+    let changed=0;
+    for(const layer of eligible){
+      const snapshot=timeline.trimSnapshot(layer);
+      if(mode==='trimLeft'){
+        timeline.trimLayerBoundary(layer,'trimL',t,snapshot);
+      }else if(mode==='trimRight'){
+        timeline.trimLayerBoundary(layer,'trimR',t,snapshot);
+      }else if(mode==='split'){
+        const clean=model.cleanLayer(layer,{includeMedia:false});
+        const right=typeof structuredClone==='function'?structuredClone(clean):JSON.parse(JSON.stringify(clean));
+        right.dataUrl=layer.dataUrl;
+        right.assetId=layer.assetId;
+        right.id=uid('layer');
+        right.name=layer.name;
+        right.kf={};
+        timeline.trimLayerBoundary(layer,'trimR',t,snapshot);
+        timeline.trimLayerBoundary(right,'trimL',t,snapshot);
+        for(const [prop,keys] of Object.entries(layer.kf||{})){
+          const leftKeys=keys.filter(key=>key.t<=t);
+          const rightKeys=keys.filter(key=>key.t>=t).map(key=>({...key,id:uid('kf')}));
+          layer.kf[prop]=leftKeys;
+          right.kf[prop]=rightKeys
+        }
+        const index=model.layers.indexOf(layer);
+        model.layers.splice(Math.max(0,index),0,right);
+        model.hydrateLayer(right);
+        this.layerMultiSelectedIds.add(right.id)
+      }else continue;
+      changed++
+    }
+    if(!changed)return false;
+    const verb=mode==='trimLeft'?'Trim kiri':mode==='trimRight'?'Trim kanan':'Split';
+    this.finishMultiLayerTimeEdit(`${verb} diterapkan ke ${changed} layer`);
+    return true
+  }
+
+  recallSelectedLayersToPlayhead(mode){
+    const fps=Math.max(1,timeline.projectFPS?.()||model.project?.fps||30);
+    const frame=1/fps;
+    const t=timeline.snapTime?timeline.snapTime(model.time):model.time;
+    const candidates=this.multiSelectedLayers().map(layer=>{
+      const start=Math.max(0,+layer.start||0);
+      const duration=Math.max(frame,+layer.duration||frame);
+      const end=start+duration;
+      const context=t<start-frame*.45?'before':t>end+frame*.45?'after':'inside';
+      return{layer,start,duration,context}
+    }).filter(item=>item.context!=='inside');
+    if(!candidates.length){toast('Playhead masih berada pada layer terpilih');return false}
+    history.push();
+    for(const item of candidates){
+      const {layer,start,duration,context}=item;
+      if(mode==='extendToPlayhead'){
+        const snapshot=timeline.trimSnapshot(layer);
+        timeline.trimLayerBoundary(layer,context==='before'?'trimL':'trimR',context==='before'?Math.max(0,t):t,snapshot)
+      }else if(mode==='moveEdgeToPlayhead'){
+        this.shiftLayerTimeline(layer,context==='before'?Math.max(0,t):Math.max(0,t-duration))
+      }
+    }
+    const message=mode==='extendToPlayhead'
+      ?`${candidates.length} layer diperpanjang ke playhead`
+      :`${candidates.length} layer dipindahkan ke playhead`;
+    this.finishMultiLayerTimeEdit(message);
+    return true
+  }
+
+  multiArrangeIcon(kind){
+    return `<span class="multiArrangeIcon ${kind}" aria-hidden="true"><i></i><i></i><i></i></span>`
+  }
+
+  multiSelectionToolState(layers=this.multiSelectedLayers()){
+    const fps=Math.max(1,timeline.projectFPS?.()||model.project?.fps||30);
+    const t=timeline.snapTime?timeline.snapTime(model.time):model.time;
+    const margin=(1/fps)*.45;
+    const inside=layers.some(layer=>t>layer.start+margin&&t<layer.start+layer.duration-margin);
+    const earliest=Math.min(...layers.map(layer=>Math.max(0,+layer.start||0)));
+    const side=t<earliest?'before':'after';
+    return{fps,t,margin,inside,side,signature:`${layers.length}:${inside?'inside':'outside:'+side}`}
+  }
+
+  refreshMultiSelectionToolsContext(){
+    if(this.drawerMode!=='multi'||!this.layerMultiSelectMode||!this.layerMultiSelectedIds.size)return;
+    const state=this.multiSelectionToolState();
+    if(state.signature!==this._multiSelectionToolSignature)this.openLayerMultiSelectionTools()
+  }
+
+  openLayerMultiSelectionTools(){
+    const layers=this.multiSelectedLayers();
+    if(!this.layerMultiSelectMode||!layers.length)return false;
+    const {inside,side,signature}=this.multiSelectionToolState(layers);
+    const timeActions=inside
+      ?`<button type="button" class="multiTimeBtn" data-multi-time="trimLeft"><span>⋯│⊏</span><small>Trim Kiri</small></button><button type="button" class="multiTimeBtn" data-multi-time="split"><span>⊐│⊏</span><small>Split</small></button><button type="button" class="multiTimeBtn" data-multi-time="trimRight"><span>⊐│⋯</span><small>Trim Kanan</small></button>`
+      :`<button type="button" class="multiTimeBtn wide" data-multi-recall="extendToPlayhead">${this.mediaQuickRecallIcon('extend',side)}<small>Perpanjang ke Playhead</small></button><button type="button" class="multiTimeBtn wide" data-multi-recall="moveEdgeToPlayhead">${this.mediaQuickRecallIcon('move',side)}<small>Pindah Ujung ke Playhead</small></button>`;
+    const arrange=`<div class="multiArrangeGroup" role="group" aria-label="Susun Layer"><button type="button" data-multi-arrange="align-start" aria-label="Sejajarkan awal layer" title="Sejajarkan Awal">${this.multiArrangeIcon('alignStart')}</button><button type="button" data-multi-arrange="sequence" aria-label="Susun layer berurutan dari bawah ke atas" title="Susun Berurutan">${this.multiArrangeIcon('sequence')}</button><button type="button" data-multi-arrange="align-end" aria-label="Sejajarkan akhir layer" title="Sejajarkan Akhir">${this.multiArrangeIcon('alignEnd')}</button></div>`;
+    this._multiSelectionToolSignature=signature;
+    this.drawerMode='multi';
+    const drawer=this.drawerShell(`${layers.length} Layer Dipilih`,`<div class="drawerBody multiSelectBody"><div class="multiTimeGroup ${inside?'inside':'outside'}">${timeActions}</div>${arrange}</div>`);
+    drawer.classList.add('multiSelectDrawer');
+    drawer.querySelectorAll('[data-multi-time]').forEach(button=>button.onclick=()=>this.trimSelectedLayersAtPlayhead(button.dataset.multiTime));
+    drawer.querySelectorAll('[data-multi-recall]').forEach(button=>button.onclick=()=>this.recallSelectedLayersToPlayhead(button.dataset.multiRecall));
+    drawer.querySelectorAll('[data-multi-arrange]').forEach(button=>button.onclick=()=>this.arrangeSelectedLayers(button.dataset.multiArrange));
+    return true
   }
 
   async exportSelectedLayers(){
@@ -9762,6 +9966,7 @@ class UIController{
     this.syncLayerMultiSelectModeUI();
     timeline.rebuild();
     renderer.render();
+    this.openLayerMultiSelectionTools();
     toast(this.layerMultiSelectedIds.size?`${this.layerMultiSelectedIds.size} layer dipilih`:'Tidak ada layer')
   }
 
@@ -9858,7 +10063,7 @@ class UIController{
       const title=multiButton.querySelector('.layerActionCopy b');
       const help=multiButton.querySelector('.layerActionCopy small');
       if(title)title.textContent=this.layerMultiSelectMode?'Selesai Memilih Layer':'Pilih Beberapa Layer';
-      if(help)help.textContent=this.layerMultiSelectMode?'Pertahankan pilihan dan kembali ke klik normal':'Aktifkan mode pilih, lalu klik layer di timeline';
+      if(help)help.textContent=this.layerMultiSelectMode?'Tutup mode pilih dan kembali ke klik Inspector normal':'Aktifkan mode pilih, lalu klik layer di timeline';
       multiButton.setAttribute('aria-pressed',this.layerMultiSelectMode?'true':'false')
     }
 
@@ -10114,7 +10319,7 @@ class UIController{
     // Setiap inspector/properti harus keluar dari mode menu "+".
     // Jika addDrawer dibiarkan aktif, CSS .addDrawer .drawerHead akan
     // menyembunyikan header beserta tombol X.
-    d.classList.remove('hidden','transformDrawer','transformEaseDrawer','addDrawer');
+    d.classList.remove('hidden','transformDrawer','transformEaseDrawer','addDrawer','multiSelectDrawer');
 
     $('#plusBtn')?.classList.remove('open');
 
@@ -10252,22 +10457,31 @@ class UIController{
       close();renderer.render();timeline.rebuild();if(this.drawerMode==='move')this.openInspector('move');
     });
   }
-  closeDrawer(){
+  closeDrawer({preserveLayerMultiSelection=false}={}){
     const d=$('#drawer');
+    const closingMulti=this.drawerMode==='multi';
     d.classList.add('hidden');
-    d.classList.remove('addDrawer','transformDrawer','transformEaseDrawer');
+    d.classList.remove('addDrawer','transformDrawer','transformEaseDrawer','multiSelectDrawer');
     this.drawerMode=null;
     $('#plusBtn').classList.remove('open');
+    if(closingMulti&&!preserveLayerMultiSelection){
+      this.layerMultiSelectMode=false;
+      this.layerMultiSelectedIds.clear();
+      this._multiSelectionToolSignature='';
+      if(timeline)timeline.suppressClickUntil=0;
+      this.syncLayerMultiSelectModeUI()
+    }
     timeline.updateDrawerOverlap();
     timeline.updateKeyframePlayheadState();
     timeline.refreshKeyframeInteractionState?.();
-    timeline.refreshKeyframeLaneMode?.()
+    timeline.refreshKeyframeLaneMode?.();
+    if(closingMulti&&!preserveLayerMultiSelection){timeline.rebuild();renderer.render()}
   }
   openTool(tool){
     this.drawerMode='tool';
     this.addTool=tool||this.addTool||'shapes';
     const d=$('#drawer');
-    d.classList.remove('hidden','transformDrawer','transformEaseDrawer');
+    d.classList.remove('hidden','transformDrawer','transformEaseDrawer','multiSelectDrawer');
     d.classList.add('addDrawer');
     $('#plusBtn').classList.add('open');
     timeline.updateDrawerOverlap();
@@ -13399,9 +13613,9 @@ class EditorSplitController{
       return out;
     };
     const originalCloseDrawer=this.ui.closeDrawer.bind(this.ui);
-    this.ui.closeDrawer=()=>{
+    this.ui.closeDrawer=(...args)=>{
       const wasOpen=this.isDrawerOpen();
-      const out=originalCloseDrawer();
+      const out=originalCloseDrawer(...args);
       if(wasOpen)this.onDrawerClosed();
       return out;
     };
@@ -18474,7 +18688,145 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 .exportScopeNotice small{font-size:9px;color:#8fe6cf;line-height:1.35}
 .exportSheet.selectedLayerExport .nonVideoExportOption{display:none}
 </style>
-<!-- V4.51 — selected-only export purges excluded video frame/GPU caches, guards final draw calls, and force-seeks restored media to prevent frozen unselected frames. -->
+<style id="oms-v452-multi-layer-arrange">
+/* V4.52 — compact multi-layer timeline toolbar + arrange controls. */
+.drawer.multiSelectDrawer{
+  left:0;
+  right:0;
+  top:auto;
+  bottom:0;
+  width:100%;
+  height:auto;
+  max-height:172px;
+  overflow:hidden;
+}
+.drawer.multiSelectDrawer>.drawerHead{
+  flex:0 0 36px;
+  height:36px;
+  min-height:36px;
+}
+.drawer.multiSelectDrawer>.drawerHead b{font-size:10px}
+.multiSelectBody{
+  flex:1 1 auto;
+  min-width:0;
+  min-height:0;
+  display:grid;
+  grid-template-columns:minmax(0,1.45fr) minmax(132px,.9fr);
+  gap:8px;
+  align-items:stretch;
+  padding:8px;
+  overflow:hidden!important;
+}
+.multiTimeGroup{
+  min-width:0;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;
+  padding-right:8px;
+  border-right:1px solid #3a4055;
+}
+.multiTimeGroup.outside{grid-template-columns:repeat(2,minmax(0,1fr))}
+.multiTimeBtn{
+  min-width:0;
+  height:58px;
+  border:1px solid #374057;
+  border-radius:8px;
+  background:#252a3e;
+  color:#dbe1ee;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  padding:4px;
+}
+.multiTimeBtn:active,
+.multiTimeBtn:focus-visible,
+.multiArrangeGroup button:active,
+.multiArrangeGroup button:focus-visible{
+  border-color:var(--accent);
+  color:var(--accent);
+  outline:none;
+}
+.multiTimeBtn>span{font-size:18px;line-height:1;letter-spacing:-2px}
+.multiTimeBtn>.mqRecallIcon{min-height:19px;letter-spacing:0}
+.multiTimeBtn>.mqRecallIcon svg{width:27px;height:18px}
+.multiTimeBtn small{
+  max-width:100%;
+  color:#aab3c6;
+  font-size:7px;
+  line-height:1.05;
+  text-align:center;
+  white-space:normal;
+}
+.multiArrangeGroup{
+  min-width:0;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  align-items:center;
+  gap:6px;
+  padding:7px;
+  border-radius:10px;
+  background:#34374f;
+}
+.multiArrangeGroup button{
+  min-width:0;
+  height:48px;
+  border:1px solid transparent;
+  border-radius:7px;
+  background:#4a4e67;
+  color:#f0f2f8;
+  display:grid;
+  place-items:center;
+  padding:0;
+}
+.multiArrangeIcon{
+  position:relative;
+  display:block;
+  width:34px;
+  height:25px;
+}
+.multiArrangeIcon i{
+  position:absolute;
+  display:block;
+  height:4px;
+  border:2px solid currentColor;
+  background:transparent;
+}
+.multiArrangeIcon i:nth-child(1){top:2px;width:28px}
+.multiArrangeIcon i:nth-child(2){top:10px;width:20px}
+.multiArrangeIcon i:nth-child(3){top:18px;width:11px}
+.multiArrangeIcon.alignStart i{left:2px}
+.multiArrangeIcon.sequence i:nth-child(1){right:1px}
+.multiArrangeIcon.sequence i:nth-child(2){left:8px}
+.multiArrangeIcon.sequence i:nth-child(3){left:1px}
+.multiArrangeIcon.alignEnd i{right:2px}
+@media(max-width:430px){
+  .multiSelectBody{grid-template-columns:minmax(0,1.35fr) minmax(118px,.9fr);gap:5px;padding:6px}
+  .multiTimeGroup{gap:3px;padding-right:5px}
+  .multiTimeBtn{height:54px;padding:3px 1px}
+  .multiTimeBtn>span{font-size:16px}
+  .multiTimeBtn small{font-size:6.4px}
+  .multiArrangeGroup{gap:3px;padding:5px}
+  .multiArrangeGroup button{height:44px}
+  .multiArrangeIcon{transform:scale(.84)}
+}
+@media(max-width:899px){
+  #drawer.multiSelectDrawer:not(.addDrawer){
+    height:108px!important;
+    max-height:108px!important;
+  }
+}
+@media(min-width:900px){
+  html:not(.omsMobileLandscapeDesktop) .timelineArea:has(>#drawer.multiSelectDrawer:not(.hidden)){
+    grid-template-rows:38px minmax(0,1fr) 112px!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea>#drawer.multiSelectDrawer:not(.hidden){
+    height:112px!important;
+  }
+}
+</style>
+<!-- V4.52 — multi-select now opens a compact trim/recall + arrange toolbar; arrange start, bottom-to-top sequence, and arrange end preserve duration/source data; closing multi-select resets the next short tap to Inspector. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
