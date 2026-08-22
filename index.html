@@ -5369,7 +5369,7 @@ class Renderer{
     this.finishFrameUI();
   }
   applyEffects(l){const e=l.effects||{},dof=this.depthOfFieldBlur(l),blur=Math.max(0,+e.blur||0)+dof;this.ctx.filter=`blur(${blur.toFixed(2)}px) brightness(${e.brightness??100}%) contrast(${e.contrast??100}%) saturate(${e.saturate??100}%) hue-rotate(${e.hue||0}deg)`;this.ctx.globalCompositeOperation=l.blend||'source-over'}
-  drawLayer(l){if(['audio','camera'].includes(l.type))return;if(l.type==='mesh'){this.drawMesh(l);return}if(l.type==='null'){this.drawNull(l);return}
+  drawLayer(l){if(!omsLayerIncludedInExport(l)||['audio','camera'].includes(l.type))return;if(l.type==='mesh'){this.drawMesh(l);return}if(l.type==='null'){this.drawNull(l);return}
     const p=model.effective(l),use3d=this.layerUses3D(l);let sx=p.x,sy=p.y,depthScale=1,rot=p.rotation+p.rotZ;
     if(use3d){const q=this.project(p.x,p.y,p.z);if(!q)return;sx=q.x;sy=q.y;depthScale=q.scale}
     else{
@@ -5438,6 +5438,7 @@ class Renderer{
   drawNull(l){const p=model.effective(l);let q={x:p.x,y:p.y,scale:1};if(this.layerUses3D(l)){q=this.project(p.x,p.y,p.z);if(!q)return}else{const zCrop=this.digitalCanvasZoom();if(Math.abs(zCrop-1)>.0001){const W=model.project.width,H=model.project.height;q={x:W/2+(p.x-W/2)*zCrop,y:H/2+(p.y-H/2)*zCrop,scale:zCrop}}}const c=this.ctx;c.save();c.translate(q.x,q.y);c.scale(q.scale||1,q.scale||1);c.strokeStyle=l.id===model.selected?'#00d7a7':'#ffd65c';c.lineWidth=3;c.beginPath();c.moveTo(-28,0);c.lineTo(28,0);c.moveTo(0,-28);c.lineTo(0,28);c.stroke();c.strokeRect(-18,-18,36,36);c.restore()}
   rotatePoint(v,rx,ry,rz){let{x,y,z}=v;let a=rad(rx),c=Math.cos(a),s=Math.sin(a);[y,z]=[y*c-z*s,y*s+z*c];a=rad(ry);c=Math.cos(a);s=Math.sin(a);[x,z]=[x*c+z*s,-x*s+z*c];a=rad(rz);c=Math.cos(a);s=Math.sin(a);[x,y]=[x*c-y*s,x*s+y*c];return{x,y,z}}
   drawMesh(l){
+    if(!omsLayerIncludedInExport(l))return;
     const p=model.effective(l);if(l.mesh==='sphere'){const q=this.project(p.x,p.y,p.z);if(!q)return;const r=Math.max(2,l.w*.5*q.scale*p.scaleX);const c=this.ctx;c.save();c.globalAlpha=p.opacity;const g=c.createRadialGradient(q.x-r*.28,q.y-r*.3,r*.06,q.x,q.y,r);g.addColorStop(0,'#ffffff');g.addColorStop(.16,l.color);g.addColorStop(1,'#121828');c.fillStyle=g;c.beginPath();c.arc(q.x,q.y,r,0,Math.PI*2);c.fill();if(l.id===model.selected){c.strokeStyle='#00d7a7';c.lineWidth=3;c.stroke()}c.restore();return}
     const hw=l.w/2,hh=l.h/2,hd=(l.depth||l.w)/2,verts=[[-hw,-hh,-hd],[hw,-hh,-hd],[hw,hh,-hd],[-hw,hh,-hd],[-hw,-hh,hd],[hw,-hh,hd],[hw,hh,hd],[-hw,hh,hd]].map(v=>{let r=this.rotatePoint({x:v[0],y:v[1],z:v[2]},p.rotX,p.rotY,p.rotZ+p.rotation);return this.project(p.x+r.x*p.scaleX,p.y+r.y*p.scaleY,p.z+r.z*p.scaleZ)});
     const faces=[[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[0,3,7,4]].map((ids,i)=>({ids,i,depth:ids.reduce((s,k)=>s+(verts[k]?.depth||0),0)/4})).sort((a,b)=>b.depth-a.depth);const c=this.ctx;c.save();c.globalAlpha=p.opacity;for(const f of faces){if(f.ids.some(i=>!verts[i]))continue;c.beginPath();f.ids.forEach((i,n)=>n?c.lineTo(verts[i].x,verts[i].y):c.moveTo(verts[i].x,verts[i].y));c.closePath();c.fillStyle=this.shade(l.color,.74+f.i*.035);c.fill();c.strokeStyle='rgba(255,255,255,.16)';c.lineWidth=2;c.stroke()}if(l.id===model.selected){const q=this.project(p.x,p.y,p.z);if(q){c.strokeStyle='#00d7a7';c.beginPath();c.arc(q.x,q.y,8,0,Math.PI*2);c.stroke()}}c.restore()
@@ -5656,6 +5657,7 @@ class WebGLRenderer{
   }
   applyBlend(l){const gl=this.gl;if(l.blend==='lighter'||l.blend==='screen')gl.blendFunc(gl.SRC_ALPHA,gl.ONE);else if(l.blend==='multiply')gl.blendFunc(gl.DST_COLOR,gl.ONE_MINUS_SRC_ALPHA);else gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA)}
   drawPlane(l,stackNormalOffset=0){
+    if(!omsLayerIncludedInExport(l))return;
     const gl=this.gl,use3d=this.layerUses3D(l),texture=this.ensureTexture(l),world=this.worldMatrix(l,model.time,new Set(),use3d);
     let renderWorld=world;
 
@@ -5705,6 +5707,7 @@ class WebGLRenderer{
     gl.uniform2f(this.tp.texel,1/Math.max(1,entry?.gpuWidth||1),1/Math.max(1,entry?.gpuHeight||1));gl.uniform1f(this.tp.blur,textureBlur);gl.drawArrays(gl.TRIANGLES,0,6)
   }
   drawMesh(l){
+    if(!omsLayerIncludedInExport(l))return;
     const gl=this.gl,geo=this.meshes[l.mesh]||this.meshes.cube,depth=Math.max(1,+l.depth||+l.w||1),world=this.worldMatrix(l,model.time,new Set(),true),modelM=Mat4.multiply(world,Mat4.scale(Math.max(1,+l.w||1),Math.max(1,+l.h||1),depth)),mvp=Mat4.multiply(this.vp,modelM),color=this.hex(l.color,this.worldOpacity(l));gl.enable(gl.DEPTH_TEST);gl.depthMask(true);this.applyBlend(l);gl.useProgram(this.meshProgram);gl.bindBuffer(gl.ARRAY_BUFFER,geo.buffer);gl.enableVertexAttribArray(this.mp.pos);gl.vertexAttribPointer(this.mp.pos,3,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(this.mp.normal);gl.vertexAttribPointer(this.mp.normal,3,gl.FLOAT,false,24,12);gl.uniformMatrix4fv(this.mp.mvp,false,mvp);gl.uniformMatrix4fv(this.mp.model,false,modelM);gl.uniform4fv(this.mp.color,color);gl.drawArrays(gl.TRIANGLES,0,geo.count)
   }
   drawLines(points,color,width=1){if(!points.length)return;const gl=this.gl;gl.useProgram(this.lineProgram);gl.bindBuffer(gl.ARRAY_BUFFER,this.lineBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(points),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(this.lp.pos);gl.vertexAttribPointer(this.lp.pos,3,gl.FLOAT,false,12,0);gl.uniformMatrix4fv(this.lp.mvp,false,this.vp);gl.uniform4fv(this.lp.color,color);gl.lineWidth(width);gl.drawArrays(gl.LINES,0,points.length/3)}
@@ -14146,7 +14149,9 @@ class ExportSessionGuard{
     this.exporter.running=false;
     $('#exportProgress').style.width='0';
     media.pause();
-    try{media.sync(snapshot.time,false,false)}catch(e){}
+    // V4.51 — after a scoped export, do not accept an old cached video frame
+    // merely because it is close to the restored playhead.
+    try{media.sync(snapshot.time,false,false,{forceSeek:true})}catch(e){}
     renderer.render();
     timeline.rebuild();
     if(snapshot.playing)clock.start()
@@ -14168,6 +14173,7 @@ class ExportSessionGuard{
     model.cameraView=snapshot.cameraView;
     renderer.exporting=snapshot.rendererExporting;
     media.pause();
+    try{media.sync(snapshot.time,false,false,{forceSeek:true})}catch(e){}
     renderer.render();
     timeline.rebuild();
     if(snapshot.playing)clock.start()
@@ -14210,11 +14216,36 @@ class Exporter{
     notice.dataset.layerCount=String(plan.count);
     notice.innerHTML=`<b>Ekspor ${plan.count} layer terpilih</b><small>${fmt(plan.start,fps)} → ${fmt(plan.end,fps)} • output ${fmt(plan.duration,fps)}</small>`
   }
+  invalidateExportVideoCaches({excludedOnly=false}={}){
+    const scope=omsExportLayerIds;
+    for(const layer of model.layers||[]){
+      if(layer.type!=='video')continue;
+      if(excludedOnly&&(!scope||scope.has(layer.id)))continue;
+      try{media.cancelSmartPausedVideoPreview?.(layer)}catch(e){}
+      try{media.cancelPausedVideoSeek?.(layer)}catch(e){}
+      try{layer.video?.pause?.()}catch(e){}
+      layer.frameCacheReady=false;
+      layer.frameCacheTime=-1;
+      layer._offlineCachedTarget=Number.NaN;
+      layer._offlinePresentedMediaTime=Number.NaN;
+      bus.emit('layer:texture-release',layer.id)
+    }
+  }
   activateLayerSelection(){
     omsExportLayerIds=this.layerSelectionPlan?new Set(this.layerSelectionPlan.ids):null;
+    if(omsExportLayerIds){
+      // Purge excluded video surfaces before any export engine can capture its
+      // first frame. This closes the last route for an unselected frozen frame.
+      renderer.endInteraction();
+      this.invalidateExportVideoCaches({excludedOnly:true})
+    }
     return omsExportLayerIds
   }
-  deactivateLayerSelection(){omsExportLayerIds=null}
+  deactivateLayerSelection(){
+    const hadScope=!!omsExportLayerIds;
+    if(hadScope)this.invalidateExportVideoCaches();
+    omsExportLayerIds=null
+  }
   exportStart(){return this.layerSelectionPlan?.start||0}
   projectTime(relativeTime){return this.exportStart()+Math.max(0,+relativeTime||0)}
   exportFilename(extension){
@@ -18443,7 +18474,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 .exportScopeNotice small{font-size:9px;color:#8fe6cf;line-height:1.35}
 .exportSheet.selectedLayerExport .nonVideoExportOption{display:none}
 </style>
-<!-- V4.50 — long-press layer-header multi-select, hidden legacy lock affordance, and strict selected-only media export routing. -->
+<!-- V4.51 — selected-only export purges excluded video frame/GPU caches, guards final draw calls, and force-seeks restored media to prevent frozen unselected frames. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
