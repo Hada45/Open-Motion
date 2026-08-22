@@ -9503,7 +9503,7 @@ class LayerActionClipboardService{
 }
 
 class UIController{
-  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this.transformCameraPolicy=new TransformCameraPolicy();this.keyframeOriginRouter=new KeyframeOriginRouter(this);this._keyframeOriginResolvers=this.keyframeOriginRouter.resolvers;this.layerActionClipboard=new LayerActionClipboardService(model);this.layerMultiSelectedIds=new Set();this.layerMultiSelectMode=false}
+  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this.transformCameraPolicy=new TransformCameraPolicy();this.keyframeOriginRouter=new KeyframeOriginRouter(this);this._keyframeOriginResolvers=this.keyframeOriginRouter.resolvers;this.layerActionClipboard=new LayerActionClipboardService(model);this.layerMultiSelectedIds=new Set();this.layerMultiSelectMode=false;this.layerMultiFocusId=null}
 
   /* =========================================================
      V4.27 — KEYFRAME ORIGIN ROUTING CONTRACT
@@ -9745,6 +9745,7 @@ class UIController{
     const had=this.layerMultiSelectedIds.size>0;
     this.layerMultiSelectedIds.clear();
     this.layerMultiSelectMode=false;
+    this.layerMultiFocusId=null;
     this._multiSelectionToolSignature='';
     this.syncLayerMultiSelectModeUI();
     return had
@@ -9756,6 +9757,7 @@ class UIController{
     // suppression before the single-layer click continues into Inspector.
     this.layerMultiSelectMode=false;
     this.layerMultiSelectedIds.clear();
+    this.layerMultiFocusId=null;
     this._multiSelectionToolSignature='';
     if(timeline)timeline.suppressClickUntil=0;
     if(this.drawerMode==='multi')this.closeDrawer({preserveLayerMultiSelection:true});
@@ -9766,6 +9768,7 @@ class UIController{
     const count=this.layerMultiSelectedIds.size;
     this.layerMultiSelectMode=false;
     this.layerMultiSelectedIds.clear();
+    this.layerMultiFocusId=null;
     this._multiSelectionToolSignature='';
     if(timeline)timeline.suppressClickUntil=0;
     if(this.drawerMode==='multi')this.closeDrawer({preserveLayerMultiSelection:true});
@@ -9790,6 +9793,14 @@ class UIController{
     return model.selected?new Set([model.selected]):new Set()
   }
 
+  multiSelectionFocusLayerId(){
+    if(!this.layerMultiSelectedIds.size)return null;
+    if(this.layerMultiFocusId&&this.layerMultiSelectedIds.has(this.layerMultiFocusId))return this.layerMultiFocusId;
+    const remaining=[...this.layerMultiSelectedIds];
+    this.layerMultiFocusId=remaining[remaining.length-1]||null;
+    return this.layerMultiFocusId
+  }
+
   selectedOutputLayers(){
     const ids=this.selectedLayerIds();
     return (model.layers||[]).filter(layer=>ids.has(layer.id)&&model.durationPolicy.isOutputLayer(layer))
@@ -9803,8 +9814,10 @@ class UIController{
     // Starting a new selection session must not inherit stale IDs from a
     // previous session; otherwise an old video/audio layer can leak into a
     // later selected-only export even though it is no longer visibly chosen.
+    const previousSelected=model.selected;
     this.layerMultiSelectedIds.clear();
-    if(model.selected)this.layerMultiSelectedIds.add(model.selected);
+    if(previousSelected)this.layerMultiSelectedIds.add(previousSelected);
+    this.layerMultiFocusId=previousSelected||null;
     model.selected=null;
     this.layerMultiSelectMode=true;
     this.closeLayerActions();
@@ -9821,6 +9834,7 @@ class UIController{
     model.selected=null;
     this.layerMultiSelectMode=true;
     this.layerMultiSelectedIds.add(layerId);
+    this.layerMultiFocusId=layerId;
     this.closeLayerActions();
     this.closeDrawer({preserveLayerMultiSelection:true});
     this.syncLayerMultiSelectModeUI();
@@ -9840,6 +9854,9 @@ class UIController{
     else if(previousSingle!==layerId)this.layerMultiSelectedIds.add(layerId);
     else if(this.layerMultiSelectedIds.has(layerId))this.layerMultiSelectedIds.delete(layerId);
     else this.layerMultiSelectedIds.add(layerId);
+    this.layerMultiFocusId=this.layerMultiSelectedIds.has(layerId)
+      ?layerId
+      :([...this.layerMultiSelectedIds].pop()||null);
     if(this.drawerMode!=='multi')this.closeDrawer({preserveLayerMultiSelection:true});
     this.syncLayerMultiSelectModeUI();
     timeline.rebuild();
@@ -10033,6 +10050,11 @@ class UIController{
     drawer.querySelectorAll('[data-multi-time]').forEach(button=>button.onclick=()=>this.trimSelectedLayersAtPlayhead(button.dataset.multiTime));
     drawer.querySelectorAll('[data-multi-recall]').forEach(button=>button.onclick=()=>this.recallSelectedLayersToPlayhead(button.dataset.multiRecall));
     drawer.querySelectorAll('[data-multi-arrange]').forEach(button=>button.onclick=()=>this.arrangeSelectedLayers(button.dataset.multiArrange));
+    // V4.60 — the multi-select drawer overlays the bottom of the mobile
+    // timeline. Pin the most recently selected row above it after the drawer's
+    // compact height has settled, just like Inspector keeps its active row in
+    // view. Other rows remain scrollable so additive selection still works.
+    requestAnimationFrame(()=>editorSplit?.ensureLayerGroupVisible?.());
     return true
   }
 
@@ -10061,8 +10083,12 @@ class UIController{
   selectAllLayers(){
     this.closeLayerActions();
     this.closeDrawer();
+    const previousSelected=model.selected;
     model.selected=null;
     this.layerMultiSelectedIds=new Set((model.layers||[]).map(layer=>layer.id));
+    this.layerMultiFocusId=(previousSelected&&this.layerMultiSelectedIds.has(previousSelected))
+      ?previousSelected
+      :([...this.layerMultiSelectedIds].pop()||null);
     this.layerMultiSelectMode=true;
     this.syncLayerMultiSelectModeUI();
     timeline.rebuild();
@@ -10568,6 +10594,7 @@ class UIController{
     if(closingMulti&&!preserveLayerMultiSelection){
       this.layerMultiSelectMode=false;
       this.layerMultiSelectedIds.clear();
+      this.layerMultiFocusId=null;
       this._multiSelectionToolSignature='';
       if(timeline)timeline.suppressClickUntil=0;
       this.syncLayerMultiSelectModeUI()
@@ -13419,8 +13446,11 @@ class EditorSplitController{
     const rows=[...document.querySelectorAll('#tracks .track')];
     const drawer=this.drawer();
     if(!sc||!inner||!rows.length||!drawer)return;
+    const focusLayerId=()=>this.ui?.drawerMode==='multi'
+      ?this.ui.multiSelectionFocusLayerId?.()
+      :(this.cameraSelectedFocusRequired()?this.cameraFocusId():model.selected);
     const wanted=Math.min(this.visibleLayerTarget(),rows.length);
-    let idx=rows.findIndex(r=>r.dataset.layerId===model.selected);
+    let idx=rows.findIndex(r=>r.dataset.layerId===focusLayerId());
     if(idx<0)idx=0;
 
     let start;
@@ -13479,7 +13509,7 @@ class EditorSplitController{
       // Re-pin after every relevant layout phase. The helper itself also grows
       // scroll capacity if a late drawer/top-bar reflow changes the limit.
       const pinSelected=()=>{
-        const focusId=this.cameraSelectedFocusRequired()?this.cameraFocusId():model.selected;
+        const focusId=focusLayerId();
         const selectedRow=[...document.querySelectorAll('#tracks .track')]
           .find(r=>r.dataset.layerId===focusId);
         pinRow(selectedRow);
@@ -18996,7 +19026,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   }
 }
 </style>
-<!-- V4.59 local preview — user-owned Preview Quality plus seamless cached-frame pause/resume playback. -->
+<!-- V4.60 local preview — multi-layer selection pins the most recently selected timeline row above its toolbar. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
