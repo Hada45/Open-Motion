@@ -9927,7 +9927,7 @@ class UIController{
     const arrange=`<div class="multiArrangeGroup" role="group" aria-label="Susun Layer"><button type="button" data-multi-arrange="align-start" aria-label="Sejajarkan awal layer" title="Sejajarkan Awal">${this.multiArrangeIcon('alignStart')}</button><button type="button" data-multi-arrange="sequence" aria-label="Susun layer berurutan dari bawah ke atas" title="Susun Berurutan">${this.multiArrangeIcon('sequence')}</button><button type="button" data-multi-arrange="align-end" aria-label="Sejajarkan akhir layer" title="Sejajarkan Akhir">${this.multiArrangeIcon('alignEnd')}</button></div>`;
     this._multiSelectionToolSignature=signature;
     this.drawerMode='multi';
-    const drawer=this.drawerShell(`${layers.length} Layer Dipilih`,`<div class="drawerBody multiSelectBody"><div class="multiTimeGroup ${inside?'inside':'outside'}">${timeActions}</div>${arrange}</div>`);
+    const drawer=this.drawerShell(`${layers.length} Layer Dipilih`,`<div class="drawerBody multiSelectBody"><div class="multiTimeGroup ${inside?'inside':`outside ${side}`}">${timeActions}</div>${arrange}</div>`);
     drawer.classList.add('multiSelectDrawer');
     drawer.querySelectorAll('[data-multi-time]').forEach(button=>button.onclick=()=>this.trimSelectedLayersAtPlayhead(button.dataset.multiTime));
     drawer.querySelectorAll('[data-multi-recall]').forEach(button=>button.onclick=()=>this.recallSelectedLayersToPlayhead(button.dataset.multiRecall));
@@ -18688,8 +18688,8 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 .exportScopeNotice small{font-size:9px;color:#8fe6cf;line-height:1.35}
 .exportSheet.selectedLayerExport .nonVideoExportOption{display:none}
 </style>
-<style id="oms-v452-multi-layer-arrange">
-/* V4.52 — compact multi-layer timeline toolbar + arrange controls. */
+<style id="oms-v453-multi-layer-arrange">
+/* V4.53 — thinner multi-layer toolbar, directional recall icons, no divider. */
 .drawer.multiSelectDrawer{
   left:0;
   right:0;
@@ -18697,48 +18697,50 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   bottom:0;
   width:100%;
   height:auto;
-  max-height:172px;
+  max-height:92px;
   overflow:hidden;
 }
 .drawer.multiSelectDrawer>.drawerHead{
-  flex:0 0 36px;
-  height:36px;
-  min-height:36px;
+  flex:0 0 26px!important;
+  height:26px!important;
+  min-height:26px!important;
+  padding:0 7px;
 }
-.drawer.multiSelectDrawer>.drawerHead b{font-size:10px}
+.drawer.multiSelectDrawer>.drawerHead b{font-size:9px}
+.drawer.multiSelectDrawer>.drawerHead button{font-size:15px}
 .multiSelectBody{
   flex:1 1 auto;
   min-width:0;
   min-height:0;
   display:grid;
-  grid-template-columns:minmax(0,1.45fr) minmax(132px,.9fr);
-  gap:8px;
-  align-items:stretch;
-  padding:8px;
+  grid-template-columns:minmax(0,1.55fr) minmax(118px,.82fr);
+  gap:6px;
+  align-items:center;
+  padding:4px 6px 6px;
   overflow:hidden!important;
 }
 .multiTimeGroup{
   min-width:0;
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:5px;
-  padding-right:8px;
-  border-right:1px solid #3a4055;
+  gap:4px;
+  padding:0;
+  border:0;
 }
 .multiTimeGroup.outside{grid-template-columns:repeat(2,minmax(0,1fr))}
 .multiTimeBtn{
   min-width:0;
-  height:58px;
+  height:48px;
   border:1px solid #374057;
-  border-radius:8px;
+  border-radius:7px;
   background:#252a3e;
   color:#dbe1ee;
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:4px;
-  padding:4px;
+  gap:3px;
+  padding:3px;
 }
 .multiTimeBtn:active,
 .multiTimeBtn:focus-visible,
@@ -18748,13 +18750,14 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   color:var(--accent);
   outline:none;
 }
-.multiTimeBtn>span{font-size:18px;line-height:1;letter-spacing:-2px}
-.multiTimeBtn>.mqRecallIcon{min-height:19px;letter-spacing:0}
-.multiTimeBtn>.mqRecallIcon svg{width:27px;height:18px}
+.multiTimeBtn>span{font-size:16px;line-height:1;letter-spacing:-2px}
+.multiTimeBtn>.mqRecallIcon{min-height:17px;letter-spacing:0}
+.multiTimeBtn>.mqRecallIcon svg{width:25px;height:17px;display:block;overflow:visible}
+.multiTimeBtn>.mqRecallIcon.before svg{transform:scaleX(-1)}
 .multiTimeBtn small{
   max-width:100%;
   color:#aab3c6;
-  font-size:7px;
+  font-size:6.5px;
   line-height:1.05;
   text-align:center;
   white-space:normal;
@@ -18764,17 +18767,17 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
   align-items:center;
-  gap:6px;
-  padding:7px;
-  border-radius:10px;
-  background:#34374f;
+  gap:4px;
+  padding:4px;
+  border-radius:8px;
+  background:#303348;
 }
 .multiArrangeGroup button{
   min-width:0;
-  height:48px;
+  height:40px;
   border:1px solid transparent;
-  border-radius:7px;
-  background:#4a4e67;
+  border-radius:6px;
+  background:#454960;
   color:#f0f2f8;
   display:grid;
   place-items:center;
@@ -18783,50 +18786,50 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 .multiArrangeIcon{
   position:relative;
   display:block;
-  width:34px;
-  height:25px;
+  width:29px;
+  height:22px;
 }
 .multiArrangeIcon i{
   position:absolute;
   display:block;
-  height:4px;
-  border:2px solid currentColor;
+  height:3px;
+  border:1.5px solid currentColor;
   background:transparent;
 }
-.multiArrangeIcon i:nth-child(1){top:2px;width:28px}
-.multiArrangeIcon i:nth-child(2){top:10px;width:20px}
-.multiArrangeIcon i:nth-child(3){top:18px;width:11px}
+.multiArrangeIcon i:nth-child(1){top:2px;width:24px}
+.multiArrangeIcon i:nth-child(2){top:9px;width:17px}
+.multiArrangeIcon i:nth-child(3){top:16px;width:10px}
 .multiArrangeIcon.alignStart i{left:2px}
 .multiArrangeIcon.sequence i:nth-child(1){right:1px}
 .multiArrangeIcon.sequence i:nth-child(2){left:8px}
 .multiArrangeIcon.sequence i:nth-child(3){left:1px}
 .multiArrangeIcon.alignEnd i{right:2px}
 @media(max-width:430px){
-  .multiSelectBody{grid-template-columns:minmax(0,1.35fr) minmax(118px,.9fr);gap:5px;padding:6px}
-  .multiTimeGroup{gap:3px;padding-right:5px}
-  .multiTimeBtn{height:54px;padding:3px 1px}
-  .multiTimeBtn>span{font-size:16px}
-  .multiTimeBtn small{font-size:6.4px}
-  .multiArrangeGroup{gap:3px;padding:5px}
-  .multiArrangeGroup button{height:44px}
-  .multiArrangeIcon{transform:scale(.84)}
+  .multiSelectBody{grid-template-columns:minmax(0,1.48fr) minmax(110px,.82fr);gap:4px;padding:3px 5px 5px}
+  .multiTimeGroup{gap:3px}
+  .multiTimeBtn{height:43px;padding:2px 1px}
+  .multiTimeBtn>span{font-size:15px}
+  .multiTimeBtn small{font-size:6px}
+  .multiArrangeGroup{gap:3px;padding:3px}
+  .multiArrangeGroup button{height:37px}
+  .multiArrangeIcon{transform:scale(.78)}
 }
 @media(max-width:899px){
   #drawer.multiSelectDrawer:not(.addDrawer){
-    height:108px!important;
-    max-height:108px!important;
+    height:76px!important;
+    max-height:76px!important;
   }
 }
 @media(min-width:900px){
   html:not(.omsMobileLandscapeDesktop) .timelineArea:has(>#drawer.multiSelectDrawer:not(.hidden)){
-    grid-template-rows:38px minmax(0,1fr) 112px!important;
+    grid-template-rows:38px minmax(0,1fr) 84px!important;
   }
   html:not(.omsMobileLandscapeDesktop) .timelineArea>#drawer.multiSelectDrawer:not(.hidden){
-    height:112px!important;
+    height:84px!important;
   }
 }
 </style>
-<!-- V4.52 — multi-select now opens a compact trim/recall + arrange toolbar; arrange start, bottom-to-top sequence, and arrange end preserve duration/source data; closing multi-select resets the next short tap to Inspector. -->
+<!-- V4.53 — multi-select toolbar is thinner, recall icons face the playhead on the left, and the center divider is removed. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
