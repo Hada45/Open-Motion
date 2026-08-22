@@ -3445,6 +3445,25 @@ const blendModeIndex=value=>({
   'source-over':0,multiply:1,darken:2,'color-burn':3,screen:4,lighten:5,'color-dodge':6,lighter:7,
   overlay:8,'soft-light':9,'hard-light':10,difference:11,exclusion:12,hue:13,saturation:14,color:15,luminosity:16
 })[normalizeBlendMode(value)]||0;
+const TRACK_MATTE_MODES=new Set(['none','mask','exclude']);
+const TRACK_MATTE_SCOPES=new Set(['below','selected']);
+const trackMatteSettings=layer=>{
+  const value=layer?.trackMatte||{};
+  return{
+    mode:TRACK_MATTE_MODES.has(value.mode)?value.mode:'none',
+    scope:TRACK_MATTE_SCOPES.has(value.scope)?value.scope:'below',
+    targetIds:Array.isArray(value.targetIds)?[...new Set(value.targetIds.filter(Boolean))]:[]
+  }
+};
+const isTrackMatteSource=layer=>trackMatteSettings(layer).mode!=='none'&&!['audio','camera','null'].includes(layer?.type);
+const trackMatteTargetsLayer=(source,target)=>{
+  if(!source||!target||source.id===target.id)return false;
+  const settings=trackMatteSettings(source);
+  if(settings.mode==='none')return false;
+  if(settings.scope==='selected')return settings.targetIds.includes(target.id);
+  const sourceIndex=model.layers.indexOf(source),targetIndex=model.layers.indexOf(target);
+  return sourceIndex>=0&&targetIndex>sourceIndex
+};
 const uid=(()=>{let n=0;return p=>`${p}_${Date.now().toString(36)}_${++n}`})();
 const download=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
 const fileDataURL=file=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file)});
@@ -3778,7 +3797,7 @@ class ProjectModel{
   defaultLayer(type,opt={}){
     const p=this.project;const base={id:uid('layer'),type,name:'Layer',start:0,duration:p.duration,hidden:false,locked:false,parentId:null,transformSpace:'world',space3d:false,
       x:p.width/2,y:p.height/2,z:0,w:Math.min(520,p.width*.55),h:Math.min(320,p.height*.28),scaleX:1,scaleY:1,scaleZ:1,rotation:0,rotX:0,rotY:0,rotZ:0,skewX:0,skewY:0,opacity:1,anchorX:.5,anchorY:.5,
-      color:'#27d3b5',stroke:'#ffffff',strokeWidth:0,radius:30,blend:'source-over',effects:{blur:0,brightness:100,contrast:100,saturate:100,hue:0},mask:{enabled:false,type:'rect',feather:0,invert:false},sourceDuration:null,sourceIn:0,sourceOut:null,mediaExtendIn:0,mediaExtendOut:0,kf:{}};
+      color:'#27d3b5',stroke:'#ffffff',strokeWidth:0,radius:30,blend:'source-over',trackMatte:{mode:'none',scope:'below',targetIds:[]},effects:{blur:0,brightness:100,contrast:100,saturate:100,hue:0},mask:{enabled:false,type:'rect',feather:0,invert:false},sourceDuration:null,sourceIn:0,sourceOut:null,mediaExtendIn:0,mediaExtendOut:0,kf:{}};
     if(type==='shape')Object.assign(base,{name:'Bentuk',shape:opt.shape||'rect'});
     if(type==='text')Object.assign(base,{name:'Teks',text:opt.text||'Open Motion',fontSize:Math.round(p.height*.07),fontWeight:700,fontFamily:'system-ui',color:'#ffffff',w:p.width*.72,h:p.height*.18,align:'center'});
     if(type==='image')Object.assign(base,{name:opt.name||'Gambar',dataUrl:opt.dataUrl||'',w:p.width*.65,h:p.height*.4});
@@ -3854,6 +3873,10 @@ class ProjectModel{
     const index=this.layers.findIndex(l=>l.id===id);
     if(index<0)return null;
     const [layer]=this.layers.splice(index,1);
+    for(const candidate of this.layers){
+      const matte=trackMatteSettings(candidate);
+      if(matte.targetIds.includes(id))candidate.trackMatte={...matte,targetIds:matte.targetIds.filter(targetId=>targetId!==id)}
+    }
     this.disposeLayerRuntime(layer);
     if(this.selected===id)this.selected=null;
     this.syncProjectDurationToContent();
@@ -3963,6 +3986,7 @@ class ProjectModel{
     });
     this.layers.forEach(l=>{
       mediaAssets.resolveLayer(l);
+      l.trackMatte=trackMatteSettings(l);
       // Projects saved before per-layer 3D existed used the scene-wide flag.
       // Preserve their appearance, while newly created 2D layers default OFF.
       if(typeof l.space3d!=='boolean')l.space3d=['camera','mesh'].includes(l.type)||!!d.mode3d;
@@ -5049,6 +5073,9 @@ class Renderer{
     this.ctx=canvas.getContext('2d');
     this.off=document.createElement('canvas');
     this.offCtx=this.off.getContext('2d');
+    this.trackMatteLayerCanvas=document.createElement('canvas');
+    this.trackMatteMaskCanvas=document.createElement('canvas');
+    this.suppressSelection=false;
     this.interactionCache=null;
     this.domInteraction=null;
     this.interactionLayer=$('#interactionLayer');
@@ -5136,6 +5163,41 @@ class Renderer{
     return layers;
   }
 
+  activeTrackMatteSources(layers=this.activeLayers()){
+    return layers.filter(isTrackMatteSource)
+  }
+
+  trackMatteInfoForLayer(layer,sources=this.activeTrackMatteSources()){
+    const targetIndex=model.layers.indexOf(layer),matches=sources.filter(source=>trackMatteTargetsLayer(source,layer));
+    if(!matches.length)return null;
+    matches.sort((a,b)=>Math.abs(model.layers.indexOf(a)-targetIndex)-Math.abs(model.layers.indexOf(b)-targetIndex));
+    const source=matches[0],settings=trackMatteSettings(source);
+    return{source,mode:settings.mode}
+  }
+
+  ensureTrackMatteCanvases(){
+    for(const canvas of [this.trackMatteLayerCanvas,this.trackMatteMaskCanvas]){
+      if(canvas.width!==this.canvas.width)canvas.width=this.canvas.width;
+      if(canvas.height!==this.canvas.height)canvas.height=this.canvas.height
+    }
+  }
+
+  renderTrackMatteLayer(canvas,layer){
+    const previous=this.ctx,context=canvas.getContext('2d'),blend=layer.blend,selected=this.suppressSelection;
+    context.setTransform(1,0,0,1,0,0);context.globalAlpha=1;context.globalCompositeOperation='source-over';context.filter='none';context.clearRect(0,0,canvas.width,canvas.height);
+    this.ctx=context;this.suppressSelection=true;layer.blend='source-over';
+    try{this.drawLayer(layer)}finally{layer.blend=blend;this.suppressSelection=selected;this.ctx=previous}
+  }
+
+  drawLayerWithTrackMatte(layer,matte){
+    this.ensureTrackMatteCanvases();
+    this.renderTrackMatteLayer(this.trackMatteLayerCanvas,layer);
+    this.renderTrackMatteLayer(this.trackMatteMaskCanvas,matte.source);
+    const layerContext=this.trackMatteLayerCanvas.getContext('2d');
+    layerContext.save();layerContext.globalAlpha=1;layerContext.filter='none';layerContext.globalCompositeOperation=matte.mode==='exclude'?'destination-out':'destination-in';layerContext.drawImage(this.trackMatteMaskCanvas,0,0);layerContext.restore();
+    const context=this.ctx;context.save();context.globalAlpha=1;context.filter='none';context.globalCompositeOperation=normalizeBlendMode(layer.blend);context.drawImage(this.trackMatteLayerCanvas,0,0);context.restore()
+  }
+
   makeInteractionCanvas(){
     const cv=document.createElement('canvas');
     cv.width=this.canvas.width;
@@ -5166,7 +5228,7 @@ class Renderer{
   canUseDomCompositor(layer){
     // DOM compositing bypasses the camera crop transform; fall back to Canvas
     // while Digital Zoom is active so interaction remains pixel-aligned.
-    if(!layer||model.playing||this.layerUses3D(layer)||Math.abs(this.digitalCanvasZoom()-1)>.0001)return false;
+    if(!layer||model.playing||this.layerUses3D(layer)||Math.abs(this.digitalCanvasZoom()-1)>.0001||this.activeTrackMatteSources().length)return false;
     if(!['video','image','text','shape'].includes(layer.type))return false;
     // A parent/controller can move multiple descendants; one surface would
     // not be sufficient in that case.
@@ -5286,7 +5348,7 @@ class Renderer{
     this.interactionCache=null;
     this.stopDomInteraction(false);
 
-    if(!model.project||model.playing||!layerId)return;
+    if(!model.project||model.playing||!layerId||this.activeTrackMatteSources().length)return;
     const selected=model.layers.find(l=>l.id===layerId);
     if(!selected||selected.type==='audio'||selected.type==='camera')return;
 
@@ -5400,8 +5462,12 @@ class Renderer{
     c.fillRect(0,0,this.canvas.width,this.canvas.height);
     this.grid3D();
 
-    const layers=this.activeLayers();
-    for(const l of layers)this.drawLayer(l);
+    const layers=this.activeLayers(),matteSources=this.activeTrackMatteSources(layers);
+    for(const l of layers){
+      if(isTrackMatteSource(l))continue;
+      const matte=this.trackMatteInfoForLayer(l,matteSources);
+      if(matte)this.drawLayerWithTrackMatte(l,matte);else this.drawLayer(l)
+    }
     this.drawEditorOverlays();
     this.finishFrameUI();
   }
@@ -5440,7 +5506,7 @@ class Renderer{
       }catch(e){}
     }
     c.restore();
-    if(l.id===model.selected)this.selectionBox(l,{x:sx,y:sy,scaleX:scx,scaleY:scy,rotation:rot,w:drawW,h:drawH});
+    if(!this.suppressSelection&&l.id===model.selected)this.selectionBox(l,{x:sx,y:sy,scaleX:scx,scaleY:scy,rotation:rot,w:drawW,h:drawH});
   }
   roundRect(x,y,w,h,r){const c=this.ctx;r=Math.max(0,Math.min(r||0,w/2,h/2));c.beginPath();if(c.roundRect)c.roundRect(x,y,w,h,r);else c.rect(x,y,w,h)}
   drawShape(l){const c=this.ctx,w=l.w,h=l.h;c.fillStyle=l.color;c.strokeStyle=l.stroke;c.lineWidth=l.strokeWidth||0;
@@ -5476,9 +5542,9 @@ class Renderer{
   rotatePoint(v,rx,ry,rz){let{x,y,z}=v;let a=rad(rx),c=Math.cos(a),s=Math.sin(a);[y,z]=[y*c-z*s,y*s+z*c];a=rad(ry);c=Math.cos(a);s=Math.sin(a);[x,z]=[x*c+z*s,-x*s+z*c];a=rad(rz);c=Math.cos(a);s=Math.sin(a);[x,y]=[x*c-y*s,x*s+y*c];return{x,y,z}}
   drawMesh(l){
     if(!omsLayerIncludedInExport(l))return;
-    const p=model.effective(l);if(l.mesh==='sphere'){const q=this.project(p.x,p.y,p.z);if(!q)return;const r=Math.max(2,l.w*.5*q.scale*p.scaleX);const c=this.ctx;c.save();c.globalAlpha=p.opacity;const g=c.createRadialGradient(q.x-r*.28,q.y-r*.3,r*.06,q.x,q.y,r);g.addColorStop(0,'#ffffff');g.addColorStop(.16,l.color);g.addColorStop(1,'#121828');c.fillStyle=g;c.beginPath();c.arc(q.x,q.y,r,0,Math.PI*2);c.fill();if(l.id===model.selected){c.strokeStyle='#00d7a7';c.lineWidth=3;c.stroke()}c.restore();return}
+    const p=model.effective(l);if(l.mesh==='sphere'){const q=this.project(p.x,p.y,p.z);if(!q)return;const r=Math.max(2,l.w*.5*q.scale*p.scaleX);const c=this.ctx;c.save();c.globalAlpha=p.opacity;const g=c.createRadialGradient(q.x-r*.28,q.y-r*.3,r*.06,q.x,q.y,r);g.addColorStop(0,'#ffffff');g.addColorStop(.16,l.color);g.addColorStop(1,'#121828');c.fillStyle=g;c.beginPath();c.arc(q.x,q.y,r,0,Math.PI*2);c.fill();if(!this.suppressSelection&&l.id===model.selected){c.strokeStyle='#00d7a7';c.lineWidth=3;c.stroke()}c.restore();return}
     const hw=l.w/2,hh=l.h/2,hd=(l.depth||l.w)/2,verts=[[-hw,-hh,-hd],[hw,-hh,-hd],[hw,hh,-hd],[-hw,hh,-hd],[-hw,-hh,hd],[hw,-hh,hd],[hw,hh,hd],[-hw,hh,hd]].map(v=>{let r=this.rotatePoint({x:v[0],y:v[1],z:v[2]},p.rotX,p.rotY,p.rotZ+p.rotation);return this.project(p.x+r.x*p.scaleX,p.y+r.y*p.scaleY,p.z+r.z*p.scaleZ)});
-    const faces=[[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[0,3,7,4]].map((ids,i)=>({ids,i,depth:ids.reduce((s,k)=>s+(verts[k]?.depth||0),0)/4})).sort((a,b)=>b.depth-a.depth);const c=this.ctx;c.save();c.globalAlpha=p.opacity;for(const f of faces){if(f.ids.some(i=>!verts[i]))continue;c.beginPath();f.ids.forEach((i,n)=>n?c.lineTo(verts[i].x,verts[i].y):c.moveTo(verts[i].x,verts[i].y));c.closePath();c.fillStyle=this.shade(l.color,.74+f.i*.035);c.fill();c.strokeStyle='rgba(255,255,255,.16)';c.lineWidth=2;c.stroke()}if(l.id===model.selected){const q=this.project(p.x,p.y,p.z);if(q){c.strokeStyle='#00d7a7';c.beginPath();c.arc(q.x,q.y,8,0,Math.PI*2);c.stroke()}}c.restore()
+    const faces=[[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[0,3,7,4]].map((ids,i)=>({ids,i,depth:ids.reduce((s,k)=>s+(verts[k]?.depth||0),0)/4})).sort((a,b)=>b.depth-a.depth);const c=this.ctx;c.save();c.globalAlpha=p.opacity;for(const f of faces){if(f.ids.some(i=>!verts[i]))continue;c.beginPath();f.ids.forEach((i,n)=>n?c.lineTo(verts[i].x,verts[i].y):c.moveTo(verts[i].x,verts[i].y));c.closePath();c.fillStyle=this.shade(l.color,.74+f.i*.035);c.fill();c.strokeStyle='rgba(255,255,255,.16)';c.lineWidth=2;c.stroke()}if(!this.suppressSelection&&l.id===model.selected){const q=this.project(p.x,p.y,p.z);if(q){c.strokeStyle='#00d7a7';c.beginPath();c.arc(q.x,q.y,8,0,Math.PI*2);c.stroke()}}c.restore()
   }
   shade(hex,f){const m=String(hex).match(/[0-9a-f]{2}/gi);if(!m)return hex;return '#'+m.map(x=>Math.round(clamp(parseInt(x,16)*f,0,255)).toString(16).padStart(2,'0')).join('')}
   drawEditorOverlays(){
@@ -5521,7 +5587,7 @@ const Mat4={
 
 class WebGLRenderer{
   constructor(projectModel,canvas){
-    this.model=projectModel;this.canvas=canvas;this.fallback=null;this.domInteraction=null;this.interactionCache=null;this.exporting=false;this.textures=new Map();this.imageWatch=new WeakSet();this.overlay=$('#interactionAbove');this.interactionLayer=$('#interactionLayer');
+    this.model=projectModel;this.canvas=canvas;this.fallback=null;this.domInteraction=null;this.interactionCache=null;this.exporting=false;this.textures=new Map();this.trackMatteTargets=new Map();this.frameTrackMattes=[];this.imageWatch=new WeakSet();this.overlay=$('#interactionAbove');this.interactionLayer=$('#interactionLayer');
     bus.on('layer:disposed',id=>this.disposeTexture(id));
     bus.on('layer:texture-release',id=>this.disposeTexture(id));
     bus.on('model:reset',()=>this.disposeAllTextures());
@@ -5534,15 +5600,19 @@ class WebGLRenderer{
   }
   disposeTexture(id){
     const entry=this.textures.get(id);
-    if(!entry)return;
-    try{if(this.gl&&entry.texture)this.gl.deleteTexture(entry.texture)}catch(e){}
-    if(entry.canvas){entry.canvas.width=0;entry.canvas.height=0}
-    this.textures.delete(id)
+    if(entry){
+      try{if(this.gl&&entry.texture)this.gl.deleteTexture(entry.texture)}catch(e){}
+      if(entry.canvas){entry.canvas.width=0;entry.canvas.height=0}
+      this.textures.delete(id)
+    }
+    this.disposeTrackMatteTarget(id)
   }
-  disposeAllTextures(){for(const id of [...this.textures.keys()])this.disposeTexture(id)}
+  disposeTrackMatteTarget(id){const entry=this.trackMatteTargets.get(id);if(!entry)return;try{if(this.gl&&entry.texture)this.gl.deleteTexture(entry.texture);if(this.gl&&entry.fbo)this.gl.deleteFramebuffer(entry.fbo)}catch(e){}this.trackMatteTargets.delete(id)}
+  disposeAllTextures(){for(const id of [...this.textures.keys()])this.disposeTexture(id);for(const id of [...this.trackMatteTargets.keys()])this.disposeTrackMatteTarget(id)}
   pruneTextures(){
     const live=new Set((model.layers||[]).map(layer=>layer.id));
-    for(const id of [...this.textures.keys()])if(!live.has(id))this.disposeTexture(id)
+    for(const id of [...this.textures.keys()])if(!live.has(id))this.disposeTexture(id);
+    for(const id of [...this.trackMatteTargets.keys()])if(!live.has(id))this.disposeTrackMatteTarget(id)
   }
   shader(type,source){const gl=this.gl,s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s)||'Shader gagal');return s}
   program(vs,fs){const gl=this.gl,p=gl.createProgram();gl.attachShader(p,this.shader(gl.VERTEX_SHADER,vs));gl.attachShader(p,this.shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p)||'Program WebGL gagal');return p}
@@ -5550,14 +5620,14 @@ class WebGLRenderer{
     const gl=this.gl;
     this.textureProgram=this.program(
       `attribute vec3 aPosition;attribute vec2 aUV;uniform mat4 uMVP;uniform float uDepthBias;varying vec2 vUV;void main(){vUV=aUV;gl_Position=uMVP*vec4(aPosition,1.0);gl_Position.z+=uDepthBias*gl_Position.w;}`,
-      `precision mediump float;varying vec2 vUV;uniform sampler2D uTexture;uniform float uOpacity;uniform vec2 uTexel;uniform float uBlur;void main(){vec4 c;if(uBlur>.05){vec2 r=uTexel*uBlur;c=texture2D(uTexture,vUV)*.20;c+=texture2D(uTexture,vUV+vec2(r.x*.5,0.0))*.10;c+=texture2D(uTexture,vUV-vec2(r.x*.5,0.0))*.10;c+=texture2D(uTexture,vUV+vec2(0.0,r.y*.5))*.10;c+=texture2D(uTexture,vUV-vec2(0.0,r.y*.5))*.10;c+=texture2D(uTexture,vUV+vec2(r.x*.75,r.y*.75))*.05;c+=texture2D(uTexture,vUV+vec2(-r.x*.75,r.y*.75))*.05;c+=texture2D(uTexture,vUV+vec2(r.x*.75,-r.y*.75))*.05;c+=texture2D(uTexture,vUV-vec2(r.x*.75,r.y*.75))*.05;c+=texture2D(uTexture,vUV+vec2(r.x,0.0))*.05;c+=texture2D(uTexture,vUV-vec2(r.x,0.0))*.05;c+=texture2D(uTexture,vUV+vec2(0.0,r.y))*.05;c+=texture2D(uTexture,vUV-vec2(0.0,r.y))*.05;}else{c=texture2D(uTexture,vUV);}if(c.a<0.006)discard;c.a*=uOpacity;gl_FragColor=c;}`
+      `precision mediump float;varying vec2 vUV;uniform sampler2D uTexture;uniform sampler2D uTrackMatte;uniform float uOpacity;uniform vec2 uTexel;uniform float uBlur;uniform vec2 uViewport;uniform float uTrackMatteMode;void main(){vec4 c;if(uBlur>.05){vec2 r=uTexel*uBlur;c=texture2D(uTexture,vUV)*.20;c+=texture2D(uTexture,vUV+vec2(r.x*.5,0.0))*.10;c+=texture2D(uTexture,vUV-vec2(r.x*.5,0.0))*.10;c+=texture2D(uTexture,vUV+vec2(0.0,r.y*.5))*.10;c+=texture2D(uTexture,vUV-vec2(0.0,r.y*.5))*.10;c+=texture2D(uTexture,vUV+vec2(r.x*.75,r.y*.75))*.05;c+=texture2D(uTexture,vUV+vec2(-r.x*.75,r.y*.75))*.05;c+=texture2D(uTexture,vUV+vec2(r.x*.75,-r.y*.75))*.05;c+=texture2D(uTexture,vUV-vec2(r.x*.75,r.y*.75))*.05;c+=texture2D(uTexture,vUV+vec2(r.x,0.0))*.05;c+=texture2D(uTexture,vUV-vec2(r.x,0.0))*.05;c+=texture2D(uTexture,vUV+vec2(0.0,r.y))*.05;c+=texture2D(uTexture,vUV-vec2(0.0,r.y))*.05;}else{c=texture2D(uTexture,vUV);}float matte=1.0;if(uTrackMatteMode>.5){float alpha=texture2D(uTrackMatte,gl_FragCoord.xy/uViewport).a;matte=uTrackMatteMode<1.5?alpha:1.0-alpha;}c.a*=uOpacity*matte;if(c.a<.006)discard;gl_FragColor=c;}`
     );
-    this.tp={pos:gl.getAttribLocation(this.textureProgram,'aPosition'),uv:gl.getAttribLocation(this.textureProgram,'aUV'),mvp:gl.getUniformLocation(this.textureProgram,'uMVP'),depthBias:gl.getUniformLocation(this.textureProgram,'uDepthBias'),tex:gl.getUniformLocation(this.textureProgram,'uTexture'),opacity:gl.getUniformLocation(this.textureProgram,'uOpacity'),texel:gl.getUniformLocation(this.textureProgram,'uTexel'),blur:gl.getUniformLocation(this.textureProgram,'uBlur')};
+    this.tp={pos:gl.getAttribLocation(this.textureProgram,'aPosition'),uv:gl.getAttribLocation(this.textureProgram,'aUV'),mvp:gl.getUniformLocation(this.textureProgram,'uMVP'),depthBias:gl.getUniformLocation(this.textureProgram,'uDepthBias'),tex:gl.getUniformLocation(this.textureProgram,'uTexture'),trackMatte:gl.getUniformLocation(this.textureProgram,'uTrackMatte'),trackMatteMode:gl.getUniformLocation(this.textureProgram,'uTrackMatteMode'),viewport:gl.getUniformLocation(this.textureProgram,'uViewport'),opacity:gl.getUniformLocation(this.textureProgram,'uOpacity'),texel:gl.getUniformLocation(this.textureProgram,'uTexel'),blur:gl.getUniformLocation(this.textureProgram,'uBlur')};
     this.meshProgram=this.program(
       `attribute vec3 aPosition;attribute vec3 aNormal;uniform mat4 uMVP;uniform mat4 uModel;varying float vLight;void main(){vec3 n=normalize(mat3(uModel)*aNormal);float d=max(dot(n,normalize(vec3(-0.35,0.72,0.58))),0.0);vLight=0.27+d*0.73;gl_Position=uMVP*vec4(aPosition,1.0);}`,
-      `precision mediump float;uniform vec4 uColor;varying float vLight;void main(){gl_FragColor=vec4(uColor.rgb*vLight,uColor.a);}`
+      `precision mediump float;uniform vec4 uColor;uniform sampler2D uTrackMatte;uniform vec2 uViewport;uniform float uTrackMatteMode;varying float vLight;void main(){float matte=1.0;if(uTrackMatteMode>.5){float alpha=texture2D(uTrackMatte,gl_FragCoord.xy/uViewport).a;matte=uTrackMatteMode<1.5?alpha:1.0-alpha;}vec4 color=vec4(uColor.rgb*vLight,uColor.a*matte);if(color.a<.006)discard;gl_FragColor=color;}`
     );
-    this.mp={pos:gl.getAttribLocation(this.meshProgram,'aPosition'),normal:gl.getAttribLocation(this.meshProgram,'aNormal'),mvp:gl.getUniformLocation(this.meshProgram,'uMVP'),model:gl.getUniformLocation(this.meshProgram,'uModel'),color:gl.getUniformLocation(this.meshProgram,'uColor')};
+    this.mp={pos:gl.getAttribLocation(this.meshProgram,'aPosition'),normal:gl.getAttribLocation(this.meshProgram,'aNormal'),mvp:gl.getUniformLocation(this.meshProgram,'uMVP'),model:gl.getUniformLocation(this.meshProgram,'uModel'),color:gl.getUniformLocation(this.meshProgram,'uColor'),trackMatte:gl.getUniformLocation(this.meshProgram,'uTrackMatte'),trackMatteMode:gl.getUniformLocation(this.meshProgram,'uTrackMatteMode'),viewport:gl.getUniformLocation(this.meshProgram,'uViewport')};
     this.lineProgram=this.program(
       `attribute vec3 aPosition;uniform mat4 uMVP;void main(){gl_Position=uMVP*vec4(aPosition,1.0);}`,
       `precision mediump float;uniform vec4 uColor;void main(){gl_FragColor=uColor;}`
@@ -5566,56 +5636,88 @@ class WebGLRenderer{
     this.quadBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.quadBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-.5,.5,0,0,0,-.5,-.5,0,0,1,.5,-.5,0,1,1,-.5,.5,0,0,0,.5,-.5,0,1,1,.5,.5,0,1,0]),gl.STATIC_DRAW);
     this.lineBuffer=gl.createBuffer();this.meshes={cube:this.makeCube(),sphere:this.makeSphere(18,28)};
     this.initBlendCompositor();
+    this.initTrackMatteCompositor();
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthFunc(gl.LEQUAL)
   }
   initBlendCompositor(){
     const gl=this.gl;
-    this.blendProgram=this.program(
-      `attribute vec2 aPosition;varying vec2 vUV;void main(){vUV=aPosition*.5+.5;gl_Position=vec4(aPosition,0.0,1.0);}`,
-      `precision mediump float;varying vec2 vUV;uniform sampler2D uBackdrop;uniform sampler2D uSource;uniform float uMode;
-      float hue2rgb(float p,float q,float t){if(t<0.0)t+=1.0;if(t>1.0)t-=1.0;if(t<1.0/6.0)return p+(q-p)*6.0*t;if(t<.5)return q;if(t<2.0/3.0)return p+(q-p)*(2.0/3.0-t)*6.0;return p;}
-      vec3 rgb2hsl(vec3 c){float mx=max(c.r,max(c.g,c.b)),mn=min(c.r,min(c.g,c.b)),h=0.0,s=0.0,l=(mx+mn)*.5,d=mx-mn;if(d>.00001){s=l>.5?d/(2.0-mx-mn):d/(mx+mn);if(mx==c.r)h=(c.g-c.b)/d+(c.g<c.b?6.0:0.0);else if(mx==c.g)h=(c.b-c.r)/d+2.0;else h=(c.r-c.g)/d+4.0;h/=6.0;}return vec3(h,s,l);}
-      vec3 hsl2rgb(vec3 hsl){if(hsl.y<.00001)return vec3(hsl.z);float q=hsl.z<.5?hsl.z*(1.0+hsl.y):hsl.z+hsl.y-hsl.z*hsl.y,p=2.0*hsl.z-q;return vec3(hue2rgb(p,q,hsl.x+1.0/3.0),hue2rgb(p,q,hsl.x),hue2rgb(p,q,hsl.x-1.0/3.0));}
-      vec3 burn(vec3 s,vec3 d){return 1.0-min(vec3(1.0),(1.0-d)/max(s,vec3(.0001)));}
-      vec3 dodge(vec3 s,vec3 d){return min(vec3(1.0),d/max(1.0-s,vec3(.0001)));}
-      vec3 blendMode(vec3 s,vec3 d){
-        if(uMode<.5)return s;
-        if(uMode<1.5)return s*d;
-        if(uMode<2.5)return min(s,d);
-        if(uMode<3.5)return burn(s,d);
-        if(uMode<4.5)return 1.0-(1.0-s)*(1.0-d);
-        if(uMode<5.5)return max(s,d);
-        if(uMode<6.5)return dodge(s,d);
-        if(uMode<7.5)return min(vec3(1.0),s+d);
-        if(uMode<8.5)return mix(2.0*s*d,1.0-2.0*(1.0-s)*(1.0-d),step(vec3(.5),d));
-        if(uMode<9.5)return (1.0-2.0*s)*d*d+2.0*s*d;
-        if(uMode<10.5)return mix(2.0*s*d,1.0-2.0*(1.0-s)*(1.0-d),step(vec3(.5),s));
-        if(uMode<11.5)return abs(d-s);
-        if(uMode<12.5)return s+d-2.0*s*d;
-        vec3 sh=rgb2hsl(s),dh=rgb2hsl(d);
-        if(uMode<13.5)return hsl2rgb(vec3(sh.x,dh.y,dh.z));
-        if(uMode<14.5)return hsl2rgb(vec3(dh.x,sh.y,dh.z));
-        if(uMode<15.5)return hsl2rgb(vec3(sh.x,sh.y,dh.z));
-        return hsl2rgb(vec3(dh.x,dh.y,sh.z));
+    // W3C Compositing & Blending Level 1. A blended fragment first evaluates
+    // B(Cb, Cs), then uses source-over alpha compositing. Sampling the copied
+    // backdrop directly in the layer fragment keeps WebGL depth testing valid,
+    // so the exact same modes work for screen-space and True 3D planes.
+    const blendMath=`
+      float lum(vec3 c){return dot(c,vec3(.3,.59,.11));}
+      float sat(vec3 c){return max(c.r,max(c.g,c.b))-min(c.r,min(c.g,c.b));}
+      vec3 clipColor(vec3 c){float l=lum(c),n=min(c.r,min(c.g,c.b)),x=max(c.r,max(c.g,c.b));if(n<0.0)c=l+(c-vec3(l))*l/max(l-n,.00001);if(x>1.0)c=l+(c-vec3(l))*(1.0-l)/max(x-l,.00001);return c;}
+      vec3 setLum(vec3 c,float l){return clipColor(c+vec3(l-lum(c)));}
+      vec3 setSat(vec3 c,float s){float n=min(c.r,min(c.g,c.b)),x=max(c.r,max(c.g,c.b));return x>n?(c-vec3(n))*s/(x-n):vec3(0.0);}
+      float burnChannel(float cb,float cs){if(cs<=.0)return 0.0;if(cb>=1.0)return 1.0;return 1.0-min(1.0,(1.0-cb)/cs);}
+      float dodgeChannel(float cb,float cs){if(cs>=1.0)return 1.0;if(cb<=.0)return 0.0;return min(1.0,cb/(1.0-cs));}
+      float softChannel(float cb,float cs){if(cs<=.5)return cb-(1.0-2.0*cs)*cb*(1.0-cb);float d=cb<=.25?((16.0*cb-12.0)*cb+4.0)*cb:sqrt(cb);return cb+(2.0*cs-1.0)*(d-cb);}
+      vec3 blendMode(vec3 cs,vec3 cb,float mode){
+        if(mode<.5)return cs;
+        if(mode<1.5)return cs*cb;
+        if(mode<2.5)return min(cs,cb);
+        if(mode<3.5)return vec3(burnChannel(cb.r,cs.r),burnChannel(cb.g,cs.g),burnChannel(cb.b,cs.b));
+        if(mode<4.5)return 1.0-(1.0-cs)*(1.0-cb);
+        if(mode<5.5)return max(cs,cb);
+        if(mode<6.5)return vec3(dodgeChannel(cb.r,cs.r),dodgeChannel(cb.g,cs.g),dodgeChannel(cb.b,cs.b));
+        if(mode<7.5)return min(vec3(1.0),cs+cb);
+        if(mode<8.5)return mix(2.0*cs*cb,1.0-2.0*(1.0-cs)*(1.0-cb),step(vec3(.5),cb));
+        if(mode<9.5)return vec3(softChannel(cb.r,cs.r),softChannel(cb.g,cs.g),softChannel(cb.b,cs.b));
+        if(mode<10.5)return mix(2.0*cs*cb,1.0-2.0*(1.0-cs)*(1.0-cb),step(vec3(.5),cs));
+        if(mode<11.5)return abs(cb-cs);
+        if(mode<12.5)return cb+cs-2.0*cb*cs;
+        if(mode<13.5)return setLum(setSat(cs,sat(cb)),lum(cb));
+        if(mode<14.5)return setLum(setSat(cb,sat(cs)),lum(cb));
+        if(mode<15.5)return setLum(cs,lum(cb));
+        return setLum(cb,lum(cs));
       }
-      void main(){vec4 d=texture2D(uBackdrop,vUV),s=texture2D(uSource,vUV);vec3 b=clamp(blendMode(s.rgb,d.rgb),0.0,1.0);gl_FragColor=vec4(mix(d.rgb,b,s.a),1.0);}`
+      vec4 compositeBlend(vec4 backdrop,vec4 source,float mode){
+        float ab=backdrop.a,as=source.a,ao=as+ab*(1.0-as);
+        vec3 blended=clamp(blendMode(source.rgb,backdrop.rgb,mode),0.0,1.0);
+        vec3 csPrime=(1.0-ab)*source.rgb+ab*blended;
+        vec3 co=as*csPrime+ab*(1.0-as)*backdrop.rgb;
+        return vec4(co/max(ao,.00001),ao);
+      }`;
+    this.blendTextureProgram=this.program(
+      `attribute vec3 aPosition;attribute vec2 aUV;uniform mat4 uMVP;uniform float uDepthBias;varying vec2 vUV;void main(){vUV=aUV;gl_Position=uMVP*vec4(aPosition,1.0);gl_Position.z+=uDepthBias*gl_Position.w;}`,
+      `precision mediump float;varying vec2 vUV;uniform sampler2D uTexture;uniform sampler2D uBackdrop;uniform sampler2D uTrackMatte;uniform float uOpacity;uniform vec2 uTexel;uniform float uBlur;uniform vec2 uViewport;uniform float uMode;uniform float uTrackMatteMode;${blendMath}
+      vec4 sourceColor(){if(uBlur>.05){vec2 r=uTexel*uBlur;vec4 c=texture2D(uTexture,vUV)*.20;c+=texture2D(uTexture,vUV+vec2(r.x*.5,0.0))*.10;c+=texture2D(uTexture,vUV-vec2(r.x*.5,0.0))*.10;c+=texture2D(uTexture,vUV+vec2(0.0,r.y*.5))*.10;c+=texture2D(uTexture,vUV-vec2(0.0,r.y*.5))*.10;c+=texture2D(uTexture,vUV+vec2(r.x*.75,r.y*.75))*.05;c+=texture2D(uTexture,vUV+vec2(-r.x*.75,r.y*.75))*.05;c+=texture2D(uTexture,vUV+vec2(r.x*.75,-r.y*.75))*.05;c+=texture2D(uTexture,vUV-vec2(r.x*.75,r.y*.75))*.05;c+=texture2D(uTexture,vUV+vec2(r.x,0.0))*.05;c+=texture2D(uTexture,vUV-vec2(r.x,0.0))*.05;c+=texture2D(uTexture,vUV+vec2(0.0,r.y))*.05;c+=texture2D(uTexture,vUV-vec2(0.0,r.y))*.05;return c;}return texture2D(uTexture,vUV);}
+      void main(){vec4 source=sourceColor();float matte=1.0;if(uTrackMatteMode>.5){float alpha=texture2D(uTrackMatte,gl_FragCoord.xy/uViewport).a;matte=uTrackMatteMode<1.5?alpha:1.0-alpha;}source.a*=uOpacity*matte;if(source.a<.006)discard;vec4 backdrop=texture2D(uBackdrop,gl_FragCoord.xy/uViewport);gl_FragColor=compositeBlend(backdrop,source,uMode);}`
     );
-    this.bp={pos:gl.getAttribLocation(this.blendProgram,'aPosition'),backdrop:gl.getUniformLocation(this.blendProgram,'uBackdrop'),source:gl.getUniformLocation(this.blendProgram,'uSource'),mode:gl.getUniformLocation(this.blendProgram,'uMode')};
-    this.blendBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.blendBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+    this.btp={pos:gl.getAttribLocation(this.blendTextureProgram,'aPosition'),uv:gl.getAttribLocation(this.blendTextureProgram,'aUV'),mvp:gl.getUniformLocation(this.blendTextureProgram,'uMVP'),depthBias:gl.getUniformLocation(this.blendTextureProgram,'uDepthBias'),tex:gl.getUniformLocation(this.blendTextureProgram,'uTexture'),backdrop:gl.getUniformLocation(this.blendTextureProgram,'uBackdrop'),trackMatte:gl.getUniformLocation(this.blendTextureProgram,'uTrackMatte'),trackMatteMode:gl.getUniformLocation(this.blendTextureProgram,'uTrackMatteMode'),opacity:gl.getUniformLocation(this.blendTextureProgram,'uOpacity'),texel:gl.getUniformLocation(this.blendTextureProgram,'uTexel'),blur:gl.getUniformLocation(this.blendTextureProgram,'uBlur'),viewport:gl.getUniformLocation(this.blendTextureProgram,'uViewport'),mode:gl.getUniformLocation(this.blendTextureProgram,'uMode')};
+    this.blendMeshProgram=this.program(
+      `attribute vec3 aPosition;attribute vec3 aNormal;uniform mat4 uMVP;uniform mat4 uModel;varying float vLight;void main(){vec3 n=normalize(mat3(uModel)*aNormal);float d=max(dot(n,normalize(vec3(-0.35,0.72,0.58))),0.0);vLight=0.27+d*0.73;gl_Position=uMVP*vec4(aPosition,1.0);}`,
+      `precision mediump float;uniform vec4 uColor;uniform sampler2D uBackdrop;uniform sampler2D uTrackMatte;uniform vec2 uViewport;uniform float uMode;uniform float uTrackMatteMode;varying float vLight;${blendMath}void main(){float matte=1.0;if(uTrackMatteMode>.5){float alpha=texture2D(uTrackMatte,gl_FragCoord.xy/uViewport).a;matte=uTrackMatteMode<1.5?alpha:1.0-alpha;}vec4 source=vec4(uColor.rgb*vLight,uColor.a*matte);if(source.a<.006)discard;vec4 backdrop=texture2D(uBackdrop,gl_FragCoord.xy/uViewport);gl_FragColor=compositeBlend(backdrop,source,uMode);}`
+    );
+    this.bmp={pos:gl.getAttribLocation(this.blendMeshProgram,'aPosition'),normal:gl.getAttribLocation(this.blendMeshProgram,'aNormal'),mvp:gl.getUniformLocation(this.blendMeshProgram,'uMVP'),model:gl.getUniformLocation(this.blendMeshProgram,'uModel'),color:gl.getUniformLocation(this.blendMeshProgram,'uColor'),backdrop:gl.getUniformLocation(this.blendMeshProgram,'uBackdrop'),trackMatte:gl.getUniformLocation(this.blendMeshProgram,'uTrackMatte'),trackMatteMode:gl.getUniformLocation(this.blendMeshProgram,'uTrackMatteMode'),viewport:gl.getUniformLocation(this.blendMeshProgram,'uViewport'),mode:gl.getUniformLocation(this.blendMeshProgram,'uMode')};
     const makeTexture=()=>{const texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return texture};
-    this.blendBackdropTexture=makeTexture();this.blendSourceTexture=makeTexture();this.blendFramebuffer=gl.createFramebuffer();this.blendTargetWidth=0;this.blendTargetHeight=0
+    this.blendBackdropTexture=makeTexture();this.blendTargetWidth=0;this.blendTargetHeight=0
   }
   ensureBlendTargets(){
     const gl=this.gl,w=this.canvas.width,h=this.canvas.height;if(this.blendTargetWidth===w&&this.blendTargetHeight===h)return;
-    for(const texture of [this.blendBackdropTexture,this.blendSourceTexture]){gl.bindTexture(gl.TEXTURE_2D,texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null)}
-    gl.bindFramebuffer(gl.FRAMEBUFFER,this.blendFramebuffer);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,this.blendSourceTexture,0);gl.bindFramebuffer(gl.FRAMEBUFFER,null);this.blendTargetWidth=w;this.blendTargetHeight=h
+    // The visible WebGL canvas is created with alpha:false, so its default
+    // framebuffer is RGB. A RGBA copy target is format-incompatible on WebGL2
+    // (INVALID_OPERATION), leaving a black backdrop and making modes appear to
+    // do nothing. Match the default framebuffer format; sampled alpha is 1.
+    gl.bindTexture(gl.TEXTURE_2D,this.blendBackdropTexture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,w,h,0,gl.RGB,gl.UNSIGNED_BYTE,null);this.blendTargetWidth=w;this.blendTargetHeight=h
   }
-  drawBlendedPlane(l,stackNormalOffset=0){
-    const gl=this.gl;this.ensureBlendTargets();gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.blendBackdropTexture);gl.copyTexSubImage2D(gl.TEXTURE_2D,0,0,0,0,0,this.canvas.width,this.canvas.height);
-    gl.bindFramebuffer(gl.FRAMEBUFFER,this.blendFramebuffer);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.disable(gl.BLEND);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
-    this._blendSourcePass=true;try{this.drawPlane(l,stackNormalOffset)}finally{this._blendSourcePass=false}
-    gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.disable(gl.BLEND);gl.useProgram(this.blendProgram);gl.bindBuffer(gl.ARRAY_BUFFER,this.blendBuffer);gl.enableVertexAttribArray(this.bp.pos);gl.vertexAttribPointer(this.bp.pos,2,gl.FLOAT,false,8,0);
-    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.blendBackdropTexture);gl.uniform1i(this.bp.backdrop,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,this.blendSourceTexture);gl.uniform1i(this.bp.source,1);gl.uniform1f(this.bp.mode,blendModeIndex(l.blend));gl.drawArrays(gl.TRIANGLES,0,6);gl.activeTexture(gl.TEXTURE0);gl.enable(gl.BLEND);gl.blendEquation(gl.FUNC_ADD);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA)
+  captureBlendBackdrop(){
+    const gl=this.gl;this.ensureBlendTargets();gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,this.blendBackdropTexture);gl.copyTexSubImage2D(gl.TEXTURE_2D,0,0,0,0,0,this.canvas.width,this.canvas.height);gl.activeTexture(gl.TEXTURE0)
+  }
+  initTrackMatteCompositor(){
+    const gl=this.gl;
+    this.trackMattePlaneProgram=this.program(
+      `attribute vec3 aPosition;attribute vec2 aUV;uniform mat4 uMVP;varying vec2 vUV;void main(){vUV=aUV;gl_Position=uMVP*vec4(aPosition,1.0);}`,
+      `precision mediump float;varying vec2 vUV;uniform sampler2D uTexture;uniform float uOpacity;void main(){float alpha=texture2D(uTexture,vUV).a*uOpacity;if(alpha<.004)discard;gl_FragColor=vec4(1.0,1.0,1.0,alpha);}`
+    );
+    this.tmp={pos:gl.getAttribLocation(this.trackMattePlaneProgram,'aPosition'),uv:gl.getAttribLocation(this.trackMattePlaneProgram,'aUV'),mvp:gl.getUniformLocation(this.trackMattePlaneProgram,'uMVP'),tex:gl.getUniformLocation(this.trackMattePlaneProgram,'uTexture'),opacity:gl.getUniformLocation(this.trackMattePlaneProgram,'uOpacity')};
+    this.trackMatteMeshProgram=this.program(
+      `attribute vec3 aPosition;uniform mat4 uMVP;void main(){gl_Position=uMVP*vec4(aPosition,1.0);}`,
+      `precision mediump float;uniform float uOpacity;void main(){if(uOpacity<.004)discard;gl_FragColor=vec4(1.0,1.0,1.0,uOpacity);}`
+    );
+    this.tmm={pos:gl.getAttribLocation(this.trackMatteMeshProgram,'aPosition'),mvp:gl.getUniformLocation(this.trackMatteMeshProgram,'uMVP'),opacity:gl.getUniformLocation(this.trackMatteMeshProgram,'uOpacity')}
   }
   makeMeshBuffer(data){const gl=this.gl,b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);return{buffer:b,count:data.length/6}}
   makeCube(){
@@ -5718,6 +5820,45 @@ class WebGLRenderer{
   }
   layerVP(layer){return this.layerUses3D(layer)?this.vp:this.vp2d}
   activeLayers(){return[...model.layers].reverse().filter(l=>!l.hidden&&omsLayerIncludedInExport(l)&&model.time>=l.start&&model.time<=l.start+l.duration)}
+  activeTrackMatteSources(layers=this.activeLayers()){return layers.filter(isTrackMatteSource)}
+  trackMatteInfoForLayer(layer){
+    const targetIndex=model.layers.indexOf(layer),matches=this.frameTrackMattes.filter(entry=>trackMatteTargetsLayer(entry.source,layer));
+    if(!matches.length)return null;
+    matches.sort((a,b)=>Math.abs(model.layers.indexOf(a.source)-targetIndex)-Math.abs(model.layers.indexOf(b.source)-targetIndex));
+    return matches[0]
+  }
+  ensureTrackMatteTarget(source){
+    const gl=this.gl,w=this.canvas.width,h=this.canvas.height;let entry=this.trackMatteTargets.get(source.id);
+    if(!entry){
+      const texture=gl.createTexture(),fbo=gl.createFramebuffer();entry={texture,fbo,width:0,height:0};this.trackMatteTargets.set(source.id,entry);
+      gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE)
+    }
+    if(entry.width!==w||entry.height!==h){
+      gl.bindTexture(gl.TEXTURE_2D,entry.texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.bindFramebuffer(gl.FRAMEBUFFER,entry.fbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,entry.texture,0);entry.width=w;entry.height=h
+    }
+    return entry
+  }
+  renderTrackMatteSource(source){
+    const gl=this.gl,entry=this.ensureTrackMatteTarget(source);gl.bindFramebuffer(gl.FRAMEBUFFER,entry.fbo);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.clearColor(0,0,0,0);gl.colorMask(true,true,true,true);gl.disable(gl.BLEND);gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clear(gl.COLOR_BUFFER_BIT);
+    if(source.type==='mesh'){
+      const geo=this.meshes[source.mesh]||this.meshes.cube,depth=Math.max(1,+source.depth||+source.w||1),world=this.worldMatrix(source,model.time,new Set(),true),modelM=Mat4.multiply(world,Mat4.scale(Math.max(1,+source.w||1),Math.max(1,+source.h||1),depth)),mvp=Mat4.multiply(this.vp,modelM);gl.useProgram(this.trackMatteMeshProgram);gl.bindBuffer(gl.ARRAY_BUFFER,geo.buffer);gl.enableVertexAttribArray(this.tmm.pos);gl.vertexAttribPointer(this.tmm.pos,3,gl.FLOAT,false,24,0);gl.uniformMatrix4fv(this.tmm.mvp,false,mvp);gl.uniform1f(this.tmm.opacity,this.worldOpacity(source));gl.drawArrays(gl.TRIANGLES,0,geo.count)
+    }else{
+      const texture=this.ensureTexture(source),world=this.worldMatrix(source,model.time,new Set(),this.layerUses3D(source)),modelM=Mat4.multiply(world,Mat4.scale(Math.max(1,+source.w||1),Math.max(1,+source.h||1),1)),mvp=Mat4.multiply(this.layerVP(source),modelM);gl.useProgram(this.trackMattePlaneProgram);gl.bindBuffer(gl.ARRAY_BUFFER,this.quadBuffer);gl.enableVertexAttribArray(this.tmp.pos);gl.vertexAttribPointer(this.tmp.pos,3,gl.FLOAT,false,20,0);gl.enableVertexAttribArray(this.tmp.uv);gl.vertexAttribPointer(this.tmp.uv,2,gl.FLOAT,false,20,12);gl.uniformMatrix4fv(this.tmp.mvp,false,mvp);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.uniform1i(this.tmp.tex,0);gl.uniform1f(this.tmp.opacity,this.worldOpacity(source));gl.drawArrays(gl.TRIANGLES,0,6)
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.canvas.width,this.canvas.height);gl.activeTexture(gl.TEXTURE0);return entry.texture
+  }
+  prepareTrackMattes(layers){
+    this.frameTrackMattes=[];
+    for(const source of this.activeTrackMatteSources(layers)){
+      const settings=trackMatteSettings(source),texture=this.renderTrackMatteSource(source);
+      this.frameTrackMattes.push({source,texture,mode:settings.mode})
+    }
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER,null);this.gl.viewport(0,0,this.canvas.width,this.canvas.height);this.gl.enable(this.gl.BLEND);this.gl.blendEquation(this.gl.FUNC_ADD);this.gl.blendFunc(this.gl.SRC_ALPHA,this.gl.ONE_MINUS_SRC_ALPHA)
+  }
+  bindTrackMatte(uniforms,info){
+    const gl=this.gl,mode=info?(info.mode==='exclude'?2:1):0;gl.uniform1f(uniforms.trackMatteMode,mode);gl.uniform2f(uniforms.viewport,this.canvas.width,this.canvas.height);
+    if(info){gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,info.texture);gl.uniform1i(uniforms.trackMatte,2);gl.activeTexture(gl.TEXTURE0)}
+  }
   hex(value,alpha=1){let h=String(value||'#ffffff').replace('#','');if(h.length===3)h=h.split('').map(x=>x+x).join('');const n=parseInt(h,16);return[Number.isFinite(n)?((n>>16)&255)/255:1,Number.isFinite(n)?((n>>8)&255)/255:1,Number.isFinite(n)?(n&255)/255:1,alpha]}
   textureSignature(l){const e=l.effects||{},m=l.mask||{},frame=l.type==='video'?(l.frameCacheTime??l.video?.currentTime??0):0,previewQ=this.exporting?1:omsPreviewQualityScale();return JSON.stringify([l.type,l.w,l.h,l.shape,l.color,l.stroke,l.strokeWidth,l.radius,l.text,l.fontSize,l.fontWeight,l.fontFamily,l.align,l.sourceRef||'',e.blur,e.brightness,e.contrast,e.saturate,e.hue,m.enabled,m.type,m.feather,m.invert,l.img?.naturalWidth||0,Math.round(frame*1000),previewQ])}
   textureEntry(l){
@@ -5745,7 +5886,7 @@ class WebGLRenderer{
   applyBlend(l){const gl=this.gl,mode=normalizeBlendMode(l.blend);gl.blendEquation(gl.FUNC_ADD);if(mode==='lighter')gl.blendFunc(gl.SRC_ALPHA,gl.ONE);else if(mode==='screen'||mode==='color-dodge'||mode==='lighten')gl.blendFunc(gl.SRC_ALPHA,gl.ONE);else if(mode==='multiply'||mode==='color-burn'||mode==='darken')gl.blendFunc(gl.DST_COLOR,gl.ONE_MINUS_SRC_ALPHA);else gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA)}
   drawPlane(l,stackNormalOffset=0){
     if(!omsLayerIncludedInExport(l))return;
-    const gl=this.gl,use3d=this.layerUses3D(l),blend=normalizeBlendMode(l.blend);if(!this._blendSourcePass&&!use3d&&blend!=='source-over')return this.drawBlendedPlane(l,stackNormalOffset);const texture=this.ensureTexture(l),world=this.worldMatrix(l,model.time,new Set(),use3d);
+    const gl=this.gl,use3d=this.layerUses3D(l),blend=normalizeBlendMode(l.blend),blended=blend!=='source-over',matte=this.trackMatteInfoForLayer(l),texture=this.ensureTexture(l),world=this.worldMatrix(l,model.time,new Set(),use3d);
     let renderWorld=world;
 
     if(use3d&&stackNormalOffset){
@@ -5786,16 +5927,20 @@ class WebGLRenderer{
     }
 
     gl.disable(gl.POLYGON_OFFSET_FILL);
-    this.applyBlend(l);gl.disable(gl.CULL_FACE);gl.useProgram(this.textureProgram);gl.bindBuffer(gl.ARRAY_BUFFER,this.quadBuffer);gl.enableVertexAttribArray(this.tp.pos);gl.vertexAttribPointer(this.tp.pos,3,gl.FLOAT,false,20,0);gl.enableVertexAttribArray(this.tp.uv);gl.vertexAttribPointer(this.tp.uv,2,gl.FLOAT,false,20,12);gl.uniformMatrix4fv(this.tp.mvp,false,mvp);gl.uniform1f(this.tp.depthBias,0);gl.uniform1f(this.tp.opacity,this.worldOpacity(l));gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.uniform1i(this.tp.tex,0);
     // V3.79 DOF: layer depth is evaluated in raw camera space. The blur itself
     // runs in the fragment shader, so animated Focus does not force expensive
     // Canvas texture repaints every frame. Screen-space 2D layers stay sharp.
     const entry=this.textures.get(l.id),screenBlur=use3d?this.depthOfFieldScreenBlur(l):0,textureBlur=this.depthOfFieldTextureRadius(l,entry,screenBlur);
-    gl.uniform2f(this.tp.texel,1/Math.max(1,entry?.gpuWidth||1),1/Math.max(1,entry?.gpuHeight||1));gl.uniform1f(this.tp.blur,textureBlur);gl.drawArrays(gl.TRIANGLES,0,6)
+    if(blended){
+      this.captureBlendBackdrop();gl.disable(gl.BLEND);gl.disable(gl.CULL_FACE);gl.useProgram(this.blendTextureProgram);gl.bindBuffer(gl.ARRAY_BUFFER,this.quadBuffer);gl.enableVertexAttribArray(this.btp.pos);gl.vertexAttribPointer(this.btp.pos,3,gl.FLOAT,false,20,0);gl.enableVertexAttribArray(this.btp.uv);gl.vertexAttribPointer(this.btp.uv,2,gl.FLOAT,false,20,12);gl.uniformMatrix4fv(this.btp.mvp,false,mvp);gl.uniform1f(this.btp.depthBias,0);gl.uniform1f(this.btp.opacity,this.worldOpacity(l));gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.uniform1i(this.btp.tex,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,this.blendBackdropTexture);gl.uniform1i(this.btp.backdrop,1);gl.uniform2f(this.btp.texel,1/Math.max(1,entry?.gpuWidth||1),1/Math.max(1,entry?.gpuHeight||1));gl.uniform1f(this.btp.blur,textureBlur);gl.uniform2f(this.btp.viewport,this.canvas.width,this.canvas.height);gl.uniform1f(this.btp.mode,blendModeIndex(blend));this.bindTrackMatte(this.btp,matte);gl.drawArrays(gl.TRIANGLES,0,6);gl.activeTexture(gl.TEXTURE0);gl.enable(gl.BLEND);gl.blendEquation(gl.FUNC_ADD);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA)
+    }else{
+      this.applyBlend(l);gl.disable(gl.CULL_FACE);gl.useProgram(this.textureProgram);gl.bindBuffer(gl.ARRAY_BUFFER,this.quadBuffer);gl.enableVertexAttribArray(this.tp.pos);gl.vertexAttribPointer(this.tp.pos,3,gl.FLOAT,false,20,0);gl.enableVertexAttribArray(this.tp.uv);gl.vertexAttribPointer(this.tp.uv,2,gl.FLOAT,false,20,12);gl.uniformMatrix4fv(this.tp.mvp,false,mvp);gl.uniform1f(this.tp.depthBias,0);gl.uniform1f(this.tp.opacity,this.worldOpacity(l));gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.uniform1i(this.tp.tex,0);gl.uniform2f(this.tp.texel,1/Math.max(1,entry?.gpuWidth||1),1/Math.max(1,entry?.gpuHeight||1));gl.uniform1f(this.tp.blur,textureBlur);this.bindTrackMatte(this.tp,matte);gl.drawArrays(gl.TRIANGLES,0,6)
+    }
   }
   drawMesh(l){
     if(!omsLayerIncludedInExport(l))return;
-    const gl=this.gl,geo=this.meshes[l.mesh]||this.meshes.cube,depth=Math.max(1,+l.depth||+l.w||1),world=this.worldMatrix(l,model.time,new Set(),true),modelM=Mat4.multiply(world,Mat4.scale(Math.max(1,+l.w||1),Math.max(1,+l.h||1),depth)),mvp=Mat4.multiply(this.vp,modelM),color=this.hex(l.color,this.worldOpacity(l));gl.enable(gl.DEPTH_TEST);gl.depthMask(true);this.applyBlend(l);gl.useProgram(this.meshProgram);gl.bindBuffer(gl.ARRAY_BUFFER,geo.buffer);gl.enableVertexAttribArray(this.mp.pos);gl.vertexAttribPointer(this.mp.pos,3,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(this.mp.normal);gl.vertexAttribPointer(this.mp.normal,3,gl.FLOAT,false,24,12);gl.uniformMatrix4fv(this.mp.mvp,false,mvp);gl.uniformMatrix4fv(this.mp.model,false,modelM);gl.uniform4fv(this.mp.color,color);gl.drawArrays(gl.TRIANGLES,0,geo.count)
+    const gl=this.gl,geo=this.meshes[l.mesh]||this.meshes.cube,depth=Math.max(1,+l.depth||+l.w||1),world=this.worldMatrix(l,model.time,new Set(),true),modelM=Mat4.multiply(world,Mat4.scale(Math.max(1,+l.w||1),Math.max(1,+l.h||1),depth)),mvp=Mat4.multiply(this.vp,modelM),color=this.hex(l.color,this.worldOpacity(l)),blend=normalizeBlendMode(l.blend),blended=blend!=='source-over',matte=this.trackMatteInfoForLayer(l);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);
+    if(blended){this.captureBlendBackdrop();gl.disable(gl.BLEND);gl.useProgram(this.blendMeshProgram);gl.bindBuffer(gl.ARRAY_BUFFER,geo.buffer);gl.enableVertexAttribArray(this.bmp.pos);gl.vertexAttribPointer(this.bmp.pos,3,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(this.bmp.normal);gl.vertexAttribPointer(this.bmp.normal,3,gl.FLOAT,false,24,12);gl.uniformMatrix4fv(this.bmp.mvp,false,mvp);gl.uniformMatrix4fv(this.bmp.model,false,modelM);gl.uniform4fv(this.bmp.color,color);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,this.blendBackdropTexture);gl.uniform1i(this.bmp.backdrop,1);gl.uniform2f(this.bmp.viewport,this.canvas.width,this.canvas.height);gl.uniform1f(this.bmp.mode,blendModeIndex(blend));this.bindTrackMatte(this.bmp,matte);gl.drawArrays(gl.TRIANGLES,0,geo.count);gl.activeTexture(gl.TEXTURE0);gl.enable(gl.BLEND);gl.blendEquation(gl.FUNC_ADD);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA)}else{this.applyBlend(l);gl.useProgram(this.meshProgram);gl.bindBuffer(gl.ARRAY_BUFFER,geo.buffer);gl.enableVertexAttribArray(this.mp.pos);gl.vertexAttribPointer(this.mp.pos,3,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(this.mp.normal);gl.vertexAttribPointer(this.mp.normal,3,gl.FLOAT,false,24,12);gl.uniformMatrix4fv(this.mp.mvp,false,mvp);gl.uniformMatrix4fv(this.mp.model,false,modelM);gl.uniform4fv(this.mp.color,color);this.bindTrackMatte(this.mp,matte);gl.drawArrays(gl.TRIANGLES,0,geo.count)}
   }
   drawLines(points,color,width=1){if(!points.length)return;const gl=this.gl;gl.useProgram(this.lineProgram);gl.bindBuffer(gl.ARRAY_BUFFER,this.lineBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(points),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(this.lp.pos);gl.vertexAttribPointer(this.lp.pos,3,gl.FLOAT,false,12,0);gl.uniformMatrix4fv(this.lp.mvp,false,this.vp);gl.uniform4fv(this.lp.color,color);gl.lineWidth(width);gl.drawArrays(gl.LINES,0,points.length/3)}
   drawCameraRigs(){
@@ -5906,8 +6051,10 @@ class WebGLRenderer{
     // Layer yang Ruang 3D-nya belum diaktifkan TIDAK ikut pass ini.
     this.grid3D();
     const drawable=this.activeLayers().filter(l=>!['audio','camera','null'].includes(l.type));
-    const layers3d=drawable.filter(l=>l.type==='mesh'||this.layerUses3D(l));
-    const layers2d=drawable.filter(l=>l.type!=='mesh'&&!this.layerUses3D(l));
+    this.prepareTrackMattes(drawable);
+    const composited=drawable.filter(l=>!isTrackMatteSource(l));
+    const layers3d=composited.filter(l=>l.type==='mesh'||this.layerUses3D(l));
+    const layers2d=composited.filter(l=>l.type!=='mesh'&&!this.layerUses3D(l));
 
     // Stacking plane 3D pada Z POSITION yang sama.
     // activeLayers() berurutan dari bawah -> atas timeline. Kita tidak lagi
@@ -10719,7 +10866,7 @@ class UIController{
     // Setiap inspector/properti harus keluar dari mode menu "+".
     // Jika addDrawer dibiarkan aktif, CSS .addDrawer .drawerHead akan
     // menyembunyikan header beserta tombol X.
-    d.classList.remove('hidden','transformDrawer','transformEaseDrawer','addDrawer','multiSelectDrawer');
+    d.classList.remove('hidden','transformDrawer','transformEaseDrawer','addDrawer','multiSelectDrawer','blendOpacityDrawer');
 
     $('#plusBtn')?.classList.remove('open');
 
@@ -10750,6 +10897,14 @@ class UIController{
       <div class="drawerTitleGroup"><b>${title}</b>${transformSpaceButton}${cameraOrbitShortcutButton}${cameraLensShortcutButton}</div>
       <button id="drawerClose" aria-label="Tutup" title="Tutup">×</button>
     </div>${html}`;
+
+    // A property drawer always opens at its first control. This is important
+    // on mobile, where the same drawer element previously retained the scroll
+    // position of the Inspector root and could open below the Opacity card.
+    d.scrollTop=0;
+    const drawerBody=d.querySelector(':scope > .drawerBody');
+    if(drawerBody){drawerBody.scrollTop=0;drawerBody.scrollLeft=0}
+    requestAnimationFrame(()=>{d.scrollTop=0;if(drawerBody){drawerBody.scrollTop=0;drawerBody.scrollLeft=0}});
 
     const close=$('#drawerClose');
     const back=$('#drawerBack');
@@ -11143,7 +11298,11 @@ class UIController{
   blendingOpacityHTML(l){
     const current=normalizeBlendMode(l.blend),opacity=Math.round(clamp(model.prop(l,'opacity'),0,1)*100),modeButton=(value,label)=>{const cssMode=value==='source-over'?'normal':value==='lighter'?'screen':value;return `<button type="button" class="blendModeBtn ${current===value?'active':''}" data-blend-mode="${value}" aria-pressed="${current===value}" title="${esc(label)}"><span class="blendModeSwatch"><i></i><i style="mix-blend-mode:${cssMode}"></i></span><span class="blendModeName">${esc(label)}</span><span class="blendModeCheck">✓</span></button>`};
     const categories=BLEND_MODE_GROUPS.map(group=>{const open=group.modes.some(mode=>mode[0]===current);return `<section class="blendCategory ${open?'open':''}" data-blend-category="${group.id}"><button type="button" class="blendCategoryHead" data-blend-toggle><span class="blendCategoryArrow">›</span><b>${esc(group.label)}</b><small>${group.modes.length} mode</small></button><div class="blendModeGrid">${group.modes.map(mode=>modeButton(mode[0],mode[1])).join('')}</div></section>`}).join('');
-    return `<div class="drawerBody blendOpacityPanel"><section class="blendOpacityCard"><div class="blendOpacityHeading"><div><b>Opacity</b><small>Transparansi layer pada frame ini</small></div><button class="diamond ${model.anim.hasKeyAt(l,'opacity',model.time)?'on':''}" data-key="opacity" data-kf-visual-prop="opacity" aria-label="Keyframe opacity">◇</button></div><div class="blendOpacityControl"><span class="blendOpacityIcon">◐</span><input id="blendOpacityRange" type="range" min="0" max="100" step="1" value="${opacity}" aria-label="Opacity layer"><label><input id="blendOpacityNumber" type="number" min="0" max="100" step="1" value="${opacity}" aria-label="Nilai opacity"><span>%</span></label></div><div class="blendOpacityPresets">${[0,25,50,75,100].map(value=>`<button type="button" data-opacity-preset="${value}" class="${opacity===value?'active':''}">${value}%</button>`).join('')}</div></section><div class="blendCurrent"><span>Mode aktif</span><b id="blendCurrentLabel">${esc(blendModeLabel(current))}</b></div><div class="blendCategories">${categories}</div><div class="miniNote">Blending dihitung terhadap seluruh layer di bawahnya. Opacity dapat diberi keyframe dan tetap digunakan pada preview maupun ekspor.</div></div>`
+    const matte=trackMatteSettings(l),maskable=model.layers.filter(layer=>layer.id!==l.id&&!['audio','camera','null'].includes(layer.type)&&!isTrackMatteSource(layer)),sourceIndex=model.layers.indexOf(l),belowCount=maskable.filter(layer=>model.layers.indexOf(layer)>sourceIndex).length;
+    const sourceShape=l.type==='shape'?({star:'Bintang',triangle:'Segitiga',ellipse:'Elips',circle:'Lingkaran',line:'Garis'}[l.shape]||'Persegi'):l.type==='video'?`Video ${Math.round(+l.w||0)}×${Math.round(+l.h||0)}`:l.type==='image'?`Gambar ${Math.round(+l.w||0)}×${Math.round(+l.h||0)}`:l.type==='text'?'Alpha teks':l.type==='mesh'?'Siluet mesh':'Alpha layer';
+    const targetRows=maskable.map(layer=>`<label class="blendMaskTarget"><input type="checkbox" data-matte-target="${layer.id}" ${matte.targetIds.includes(layer.id)?'checked':''}><span><b>${esc(layer.name)}</b><small>${model.layers.indexOf(layer)>sourceIndex?'Di bawah sumber':'Di atas sumber'} • ${esc(layer.type)}</small></span></label>`).join('')||'<div class="blendMaskEmpty">Belum ada layer yang dapat dijadikan target.</div>';
+    const maskPanel=`<section class="blendMaskCard ${matte.mode==='none'?'inactive':''}" id="blendTrackMatte"><div class="blendMaskHeading"><span class="blendMaskGlyph">◩</span><div><b>Masking Layer</b><small>Bentuk mengikuti alpha layer ini</small></div><span class="blendMaskState" id="blendMaskState">${matte.mode==='none'?'Nonaktif':matte.mode==='exclude'?'Exclude':'Mask'}</span></div><div class="blendMaskSource"><span>${esc(sourceShape)}</span><small>${esc(l.name)} menjadi sumber mask dan tidak ikut dicat sebagai warna.</small></div><div class="blendMaskModes"><button type="button" data-matte-mode="none" class="${matte.mode==='none'?'active':''}"><i>○</i><span>Nonaktif</span></button><button type="button" data-matte-mode="mask" class="${matte.mode==='mask'?'active':''}"><i>◉</i><span>Mask</span><small>Area dalam</small></button><button type="button" data-matte-mode="exclude" class="${matte.mode==='exclude'?'active':''}"><i>⊘</i><span>Exclude</span><small>Area luar</small></button></div><div class="blendMaskScopeTitle">Terapkan ke</div><div class="blendMaskScopes"><button type="button" data-matte-scope="below" class="${matte.scope==='below'?'active':''}"><span>Semua di bawah</span><small>${belowCount} layer</small></button><button type="button" data-matte-scope="selected" class="${matte.scope==='selected'?'active':''}"><span>Layer tertentu</span><small>Pilih satu atau lebih</small></button></div><div class="blendMaskTargets ${matte.scope==='selected'?'':'hidden'}" id="blendMaskTargets">${targetRows}</div><div class="blendMaskNote" id="blendMaskNote">${matte.mode==='none'?'Aktifkan Mask atau Exclude untuk menggunakan layer ini sebagai sumber.':matte.scope==='below'?`Mempengaruhi ${belowCount} layer di bawah posisi sumber pada timeline.`:`Mempengaruhi ${matte.targetIds.filter(id=>maskable.some(layer=>layer.id===id)).length} layer yang dipilih.`}</div></section>`;
+    return `<div class="drawerBody blendOpacityPanel"><section class="blendOpacityCard"><div class="blendOpacityHeading"><div><b>Opacity</b><small>Transparansi layer pada frame ini</small></div><button class="diamond ${model.anim.hasKeyAt(l,'opacity',model.time)?'on':''}" data-key="opacity" data-kf-visual-prop="opacity" aria-label="Keyframe opacity">◇</button></div><div class="blendOpacityControl"><span class="blendOpacityIcon">◐</span><input id="blendOpacityRange" type="range" min="0" max="100" step="1" value="${opacity}" aria-label="Opacity layer"><label><input id="blendOpacityNumber" type="number" min="0" max="100" step="1" value="${opacity}" aria-label="Nilai opacity"><span>%</span></label></div><div class="blendOpacityPresets">${[0,25,50,75,100].map(value=>`<button type="button" data-opacity-preset="${value}" class="${opacity===value?'active':''}">${value}%</button>`).join('')}</div></section><div class="blendCurrent"><span>Mode aktif</span><b id="blendCurrentLabel">${esc(blendModeLabel(current))}</b></div><div class="blendCategories">${categories}</div><div class="miniNote">Blending dihitung terhadap seluruh layer di bawahnya. Opacity dapat diberi keyframe dan tetap digunakan pada preview maupun ekspor.</div>${maskPanel}</div>`
   }
   openInspector(type){const l=model.selectedLayer();if(!l)return;this.drawerMode=type;timeline.refreshKeyframeInteractionState?.();let html='';if(type==='move')html=this.transformHTML(l);
     else if(type==='color')html=`<div class="drawerBody propPanel"><div class="colorRow"><input id="fillColor" type="color" value="${l.color||'#ffffff'}"><input id="fillHex" type="text" value="${l.color||'#ffffff'}"></div>${this.row('Stroke','strokeWidth',l.strokeWidth||0,false,'1')}<div class="miniNote">Opacity dan mode komposit kini tersedia di menu Blending & Opacity.</div></div>`;
@@ -11156,6 +11315,7 @@ class UIController{
     else if(type==='keys'){this.openGraphEditor();return}
     else if(type==='three')html=this.threeHTML(l);
     this.drawerShell(type==='move'?'Transform':type==='blend'?'Blending & Opacity':type==='three'?'True 3D & Camera':type==='hier'?'Scene Graph / Parenting':type==='keys'?'Keyframes':'Properti',html);
+    if(type==='blend')$('#drawer').classList.add('blendOpacityDrawer');
     if(type==='move'){
       $('#drawer').classList.add('transformDrawer');
       $('#drawer').classList.toggle('transformEaseDrawer',!!this.transformEaseEditorOpen);
@@ -13036,7 +13196,23 @@ class UIController{
       if(number){number.onfocus=checkpoint;number.onpointerdown=checkpoint;number.oninput=e=>{checkpoint();applyOpacity(e.target.value)};number.onchange=commitOpacity;number.onblur=()=>{opacityHistoryPending=false}}
       $$('[data-opacity-preset]').forEach(button=>button.onclick=()=>{history.push();applyOpacity(button.dataset.opacityPreset);opacityHistoryPending=false;timeline.rebuild();renderer.render()});
       $$('[data-blend-toggle]').forEach(button=>button.onclick=()=>button.closest('.blendCategory')?.classList.toggle('open'));
-      $$('[data-blend-mode]').forEach(button=>button.onclick=()=>{const mode=normalizeBlendMode(button.dataset.blendMode);if(mode===normalizeBlendMode(l.blend))return;history.push();l.blend=mode;$$('[data-blend-mode]').forEach(item=>{const active=item.dataset.blendMode===mode;item.classList.toggle('active',active);item.setAttribute('aria-pressed',String(active))});const label=$('#blendCurrentLabel');if(label)label.textContent=blendModeLabel(mode);button.closest('.blendCategory')?.classList.add('open');renderer.render();toast(`Blending: ${blendModeLabel(mode)}`)})
+      $$('[data-blend-mode]').forEach(button=>button.onclick=()=>{const mode=normalizeBlendMode(button.dataset.blendMode);if(mode===normalizeBlendMode(l.blend))return;history.push();l.blend=mode;$$('[data-blend-mode]').forEach(item=>{const active=item.dataset.blendMode===mode;item.classList.toggle('active',active);item.setAttribute('aria-pressed',String(active))});const label=$('#blendCurrentLabel');if(label)label.textContent=blendModeLabel(mode);button.closest('.blendCategory')?.classList.add('open');renderer.render();toast(`Blending: ${blendModeLabel(mode)}`)});
+      l.trackMatte=trackMatteSettings(l);
+      const mattePanel=$('#blendTrackMatte'),matteTargets=$('#blendMaskTargets'),matteState=$('#blendMaskState'),matteNote=$('#blendMaskNote');
+      const refreshMatteUI=()=>{
+        const settings=trackMatteSettings(l),sourceIndex=model.layers.indexOf(l),eligible=model.layers.filter(layer=>layer.id!==l.id&&!['audio','camera','null'].includes(layer.type)&&!isTrackMatteSource(layer)),validIds=new Set(eligible.map(layer=>layer.id));
+        l.trackMatte={...settings,targetIds:settings.targetIds.filter(id=>validIds.has(id))};
+        mattePanel?.classList.toggle('inactive',settings.mode==='none');
+        $$('[data-matte-mode]').forEach(button=>button.classList.toggle('active',button.dataset.matteMode===settings.mode));
+        $$('[data-matte-scope]').forEach(button=>button.classList.toggle('active',button.dataset.matteScope===settings.scope));
+        matteTargets?.classList.toggle('hidden',settings.scope!=='selected');
+        if(matteState)matteState.textContent=settings.mode==='none'?'Nonaktif':settings.mode==='exclude'?'Exclude':'Mask';
+        if(matteNote){const below=eligible.filter(layer=>model.layers.indexOf(layer)>sourceIndex).length,chosen=settings.targetIds.filter(id=>validIds.has(id)).length;matteNote.textContent=settings.mode==='none'?'Aktifkan Mask atau Exclude untuk menggunakan layer ini sebagai sumber.':settings.scope==='below'?`Mempengaruhi ${below} layer di bawah posisi sumber pada timeline.`:`Mempengaruhi ${chosen} layer yang dipilih.`}
+      };
+      $$('[data-matte-mode]').forEach(button=>button.onclick=()=>{const mode=TRACK_MATTE_MODES.has(button.dataset.matteMode)?button.dataset.matteMode:'none';if(mode===trackMatteSettings(l).mode)return;history.push();l.trackMatte={...trackMatteSettings(l),mode};refreshMatteUI();renderer.render();timeline.rebuild();toast(mode==='none'?'Masking dinonaktifkan':mode==='exclude'?'Exclude aktif':'Mask aktif')});
+      $$('[data-matte-scope]').forEach(button=>button.onclick=()=>{const scope=TRACK_MATTE_SCOPES.has(button.dataset.matteScope)?button.dataset.matteScope:'below';if(scope===trackMatteSettings(l).scope)return;history.push();l.trackMatte={...trackMatteSettings(l),scope};refreshMatteUI();renderer.render();timeline.rebuild()});
+      $$('[data-matte-target]').forEach(input=>input.onchange=()=>{history.push();const settings=trackMatteSettings(l),ids=new Set(settings.targetIds);if(input.checked)ids.add(input.dataset.matteTarget);else ids.delete(input.dataset.matteTarget);l.trackMatte={...settings,targetIds:[...ids]};refreshMatteUI();renderer.render();timeline.rebuild()});
+      refreshMatteUI()
     }
     if(type==='mask'){$('#maskEnabled').onchange=e=>{history.push();l.mask.enabled=e.target.checked;renderer.render()};$('#maskType').value=l.mask.type;$('#maskType').onchange=e=>{history.push();l.mask.type=e.target.value;renderer.render()}}
     if(type==='text'){$('#textValue').oninput=e=>{l.text=e.target.value;renderer.render()};$('#fontWeight').value=l.fontWeight;$('#fontWeight').onchange=e=>{history.push();l.fontWeight=+e.target.value;renderer.render()}}
@@ -14719,22 +14895,23 @@ const XMLBridge={
     const resourceMedia=[...scene.querySelectorAll('media')].filter(el=>!el.hasAttribute('startTime')&&!el.hasAttribute('endTime')&&!el.querySelector(':scope > transform')),mediaByUri=new Map(resourceMedia.flatMap(el=>[this.attr(el,['uri','src'],''),this.attr(el,['filename'],null)].filter(Boolean).map(key=>[key,el]))),selector='layer,shape,text,image,video,audio,camera,object,embedScene,media',candidates=[...scene.querySelectorAll(selector)].filter(el=>!resourceMedia.includes(el));
     const oldProject=model.project;model.project=project;const layers=[];
     try{
-      for(const el of candidates){const type=this.layerType(el),transform=el.querySelector(':scope > transform,:scope > keyable-transform,:scope > properties')||el,appearance=el.querySelector(':scope > appearance,:scope > style')||el,effectNode=el.querySelector(':scope > effects')||el,maskNode=el.querySelector(':scope > mask')||el,mediaNode=el.querySelector(':scope > source,:scope > media-source')||el,fillNode=el.querySelector(':scope > fillColor,:scope > fill-color'),meshRaw=String(this.attr(el,['mesh','geometry','subtype','type'],'')).toLowerCase(),sourceRef=this.attr(el,['fillVideo','fillImage','src','source','url','data'],this.attr(mediaNode,['src','source','url','data'],'')),mediaDef=mediaByUri.get(sourceRef),opt={name:this.attr(el,['name','label','title'],this.attr(mediaDef||el,['filename','title'],type==='camera'?'Kamera XML':'Layer XML'))};if(type==='shape')opt.shape=this.shapeName(this.attr(el,['shape','geometry','subtype','s'],'rect'));if(type==='mesh')opt.mesh=meshRaw.includes('sphere')?'sphere':'cube';if(type==='text')opt.text=this.attr(el,['text','value'],el.querySelector(':scope > content')?.textContent||'Text');if(['image','video','audio'].includes(type)&&/^data:/i.test(sourceRef))opt.dataUrl=sourceRef;
+      for(const el of candidates){const type=this.layerType(el),transform=el.querySelector(':scope > transform,:scope > keyable-transform,:scope > properties')||el,appearance=el.querySelector(':scope > appearance,:scope > style')||el,effectNode=el.querySelector(':scope > effects')||el,maskNode=el.querySelector(':scope > mask')||el,trackMatteNode=el.querySelector(':scope > track-matte,:scope > trackMatte'),mediaNode=el.querySelector(':scope > source,:scope > media-source')||el,fillNode=el.querySelector(':scope > fillColor,:scope > fill-color'),meshRaw=String(this.attr(el,['mesh','geometry','subtype','type'],'')).toLowerCase(),sourceRef=this.attr(el,['fillVideo','fillImage','src','source','url','data'],this.attr(mediaNode,['src','source','url','data'],'')),mediaDef=mediaByUri.get(sourceRef),opt={name:this.attr(el,['name','label','title'],this.attr(mediaDef||el,['filename','title'],type==='camera'?'Kamera XML':'Layer XML'))};if(type==='shape')opt.shape=this.shapeName(this.attr(el,['shape','geometry','subtype','s'],'rect'));if(type==='mesh')opt.mesh=meshRaw.includes('sphere')?'sphere':'cube';if(type==='text')opt.text=this.attr(el,['text','value'],el.querySelector(':scope > content')?.textContent||'Text');if(['image','video','audio'].includes(type)&&/^data:/i.test(sourceRef))opt.dataUrl=sourceRef;
         const startRaw=this.attr(el,['start','startTime','in'],0),endRaw=this.attr(el,['end','endTime','out'],null),start=isAM?(parseFloat(startRaw)||0)/1000:this.seconds(startRaw,0),end=endRaw==null?null:(isAM?(parseFloat(endRaw)||0)/1000:this.seconds(endRaw,0)),layerDuration=end!=null&&end>start?end-start:this.seconds(this.attr(el,['duration','length'],duration),duration),sizeNode=el.querySelector(':scope > property[name="size"],:scope > size'),pathNode=el.querySelector(':scope > path'),declaredSize=this.values(this.attr(sizeNode||el,['value'],null),[]),pathSize=this.pathSize(this.attr(pathNode||el,['d'],''),[this.num(mediaDef||el,['width'],0),this.num(mediaDef||el,['height'],0)]),l=model.defaultLayer(type,opt),baseW=declaredSize[0]||pathSize[0]||l.w,baseH=declaredSize[1]||pathSize[1]||l.h,x=this.num(transform,['x','positionX','locationX'],width/2),y=this.num(transform,['y','positionY','locationY'],height/2);l._xmlSourceId=this.attr(el,['id','uuid','layerId'],l.id);if(sourceRef&&!/^data:/i.test(sourceRef))l.sourceRef=sourceRef;Object.assign(l,{transformSpace:String(this.attr(el,['transformSpace','movementSpace'],this.attr(transform,['transformSpace','movementSpace'],'local'))).toLowerCase()==='world'?'world':'local',x,y,z:this.num(transform,['z','positionZ','locationZ'],0),w:Math.max(1,this.num(appearance,['width','w'],baseW)),h:Math.max(1,this.num(appearance,['height','h'],baseH)),rotation:this.num(transform,['rotation','angle'],0),rotX:this.num(transform,['rotationX','rotX'],0),rotY:this.num(transform,['rotationY','rotY'],0),rotZ:this.num(transform,['rotationZ','rotZ'],0),scaleX:this.num(transform,['scaleX','sx'],1),scaleY:this.num(transform,['scaleY','sy'],1),scaleZ:this.num(transform,['scaleZ','sz'],1),opacity:this.num(transform,['opacity','alpha'],1),blend:normalizeBlendMode(this.attr(appearance,['blend','blendMode','composite'],l.blend)),color:this.color(this.attr(appearance,['color','fill','fillColor'],this.attr(fillNode||el,['value'],l.color)),l.color),stroke:this.color(this.attr(appearance,['stroke','strokeColor'],l.stroke),l.stroke),strokeWidth:this.num(appearance,['strokeWidth'],l.strokeWidth||0),radius:this.num(appearance,['radius','cornerRadius'],l.radius||0),start,duration:Math.max(.001,layerDuration)});const amTransform=this.applyAMTransform(l,transform,start,l.duration);if(!amTransform){if(Math.abs(l.scaleX)>10)l.scaleX/=100;if(Math.abs(l.scaleY)>10)l.scaleY/=100;if(Math.abs(l.scaleZ)>10)l.scaleZ/=100}if(Math.abs(l.opacity)>1)l.opacity/=100;
         l.effects={blur:this.num(effectNode,['blur'],l.effects.blur),brightness:this.num(effectNode,['brightness'],l.effects.brightness),contrast:this.num(effectNode,['contrast'],l.effects.contrast),saturate:this.num(effectNode,['saturate','saturation'],l.effects.saturate),hue:this.num(effectNode,['hue'],l.effects.hue)};l.mask={enabled:String(this.attr(maskNode,['enabled'],l.mask.enabled)).toLowerCase()==='true',type:this.attr(maskNode,['type'],l.mask.type),feather:this.num(maskNode,['feather'],l.mask.feather),invert:String(this.attr(maskNode,['invert'],l.mask.invert)).toLowerCase()==='true'};
+        const importedMatteMode=trackMatteNode?this.attr(trackMatteNode,['mode'],'none'):'none',importedMatteScope=trackMatteNode?this.attr(trackMatteNode,['scope'],'below'):'below',importedMatteTargets=trackMatteNode?String(this.attr(trackMatteNode,['targets','targetIds'],'')).split(',').map(value=>value.trim()).filter(Boolean):[];l.trackMatte={mode:TRACK_MATTE_MODES.has(importedMatteMode)?importedMatteMode:'none',scope:TRACK_MATTE_SCOPES.has(importedMatteScope)?importedMatteScope:'below',targetIds:[]};l._trackMatteTargetRefs=importedMatteTargets;
         if(type==='text'){l.fontSize=this.num(appearance,['fontSize'],l.fontSize);l.fontWeight=this.num(appearance,['fontWeight'],l.fontWeight);l.fontFamily=this.attr(appearance,['fontFamily'],l.fontFamily);l.align=this.attr(appearance,['align','textAlign'],l.align)}if(['video','audio'].includes(type)){l.volume=this.num(mediaNode,['volume'],l.volume??1);l.playbackRate=this.num(mediaNode,['playbackRate','speed'],l.playbackRate??1);l.sourceIn=this.seconds(this.attr(mediaNode,['sourceIn','in'],l.sourceIn||0),l.sourceIn||0);const out=this.attr(mediaNode,['sourceOut','out'],null);if(out!=null&&out!=='')l.sourceOut=this.seconds(out,0);l.mediaExtendIn=Math.max(0,this.seconds(this.attr(mediaNode,['extendIn','mediaExtendIn','holdIn'],0),0));l.mediaExtendOut=Math.max(0,this.seconds(this.attr(mediaNode,['extendOut','mediaExtendOut','holdOut'],0),0))}
         if(type==='camera'){l.x=this.num(transform,['x','positionX','locationX'],0);l.y=this.num(transform,['y','positionY','locationY'],0);l.yaw=this.num(transform,['yaw','rotationY'],0);l.pitch=this.num(transform,['pitch','rotationX'],0);l.roll=this.num(transform,['roll','rotationZ'],0);l.orbitEnabled=String(this.attr(el,['orbitEnabled','orbitConstraint'],'false')).toLowerCase()==='true';l._orbitTargetRef=this.attr(el,['orbitTargetId','orbitTarget','targetLayer'],null);l.orbitAzimuth=this.num(transform,['orbitAzimuth','azimuth'],this.num(el,['orbitAzimuth','azimuth'],0));l.orbitElevation=this.num(transform,['orbitElevation','elevation'],this.num(el,['orbitElevation','elevation'],0));l.orbitDistance=Math.max(.001,this.num(transform,['orbitDistance','ropeDistance'],this.num(el,['orbitDistance','ropeDistance'],l.orbitDistance)));l.fov=this.num(el,['fov','fieldOfView'],55);const importedFocal=this.num(el,['focalLength','focalLengthMm'],NaN),importedZoom=this.num(el,['zoom','cameraZoom'],NaN);if(Number.isFinite(importedFocal)&&importedFocal>0)l.fov=cameraFovFromFocal(importedFocal);else if(!this.attr(el,['fov','fieldOfView'],null)&&Number.isFinite(importedZoom)&&importedZoom>0)l.fov=cameraFovFromZoom(importedZoom);l.focalLength=cameraFocalFromFov(l.fov);l.zoom=cameraZoomFromFov(l.fov);l.projection=this.attr(el,['projection'],'perspective');l.near=this.num(el,['near','nearClip'],1);l.far=this.num(el,['far','farClip'],50000);l.orthoSize=this.num(el,['orthoSize','orthographicSize'],height)}this.readKeyframes(el,l);const explicit3d=this.attr(el,['space3d','threeD','enable3d'],null),key3d=['z','rotX','rotY','scaleZ'].some(prop=>(l.kf?.[prop]||[]).length);if(['camera','mesh'].includes(type))l.space3d=true;else if(explicit3d!=null)l.space3d=String(explicit3d).toLowerCase()==='true';else l.space3d=key3d||Math.abs(+l.z||0)>.001||Math.abs(+l.rotX||0)>.001||Math.abs(+l.rotY||0)>.001;layers.push(l)
       }
     }finally{model.project=oldProject}
     if(!layers.length){model.project=project;try{layers.push(model.defaultLayer('shape',{name:'XML Scene',shape:'rect',w:width*.65,h:height*.25,color:'#73e2bd'}))}finally{model.project=oldProject}}
-    const ids=new Set(layers.map(l=>l.id));layers.forEach((l,i)=>{const el=candidates[i],ancestor=el?.parentElement?.closest(selector),parentRef=el&&(this.attr(el,['parent','parentId'],'')||this.attr(ancestor||el,['id','uuid','layerId'],''));if(parentRef){const parent=layers.find(x=>x!==l&&(x.name===parentRef||x.id===parentRef||x._xmlSourceId===parentRef));if(parent&&ids.has(parent.id))l.parentId=parent.id}});layers.filter(l=>l.type==='camera').forEach(camera=>{const ref=camera._orbitTargetRef,target=ref&&layers.find(x=>x!==camera&&(x.id===ref||x.name===ref||x._xmlSourceId===ref));camera.orbitTargetId=target?.id||null;if(!target)camera.orbitEnabled=false});layers.forEach(l=>{delete l._xmlSourceId;delete l._orbitTargetRef});
+    const ids=new Set(layers.map(l=>l.id));layers.forEach((l,i)=>{const el=candidates[i],ancestor=el?.parentElement?.closest(selector),parentRef=el&&(this.attr(el,['parent','parentId'],'')||this.attr(ancestor||el,['id','uuid','layerId'],''));if(parentRef){const parent=layers.find(x=>x!==l&&(x.name===parentRef||x.id===parentRef||x._xmlSourceId===parentRef));if(parent&&ids.has(parent.id))l.parentId=parent.id}});layers.filter(l=>l.type==='camera').forEach(camera=>{const ref=camera._orbitTargetRef,target=ref&&layers.find(x=>x!==camera&&(x.id===ref||x.name===ref||x._xmlSourceId===ref));camera.orbitTargetId=target?.id||null;if(!target)camera.orbitEnabled=false});layers.forEach(l=>{const matte=trackMatteSettings(l),targets=(l._trackMatteTargetRefs||[]).map(ref=>layers.find(x=>x!==l&&(x.id===ref||x.name===ref||x._xmlSourceId===ref))?.id).filter(Boolean);l.trackMatte={...matte,targetIds:[...new Set(targets)]};delete l._xmlSourceId;delete l._orbitTargetRef;delete l._trackMatteTargetRefs});
     const has3d=layers.some(l=>model.layer3DEnabled(l));return{project,layers,selected:layers[0]?.id||null,time:0,mode3d:has3d,cameraView:true,snap:true}
   },
   keysXML(layer){const rows=[];for(const [property,keys] of Object.entries(layer.kf||{}))for(const key of keys)rows.push(`        <keyframe property="${this.xmlEscape(property)}" time="${(+key.t||0).toFixed(6)}s" value="${this.xmlEscape(key.v)}" easing="${this.xmlEscape(key.easing?.type||key.easing||'linear')}"/>`);return rows.length?`\n      <keyframes>\n${rows.join('\n')}\n      </keyframes>`:''},
   toXML(){
     const p=model.project,lines=[`<?xml version="1.0" encoding="UTF-8"?>`,`<open-motion version="4" xmlns:om="https://openmotion.local/schema/4">`,`  <scene name="${this.xmlEscape(p.name)}" width="${p.width}" height="${p.height}" fps="${p.fps}" duration="${p.duration}s" background="${this.xmlEscape(p.bg)}" renderer="webgl">`];
     for(const l of [...model.layers].reverse()){const attrs=[`id="${this.xmlEscape(l.id)}"`,`type="${this.xmlEscape(l.type)}"`,`name="${this.xmlEscape(l.name)}"`,`start="${+l.start||0}s"`,`duration="${+l.duration||0}s"`,`transformSpace="${l.transformSpace==='world'?'world':'local'}"`,`space3d="${model.layer3DEnabled(l)}"`];if(l.parentId)attrs.push(`parentId="${this.xmlEscape(l.parentId)}"`);if(l.type==='camera'){const xmlLensMode=cameraLensModeValue(l),xmlFocal=xmlLensMode==='free'?(+l.focalLength||cameraFocalFromFov(+l.fov||55)):cameraFocalFromFov(+l.fov||55),xmlZoom=['digital','free'].includes(xmlLensMode)?(+l.digitalZoom||1):cameraZoomFromFov(+l.fov||55);attrs.push(`projection="${this.xmlEscape(l.projection||'perspective')}"`,`fov="${+l.fov||55}"`,`focalLength="${xmlFocal}"`,`zoom="${xmlZoom}"`,`lensMode="${this.xmlEscape(xmlLensMode)}"`,`primeFocalLength="${+l.primeFocalLength||cameraFocalFromFov(+l.fov||55)}"`,`digitalBaseFocalLength="${+l.digitalBaseFocalLength||cameraFocalFromFov(+l.fov||55)}"`,`digitalZoom="${+l.digitalZoom||1}"`,`near="${+l.near||1}"`,`far="${+l.far||50000}"`,`orthoSize="${+l.orthoSize||p.height}"`,`orbitEnabled="${!!l.orbitEnabled}"`);if(l.orbitTargetId)attrs.push(`orbitTargetId="${this.xmlEscape(l.orbitTargetId)}"`)}if(l.type==='mesh')attrs.push(`mesh="${this.xmlEscape(l.mesh||'cube')}"`,`depth="${+l.depth||+l.w||1}"`);if(l.type==='shape')attrs.push(`shape="${this.xmlEscape(l.shape||'rect')}"`);if(l.type==='text')attrs.push(`text="${this.xmlEscape(l.text||'')}"`);if(['image','video','audio'].includes(l.type)&&l.dataUrl)attrs.push(`source="${this.xmlEscape(l.dataUrl)}"`);
-      const e=l.effects||{},m=l.mask||{},camera=l.type==='camera',rx=camera?(+l.pitch||0):(+l.rotX||0),ry=camera?(+l.yaw||0):(+l.rotY||0),rz=camera?(+l.roll||0):(+l.rotZ||0),rotation=camera?rz:(+l.rotation||0),cameraEuler=camera?` pitch="${rx}" yaw="${ry}" roll="${rz}" orbitAzimuth="${+l.orbitAzimuth||0}" orbitElevation="${+l.orbitElevation||0}" orbitDistance="${Math.max(.001,+l.orbitDistance||1)}"`:'';lines.push(`    <layer ${attrs.join(' ')}>`);lines.push(`      <transform x="${+l.x||0}" y="${+l.y||0}" z="${+l.z||0}" scaleX="${l.scaleX??1}" scaleY="${l.scaleY??1}" scaleZ="${l.scaleZ??1}" rotation="${rotation}" rotationX="${rx}" rotationY="${ry}" rotationZ="${rz}"${cameraEuler} opacity="${l.opacity??1}"/>`);lines.push(`      <appearance width="${+l.w||0}" height="${+l.h||0}" color="${this.xmlEscape(l.color||'#ffffff')}" blend="${this.xmlEscape(normalizeBlendMode(l.blend))}" stroke="${this.xmlEscape(l.stroke||'#ffffff')}" strokeWidth="${+l.strokeWidth||0}" radius="${+l.radius||0}" fontSize="${+l.fontSize||0}" fontWeight="${+l.fontWeight||0}" fontFamily="${this.xmlEscape(l.fontFamily||'system-ui')}" align="${this.xmlEscape(l.align||'center')}"/>`);lines.push(`      <effects blur="${+e.blur||0}" brightness="${e.brightness??100}" contrast="${e.contrast??100}" saturate="${e.saturate??100}" hue="${+e.hue||0}"/>`);lines.push(`      <mask enabled="${!!m.enabled}" type="${this.xmlEscape(m.type||'rect')}" feather="${+m.feather||0}" invert="${!!m.invert}"/>`);if(['video','audio'].includes(l.type))lines.push(`      <source volume="${l.volume??1}" playbackRate="${l.playbackRate??1}" sourceIn="${+l.sourceIn||0}s" sourceOut="${Number.isFinite(l.sourceOut)?l.sourceOut:''}" extendIn="${Math.max(0,+l.mediaExtendIn||0)}s" extendOut="${Math.max(0,+l.mediaExtendOut||0)}s"/>`);const keys=this.keysXML(l);if(keys)lines.push(keys.trimStart());lines.push(`    </layer>`)
+      const e=l.effects||{},m=l.mask||{},tm=trackMatteSettings(l),camera=l.type==='camera',rx=camera?(+l.pitch||0):(+l.rotX||0),ry=camera?(+l.yaw||0):(+l.rotY||0),rz=camera?(+l.roll||0):(+l.rotZ||0),rotation=camera?rz:(+l.rotation||0),cameraEuler=camera?` pitch="${rx}" yaw="${ry}" roll="${rz}" orbitAzimuth="${+l.orbitAzimuth||0}" orbitElevation="${+l.orbitElevation||0}" orbitDistance="${Math.max(.001,+l.orbitDistance||1)}"`:'';lines.push(`    <layer ${attrs.join(' ')}>`);lines.push(`      <transform x="${+l.x||0}" y="${+l.y||0}" z="${+l.z||0}" scaleX="${l.scaleX??1}" scaleY="${l.scaleY??1}" scaleZ="${l.scaleZ??1}" rotation="${rotation}" rotationX="${rx}" rotationY="${ry}" rotationZ="${rz}"${cameraEuler} opacity="${l.opacity??1}"/>`);lines.push(`      <appearance width="${+l.w||0}" height="${+l.h||0}" color="${this.xmlEscape(l.color||'#ffffff')}" blend="${this.xmlEscape(normalizeBlendMode(l.blend))}" stroke="${this.xmlEscape(l.stroke||'#ffffff')}" strokeWidth="${+l.strokeWidth||0}" radius="${+l.radius||0}" fontSize="${+l.fontSize||0}" fontWeight="${+l.fontWeight||0}" fontFamily="${this.xmlEscape(l.fontFamily||'system-ui')}" align="${this.xmlEscape(l.align||'center')}"/>`);lines.push(`      <effects blur="${+e.blur||0}" brightness="${e.brightness??100}" contrast="${e.contrast??100}" saturate="${e.saturate??100}" hue="${+e.hue||0}"/>`);lines.push(`      <mask enabled="${!!m.enabled}" type="${this.xmlEscape(m.type||'rect')}" feather="${+m.feather||0}" invert="${!!m.invert}"/>`);if(tm.mode!=='none')lines.push(`      <track-matte mode="${this.xmlEscape(tm.mode)}" scope="${this.xmlEscape(tm.scope)}" targets="${this.xmlEscape(tm.targetIds.join(','))}"/>`);if(['video','audio'].includes(l.type))lines.push(`      <source volume="${l.volume??1}" playbackRate="${l.playbackRate??1}" sourceIn="${+l.sourceIn||0}s" sourceOut="${Number.isFinite(l.sourceOut)?l.sourceOut:''}" extendIn="${Math.max(0,+l.mediaExtendIn||0)}s" extendOut="${Math.max(0,+l.mediaExtendOut||0)}s"/>`);const keys=this.keysXML(l);if(keys)lines.push(keys.trimStart());lines.push(`    </layer>`)
     }
     lines.push('  </scene>','</open-motion>');return lines.join('\n')
   },
@@ -19317,9 +19494,9 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
     overflow-y:hidden!important;
   }
 }
-.blendOpacityPanel{display:flex;flex-direction:column;gap:8px;padding:9px;background:#171b29}
+.blendOpacityPanel{display:flex;flex-direction:column;gap:8px;padding:9px;background:#171b29;scroll-padding-top:106px}
 .blendOpacityCard,.blendCurrent,.blendCategory{border:1px solid #30384d;background:#202638;border-radius:10px;overflow:hidden}
-.blendOpacityCard{padding:10px}
+.blendOpacityCard{position:sticky;top:0;z-index:5;flex:0 0 auto;padding:10px;box-shadow:0 7px 16px rgba(9,12,19,.72)}
 .blendOpacityHeading{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .blendOpacityHeading>div{flex:1;min-width:0}
 .blendOpacityHeading b{display:block;color:#edf2fb;font-size:11px}
@@ -19355,13 +19532,15 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 .blendModeName{max-width:100%;font-size:7.5px;line-height:1.1;white-space:normal;text-align:center}
 .blendModeCheck{display:none;position:absolute;right:4px;top:3px;color:var(--accent);font-size:8px}
 .blendModeBtn.active .blendModeCheck{display:block}
+.blendMaskCard{border:1px solid #354057;background:#1d2333;border-radius:12px;padding:10px;overflow:hidden;flex:0 0 auto}.blendMaskCard.inactive{border-color:#2b3244}.blendMaskHeading{display:flex;align-items:center;gap:8px}.blendMaskGlyph{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:#182a2e;color:#73e2bd;font-size:18px}.blendMaskHeading>div{flex:1;min-width:0}.blendMaskHeading b{display:block;color:#edf2fb;font-size:11px}.blendMaskHeading small{display:block;color:#8490a7;font-size:8px;margin-top:2px}.blendMaskState{border:1px solid #3b465e;border-radius:999px;padding:4px 7px;color:#9aa6bb;font-size:8px}.blendMaskCard:not(.inactive) .blendMaskState{border-color:#4f9d8b;background:#18322f;color:#8ff0d5}.blendMaskSource{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:9px;padding:8px;border-radius:8px;background:#151b29}.blendMaskSource span{color:#cbd4e4;font-size:9px;font-weight:700;white-space:nowrap}.blendMaskSource small{color:#7f8ba1;font-size:7px;text-align:right;line-height:1.35}.blendMaskModes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}.blendMaskModes button,.blendMaskScopes button{border:1px solid #353e53;background:#20273a;color:#9ca8bd;border-radius:9px;min-width:0}.blendMaskModes button{min-height:58px;display:grid;place-items:center;align-content:center;gap:2px}.blendMaskModes i{font-style:normal;font-size:20px}.blendMaskModes span,.blendMaskScopes span{font-size:9px;font-weight:700}.blendMaskModes small,.blendMaskScopes small{font-size:7px;color:#77839a}.blendMaskModes button.active,.blendMaskScopes button.active{border-color:#66d9ba;background:#19322f;color:#a1f1dc;box-shadow:inset 0 0 0 1px rgba(115,226,189,.16)}.blendMaskModes button[data-matte-mode=exclude].active{border-color:#e690a8;background:#34202b;color:#ffc0d0}.blendMaskScopeTitle{margin:10px 1px 5px;color:#8c98ad;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.blendMaskScopes{display:grid;grid-template-columns:1fr 1fr;gap:6px}.blendMaskScopes button{min-height:42px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:6px}.blendMaskTargets{display:grid;gap:4px;margin-top:7px;max-height:150px;overflow:auto;padding-right:2px}.blendMaskTarget{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1px solid #30394d;border-radius:8px;background:#171d2b}.blendMaskTarget:has(input:checked){border-color:#4c9f8a;background:#18302f}.blendMaskTarget input{width:16px;height:16px;accent-color:#73e2bd}.blendMaskTarget span{min-width:0}.blendMaskTarget b,.blendMaskTarget small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.blendMaskTarget b{font-size:9px;color:#cbd5e5}.blendMaskTarget small{font-size:7px;color:#7f8ba1;margin-top:2px}.blendMaskEmpty,.blendMaskNote{padding:8px;border-radius:7px;background:#151a27;color:#7f8ba1;font-size:8px;line-height:1.4}.blendMaskNote{margin-top:7px}.blendMaskCard.inactive .blendMaskSource,.blendMaskCard.inactive .blendMaskScopes,.blendMaskCard.inactive .blendMaskScopeTitle,.blendMaskCard.inactive .blendMaskTargets,.blendMaskCard.inactive .blendMaskNote{opacity:.58}
 @media(max-width:390px){
-  .blendOpacityPanel{padding:7px;gap:6px}.blendOpacityCard{padding:8px}.blendModeGrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:0 5px 6px}.blendModeBtn{min-height:58px;padding:4px 2px}.blendModeSwatch{transform:scale(.9)}.blendModeName{font-size:7px}
+  .blendOpacityPanel{padding:7px;gap:6px;scroll-padding-top:98px}.blendOpacityCard{padding:8px}.blendModeGrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:0 5px 6px}.blendModeBtn{min-height:58px;padding:4px 2px}.blendModeSwatch{transform:scale(.9)}.blendModeName{font-size:7px}.blendMaskCard{padding:8px}.blendMaskModes button{min-height:52px}.blendMaskSource{padding:7px}.blendMaskTargets{max-height:132px}
 }
 @media(min-width:900px){
   .blendModeGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.blendModeBtn{min-height:68px}.blendOpacityPanel{padding:12px}
 }
 </style>
+<!-- V4.63 — alpha track mattes add shape/media-driven Mask and Exclude modes, with all-layers-below or explicit-target scope in Blending & Opacity. -->
 <!-- V4.62 — dedicated Blending & Opacity Inspector with keyframeable opacity, grouped compositing modes, WebGL backdrop compositing, and XML persistence. -->
 <!-- V4.61 — selected timeline layers move horizontally as a frame-aligned group, reorder vertically as a stable block, and suppress Android native text-selection callouts. -->
 </body>
