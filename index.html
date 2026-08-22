@@ -18688,8 +18688,8 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 .exportScopeNotice small{font-size:9px;color:#8fe6cf;line-height:1.35}
 .exportSheet.selectedLayerExport .nonVideoExportOption{display:none}
 </style>
-<style id="oms-v453-multi-layer-arrange">
-/* V4.53 — thinner multi-layer toolbar, directional recall icons, no divider. */
+<style id="oms-v454-multi-layer-arrange">
+/* V4.54 local preview — unified toolbar surfaces + stepped sequence icon. */
 .drawer.multiSelectDrawer{
   left:0;
   right:0;
@@ -18716,9 +18716,12 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   grid-template-columns:minmax(0,1.55fr) minmax(118px,.82fr);
   gap:6px;
   align-items:center;
-  padding:4px 6px 6px;
+  padding:3px 6px 4px;
   overflow:hidden!important;
+  overscroll-behavior:none;
+  scrollbar-width:none;
 }
+#drawer.multiSelectDrawer .multiSelectBody::-webkit-scrollbar{display:none;width:0;height:0}
 .multiTimeGroup{
   min-width:0;
   display:grid;
@@ -18730,7 +18733,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 .multiTimeGroup.outside{grid-template-columns:repeat(2,minmax(0,1fr))}
 .multiTimeBtn{
   min-width:0;
-  height:48px;
+  height:46px;
   border:1px solid #374057;
   border-radius:7px;
   background:#252a3e;
@@ -18768,17 +18771,17 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   grid-template-columns:repeat(3,minmax(0,1fr));
   align-items:center;
   gap:4px;
-  padding:4px;
-  border-radius:8px;
-  background:#303348;
+  padding:0;
+  border-radius:0;
+  background:transparent;
 }
 .multiArrangeGroup button{
   min-width:0;
-  height:40px;
-  border:1px solid transparent;
-  border-radius:6px;
-  background:#454960;
-  color:#f0f2f8;
+  height:46px;
+  border:1px solid #374057;
+  border-radius:7px;
+  background:#252a3e;
+  color:#dbe1ee;
   display:grid;
   place-items:center;
   padding:0;
@@ -18800,24 +18803,41 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 .multiArrangeIcon i:nth-child(2){top:9px;width:17px}
 .multiArrangeIcon i:nth-child(3){top:16px;width:10px}
 .multiArrangeIcon.alignStart i{left:2px}
-.multiArrangeIcon.sequence i:nth-child(1){right:1px}
-.multiArrangeIcon.sequence i:nth-child(2){left:8px}
-.multiArrangeIcon.sequence i:nth-child(3){left:1px}
+.multiArrangeIcon.sequence i{
+  width:11px;
+  height:4px;
+  border:0;
+  border-radius:1px;
+  background:currentColor;
+}
+.multiArrangeIcon.sequence i:nth-child(1){top:1px;left:17px;right:auto;width:11px}
+.multiArrangeIcon.sequence i:nth-child(2){top:9px;left:9px;width:11px}
+.multiArrangeIcon.sequence i:nth-child(3){top:17px;left:1px;width:11px}
 .multiArrangeIcon.alignEnd i{right:2px}
 @media(max-width:430px){
-  .multiSelectBody{grid-template-columns:minmax(0,1.48fr) minmax(110px,.82fr);gap:4px;padding:3px 5px 5px}
+  .multiSelectBody{grid-template-columns:minmax(0,1.48fr) minmax(110px,.82fr);gap:4px;padding:2px 5px 3px}
   .multiTimeGroup{gap:3px}
-  .multiTimeBtn{height:43px;padding:2px 1px}
+  .multiTimeBtn{height:41px;padding:2px 1px}
   .multiTimeBtn>span{font-size:15px}
   .multiTimeBtn small{font-size:6px}
-  .multiArrangeGroup{gap:3px;padding:3px}
-  .multiArrangeGroup button{height:37px}
+  .multiArrangeGroup{gap:3px;padding:0}
+  .multiArrangeGroup button{height:41px}
   .multiArrangeIcon{transform:scale(.78)}
 }
 @media(max-width:899px){
   #drawer.multiSelectDrawer:not(.addDrawer){
     height:76px!important;
     max-height:76px!important;
+  }
+  #drawer.multiSelectDrawer:not(.addDrawer)>.drawerHead{
+    flex:0 0 26px!important;
+    height:26px!important;
+    min-height:26px!important;
+  }
+  #drawer.multiSelectDrawer:not(.addDrawer)>.multiSelectBody{
+    overflow:hidden!important;
+    overflow-x:hidden!important;
+    overflow-y:hidden!important;
   }
 }
 @media(min-width:900px){
@@ -18827,9 +18847,20 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   html:not(.omsMobileLandscapeDesktop) .timelineArea>#drawer.multiSelectDrawer:not(.hidden){
     height:84px!important;
   }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea>#drawer.multiSelectDrawer:not(.addDrawer)>.drawerHead{
+    flex:0 0 26px!important;
+    height:26px!important;
+    min-height:26px!important;
+  }
+  html:not(.omsMobileLandscapeDesktop) .timelineArea>#drawer.multiSelectDrawer:not(.addDrawer)>.multiSelectBody{
+    padding:3px 6px 4px!important;
+    overflow:hidden!important;
+    overflow-x:hidden!important;
+    overflow-y:hidden!important;
+  }
 }
 </style>
-<!-- V4.53 — multi-select toolbar is thinner, recall icons face the playhead on the left, and the center divider is removed. -->
+<!-- V4.54 local preview — arrange buttons share the time-button surface; sequence uses three filled stepped clips. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
