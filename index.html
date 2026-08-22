@@ -4339,11 +4339,71 @@ class PausedVideoSeekCoordinator{
   }
 }
 
+function omsAnalyzeFrequencySpectrum(data,previous,{sampleRate=48000,fftSize=2048,minDecibels=-96,maxDecibels=-18,primed=false}={}){
+  const binHz=sampleRate/fftSize;
+  const nyquist=sampleRate*.5;
+  const normalizedAt=i=>{
+    const db=data[i];
+    if(!Number.isFinite(db))return 0;
+    return Math.pow(clamp((db-minDecibels)/(maxDecibels-minDecibels),0,1),1.7)
+  };
+  const band=(low,high)=>{
+    const a=clamp(Math.floor(low/binHz),0,data.length-1);
+    const z=clamp(Math.ceil(Math.min(high,nyquist)/binHz),a+1,data.length);
+    let sum=0,peak=0,count=0;
+    for(let i=a;i<z;i++){
+      const value=normalizedAt(i);
+      sum+=value*value;
+      peak=Math.max(peak,value);
+      count++
+    }
+    return count?clamp(Math.sqrt(sum/count)*.72+peak*.28,0,1):0
+  };
+
+  const low=band(20,250);
+  const mid=band(250,4000);
+  const high=band(4000,Math.min(20000,nyquist));
+  const fluxStart=clamp(Math.floor(1500/binHz),0,data.length-1);
+  const fluxEnd=clamp(Math.ceil(Math.min(20000,nyquist)/binHz),fluxStart+1,data.length);
+  let fluxSquare=0,fluxPeak=0,fluxCount=0;
+  for(let i=0;i<data.length;i++){
+    const value=normalizedAt(i);
+    if(primed&&i>=fluxStart&&i<fluxEnd){
+      const delta=Math.max(0,value-(previous[i]||0));
+      fluxSquare+=delta*delta;
+      fluxPeak=Math.max(fluxPeak,delta);
+      fluxCount++
+    }
+    previous[i]=value
+  }
+  const flux=clamp(
+    Math.sqrt(fluxSquare/Math.max(1,fluxCount))*3.2+fluxPeak*.68,
+    0,1
+  );
+  const energy=clamp(Math.max(
+    low*.76,
+    mid*.98,
+    high*1.30,
+    flux*1.55,
+    (low*.22+mid*.35+high*.43)
+  ),0,1);
+  return {energy,low,mid,high,flux,sampleRate,fftSize}
+}
 class MediaManager{
   constructor(model){
     this.model=model;
     this.audioCtx=null;
     this.exportDest=null;
+    // V4.64 — lightweight live spectrum analysis. The analyser stays on the
+    // playback mix, uses one reusable buffer, and never changes project/export
+    // data. FFT 2048 gives useful high-frequency detail without burdening mobile.
+    this.liveAnalyser=null;
+    this.liveFrequencyData=null;
+    this.livePreviousSpectrum=null;
+    this.liveSpectrumSnapshot=null;
+    this.liveSpectrumPrimed=false;
+    this.liveAudioRoutes=new WeakMap();
+    this.liveAnalysisError=false;
     this.waveCtx=null;
     this.waveJobs=new WeakMap();
     this.waveTail=Promise.resolve();
@@ -4837,6 +4897,80 @@ class MediaManager{
     }
   }
 
+  ensureLiveAudioAnalyser(){
+    if(this.liveAnalysisError)return null;
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC)return null;
+
+    try{
+      this.audioCtx ||= new AC({latencyHint:'interactive'});
+      if(!this.liveAnalyser){
+        const analyser=this.audioCtx.createAnalyser();
+        analyser.fftSize=2048;
+        analyser.minDecibels=-96;
+        analyser.maxDecibels=-18;
+        // Low analyser smoothing retains short hi-hats/cymbals. The visible
+        // meter applies its own time-based attack/release below.
+        analyser.smoothingTimeConstant=.32;
+        analyser.connect(this.audioCtx.destination);
+        this.liveAnalyser=analyser;
+        this.liveFrequencyData=new Float32Array(analyser.frequencyBinCount);
+        this.livePreviousSpectrum=new Float32Array(analyser.frequencyBinCount)
+      }
+
+      let connected=0;
+      for(const l of this.model.layers||[]){
+        const el=l.video||l.audio;
+        if(!el)continue;
+        try{
+          if(!l.audioNode)l.audioNode=this.audioCtx.createMediaElementSource(el);
+          if(this.liveAudioRoutes.get(l.audioNode)!=='live'){
+            try{l.audioNode.disconnect()}catch(e){}
+            l.audioNode.connect(this.liveAnalyser);
+            this.liveAudioRoutes.set(l.audioNode,'live')
+          }
+          connected++
+        }catch(err){console.warn('Sumber audio tidak dapat dianalisis:',l.name,err)}
+      }
+
+      this.audioCtx.resume().catch(()=>{});
+      return connected?this.liveAnalyser:null
+    }catch(err){
+      console.warn('Live audio analyser gagal, memakai waveform fallback:',err);
+      this.liveAnalysisError=true;
+      return null
+    }
+  }
+
+  liveSpectrumEnergy(){
+    const analyser=this.liveAnalyser;
+    const ctx=this.audioCtx;
+    if(!analyser||!ctx||ctx.state!=='running')return null;
+
+    const data=this.liveFrequencyData;
+    const previous=this.livePreviousSpectrum;
+    if(!data||data.length!==analyser.frequencyBinCount)return null;
+    analyser.getFloatFrequencyData(data);
+
+    // Positive spectral change above 1.5 kHz preserves brief high-frequency
+    // attacks which disappear in a conventional RMS envelope. Bass no longer
+    // owns the meter: mid/high bands receive perceptual compensation.
+    this.liveSpectrumSnapshot=omsAnalyzeFrequencySpectrum(data,previous,{
+      sampleRate:ctx.sampleRate,
+      fftSize:analyser.fftSize,
+      minDecibels:analyser.minDecibels,
+      maxDecibels:analyser.maxDecibels,
+      primed:this.liveSpectrumPrimed
+    });
+    this.liveSpectrumPrimed=true;
+    return this.liveSpectrumSnapshot
+  }
+
+  resetLiveSpectrumAnalysis(){
+    this.liveSpectrumPrimed=false;
+    this.liveSpectrumSnapshot=null
+  }
+
   tick(t,muted=false){
     // Lightweight continuous-playback follower. It checks only state/region
     // changes every rendered project frame. currentTime is never rewritten
@@ -4898,19 +5032,23 @@ class MediaManager{
   }
 
   restorePlaybackAudio(){
-    if(!this.audioCtx||!this.exportDest)return;
+    // Ordinary pause/play keeps the analyser graph hot. Only rebuild routes
+    // after an export temporarily moved sources into MediaStreamDestination.
+    if(!this.audioCtx||(!this.exportDest&&!this.exportGains?.size))return;
     for(const gain of this.exportGains||[]){
       try{gain.disconnect()}catch(e){}
     }
     this.exportGains?.clear?.();
+    const playbackDestination=this.liveAnalyser||this.audioCtx.destination;
     for(const l of model.layers){
       if(!l.audioNode)continue;
       try{
         l.audioNode.disconnect();
-        l.audioNode.connect(this.audioCtx.destination);
+        l.audioNode.connect(playbackDestination);
+        this.liveAudioRoutes.set(l.audioNode,this.liveAnalyser?'live':'direct');
       }catch(e){}
     }
-    try{this.exportDest.stream.getTracks().forEach(t=>t.stop())}catch(e){}
+    try{this.exportDest?.stream.getTracks().forEach(t=>t.stop())}catch(e){}
     this.exportDest=null;
     try{this.audioCtx.resume().catch(()=>{})}catch(e){}
   }
@@ -4968,6 +5106,7 @@ class MediaManager{
         gain.gain.value=clamp(l.volume??1,0,1);
         l.audioNode.connect(gain);
         gain.connect(this.exportDest);
+        this.liveAudioRoutes.set(l.audioNode,'export');
         this.exportGains.add(gain)
       }catch(e){}
     }
@@ -6545,6 +6684,7 @@ class TimelineController{
     this.audioMeterLevel=0;
     this.audioMeterPeak=0;
     this.audioMeterLastTime=-1;
+    this.audioMeterLastStamp=0;
 
     const sc=$('#timelineScroll');
     this.lastScrollLeft=sc.scrollLeft;
@@ -7307,6 +7447,7 @@ class TimelineController{
     this.audioMeterLevel=0;
     this.audioMeterPeak=0;
     this.audioMeterLastTime=-1;
+    this.audioMeterLastStamp=0;
 
     const meter=$('#liveAudioMeter');
     if(!meter)return;
@@ -7353,35 +7494,48 @@ class TimelineController{
     // Decode source audio in background when needed.
     for(const l of audible)media.ensureWaveform(l);
 
-    const ready=audible.some(l=>
+    const waveformReady=audible.some(l=>
       Array.isArray(l.audioWave) &&
       l.audioWave.length>16
     );
+    const spectrumReady=!!(
+      model.playing &&
+      media.liveAnalyser &&
+      media.audioCtx?.state==='running'
+    );
 
-    if(!ready){
+    if(!waveformReady&&!spectrumReady){
       meter.classList.remove('active');
       meter.style.width='0px';
       meter.style.opacity='0';
       return;
     }
 
-    const raw=model.playing ? this.realtimeAudioEnergy(model.time) : 0;
+    const spectrum=model.playing?media.liveSpectrumEnergy():null;
+    // Precomputed waveform remains a safe fallback for unsupported/suspended
+    // Web Audio contexts, but normal playback now follows the actual FFT mix.
+    const raw=model.playing
+      ? (spectrum?.energy??this.realtimeAudioEnergy(model.time))
+      : 0;
 
-    // Fast attack, slower release while playing. When paused, decay faster
-    // so the line visibly returns to zero.
-    const attack=.62;
-    const release=model.playing ? .13 : .24;
-    this.audioMeterLevel +=
-      (raw-this.audioMeterLevel) *
-      (raw>this.audioMeterLevel?attack:release);
+    // Time-based attack/release makes the meter behave identically when a phone
+    // misses animation frames. It is no longer tied to project/render FPS.
+    const stamp=performance.now();
+    const dt=this.audioMeterLastStamp
+      ? clamp((stamp-this.audioMeterLastStamp)/1000,1/240,.25)
+      : 1/30;
+    this.audioMeterLastStamp=stamp;
+    const attack=1-Math.exp(-dt/.030);
+    const release=1-Math.exp(-dt/(model.playing ? .145 : .085));
+    this.audioMeterLevel+=(raw-this.audioMeterLevel)*(raw>this.audioMeterLevel?attack:release);
 
     if(model.playing){
       this.audioMeterPeak=Math.max(
         this.audioMeterLevel,
-        this.audioMeterPeak*.90
+        this.audioMeterPeak*Math.exp(-dt/.18)
       );
     }else{
-      this.audioMeterPeak*=.76;
+      this.audioMeterPeak*=Math.exp(-dt/.07);
     }
 
     const effective=Math.max(this.audioMeterLevel,this.audioMeterPeak);
@@ -14486,7 +14640,7 @@ const viewportNav=new ViewportNavigator(model,renderer,ui,renderer.canvas);
 
 
 class PlaybackClock{
-  constructor(){this.last=0;this.raf=0;this.playbackTime=0;this.lastRenderedFrame=-1}
+  constructor(){this.last=0;this.raf=0;this.playbackTime=0;this.lastRenderedFrame=-1;this.lastMeterUpdate=0}
   toggle(){model.playing?this.stop():this.start()}
   start(){
     timeline.cancelScrollFrameSettle();
@@ -14497,7 +14651,10 @@ class PlaybackClock{
     model.playing=true;
     window.omsSetPlayButtonVisual?.(true);
     this.last=performance.now();
+    this.lastMeterUpdate=0;
     timeline.resetRealtimeAudioMeter(false);
+    media.ensureLiveAudioAnalyser();
+    media.resetLiveSpectrumAnalysis();
     // Resume without flushing an already-aligned decoder. If a real correction
     // is needed, keep the last cached frame visible until the new frame arrives.
     media.sync(model.time,true,false,{forceSeek:true,resumePlayback:true,preserveFrameCache:true});
@@ -14538,11 +14695,20 @@ class PlaybackClock{
     if(duration<=0){this.stop();return}
     this.playbackTime+=dt;
 
+    // Meter UI is capped at 30 Hz and is independent from project-frame/WebGL
+    // rendering. Audio analysis therefore stays responsive when video drops a
+    // frame on mobile, without increasing render load.
+    if(!this.lastMeterUpdate||now-this.lastMeterUpdate>=1000/30){
+      this.lastMeterUpdate=now;
+      timeline.updateRealtimeAudioMeter()
+    }
+
     let wrapped=false;
     if(this.playbackTime>=duration){
       this.playbackTime%=duration;
       wrapped=true;
       timeline.resetRealtimeAudioMeter(false);
+      media.resetLiveSpectrumAnalysis();
       media.sync(0,true,false,{forceSeek:true,preserveFrameCache:true})
     }
 
@@ -14552,7 +14718,6 @@ class PlaybackClock{
       model.time=nextFrame/timeline.projectFPS();
       // Boundary-aware follower: no per-frame hard seek during normal playback.
       media.tick(model.time,false);
-      timeline.updateRealtimeAudioMeter();
       renderer.render()
     }
 
@@ -19540,6 +19705,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   .blendModeGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.blendModeBtn{min-height:68px}.blendOpacityPanel{padding:12px}
 }
 </style>
+<!-- V4.64 — the realtime audio meter reads a 2048-point FFT playback mix, balances low/mid/high bands, preserves high-frequency spectral transients, and updates independently at a mobile-safe 30 Hz. -->
 <!-- V4.63 — alpha track mattes add shape/media-driven Mask and Exclude modes, with all-layers-below or explicit-target scope in Blending & Opacity. -->
 <!-- V4.62 — dedicated Blending & Opacity Inspector with keyframeable opacity, grouped compositing modes, WebGL backdrop compositing, and XML persistence. -->
 <!-- V4.61 — selected timeline layers move horizontally as a frame-aligned group, reorder vertically as a stable block, and suppress Android native text-selection callouts. -->
