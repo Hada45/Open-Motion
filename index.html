@@ -1126,6 +1126,25 @@ input[type=range]{accent-color:var(--accent)}
   opacity:1;
 }
 
+/* Red is reserved for genuinely high visualizer energy. Keeping it out of the
+   normal gradient prevents quiet audio from looking clipped. */
+.liveAudioMeter.audioHot{
+  background:
+    linear-gradient(
+      90deg,
+      rgba(239,54,45,.98) 0%,
+      rgba(235,103,28,.96) 10%,
+      rgba(214,155,25,.94) 22%,
+      rgba(85,218,42,.98) 38%,
+      rgba(0,244,91,1) 50%,
+      rgba(85,218,42,.98) 62%,
+      rgba(214,155,25,.94) 78%,
+      rgba(235,103,28,.96) 90%,
+      rgba(239,54,45,.98) 100%
+    );
+  box-shadow:0 0 4px rgba(239,54,45,.28);
+}
+
 
 /* V3.45 — Advanced custom easing editor */
 .transformStudio.easeEditing{
@@ -4377,15 +4396,15 @@ function omsAnalyzeFrequencySpectrum(data,previous,{sampleRate=48000,fftSize=204
     previous[i]=value
   }
   const flux=clamp(
-    Math.sqrt(fluxSquare/Math.max(1,fluxCount))*3.2+fluxPeak*.68,
+    Math.sqrt(fluxSquare/Math.max(1,fluxCount))*2.0+fluxPeak*.42,
     0,1
   );
   const energy=clamp(Math.max(
     low*.76,
     mid*.98,
-    high*1.30,
-    flux*1.55,
-    (low*.22+mid*.35+high*.43)
+    high*1.12,
+    flux*1.05,
+    (low*.25+mid*.39+high*.36)
   ),0,1);
   return {energy,low,mid,high,flux,sampleRate,fftSize}
 }
@@ -4898,6 +4917,7 @@ class MediaManager{
   }
 
   ensureLiveAudioAnalyser(){
+    if(!this.usesMobileSpectrumVisualizer())return null;
     if(this.liveAnalysisError)return null;
     const AC=window.AudioContext||window.webkitAudioContext;
     if(!AC)return null;
@@ -4911,7 +4931,7 @@ class MediaManager{
         analyser.maxDecibels=-18;
         // Low analyser smoothing retains short hi-hats/cymbals. The visible
         // meter applies its own time-based attack/release below.
-        analyser.smoothingTimeConstant=.32;
+        analyser.smoothingTimeConstant=.18;
         analyser.connect(this.audioCtx.destination);
         this.liveAnalyser=analyser;
         this.liveFrequencyData=new Float32Array(analyser.frequencyBinCount);
@@ -4940,6 +4960,13 @@ class MediaManager{
       this.liveAnalysisError=true;
       return null
     }
+  }
+
+  usesMobileSpectrumVisualizer(){
+    return !!(
+      document.documentElement.classList.contains('omsMobileLandscapeDesktop') ||
+      window.matchMedia?.('(pointer: coarse)').matches
+    )
   }
 
   liveSpectrumEnergy(){
@@ -6683,6 +6710,7 @@ class TimelineController{
 
     this.audioMeterLevel=0;
     this.audioMeterPeak=0;
+    this.audioMeterPeakHoldUntil=0;
     this.audioMeterLastTime=-1;
     this.audioMeterLastStamp=0;
 
@@ -7446,6 +7474,7 @@ class TimelineController{
   resetRealtimeAudioMeter(hide=false){
     this.audioMeterLevel=0;
     this.audioMeterPeak=0;
+    this.audioMeterPeakHoldUntil=0;
     this.audioMeterLastTime=-1;
     this.audioMeterLastStamp=0;
 
@@ -7453,6 +7482,7 @@ class TimelineController{
     if(!meter)return;
 
     meter.style.width='0px';
+    meter.classList.remove('audioHot');
     if(hide)meter.classList.remove('active');
   }
 
@@ -7498,7 +7528,9 @@ class TimelineController{
       Array.isArray(l.audioWave) &&
       l.audioWave.length>16
     );
+    const mobileSpectrum=media.usesMobileSpectrumVisualizer();
     const spectrumReady=!!(
+      mobileSpectrum &&
       model.playing &&
       media.liveAnalyser &&
       media.audioCtx?.state==='running'
@@ -7506,36 +7538,46 @@ class TimelineController{
 
     if(!waveformReady&&!spectrumReady){
       meter.classList.remove('active');
+      meter.classList.remove('audioHot');
       meter.style.width='0px';
       meter.style.opacity='0';
       return;
     }
 
-    const spectrum=model.playing?media.liveSpectrumEnergy():null;
-    // Precomputed waveform remains a safe fallback for unsupported/suspended
-    // Web Audio contexts, but normal playback now follows the actual FFT mix.
+    const spectrum=mobileSpectrum&&model.playing?media.liveSpectrumEnergy():null;
+    // Mobile follows the actual FFT mix, with the precomputed waveform as a
+    // fallback. Desktop intentionally continues using that original waveform.
     const raw=model.playing
       ? (spectrum?.energy??this.realtimeAudioEnergy(model.time))
       : 0;
 
-    // Time-based attack/release makes the meter behave identically when a phone
-    // misses animation frames. It is no longer tied to project/render FPS.
+    // Mobile uses a low-latency envelope. Desktop deliberately retains the
+    // original waveform envelope and cadence requested for the PC layout.
     const stamp=performance.now();
     const dt=this.audioMeterLastStamp
       ? clamp((stamp-this.audioMeterLastStamp)/1000,1/240,.25)
       : 1/30;
     this.audioMeterLastStamp=stamp;
-    const attack=1-Math.exp(-dt/.030);
-    const release=1-Math.exp(-dt/(model.playing ? .145 : .085));
-    this.audioMeterLevel+=(raw-this.audioMeterLevel)*(raw>this.audioMeterLevel?attack:release);
+    if(mobileSpectrum){
+      const attack=1-Math.exp(-dt/.014);
+      const release=1-Math.exp(-dt/(model.playing ? .112 : .070));
+      this.audioMeterLevel+=(raw-this.audioMeterLevel)*(raw>this.audioMeterLevel?attack:release);
 
-    if(model.playing){
-      this.audioMeterPeak=Math.max(
-        this.audioMeterLevel,
-        this.audioMeterPeak*Math.exp(-dt/.18)
-      );
+      if(model.playing&&this.audioMeterLevel>=this.audioMeterPeak){
+        this.audioMeterPeak=this.audioMeterLevel;
+        this.audioMeterPeakHoldUntil=stamp+100
+      }else if(model.playing&&stamp>=this.audioMeterPeakHoldUntil){
+        this.audioMeterPeak=Math.max(this.audioMeterLevel,this.audioMeterPeak*Math.exp(-dt/.13))
+      }else if(!model.playing){
+        this.audioMeterPeak*=Math.exp(-dt/.06)
+      }
     }else{
-      this.audioMeterPeak*=Math.exp(-dt/.07);
+      const attack=.62;
+      const release=model.playing ? .13 : .24;
+      this.audioMeterLevel+=(raw-this.audioMeterLevel)*(raw>this.audioMeterLevel?attack:release);
+      this.audioMeterPeak=model.playing
+        ? Math.max(this.audioMeterLevel,this.audioMeterPeak*.90)
+        : this.audioMeterPeak*.76
     }
 
     const effective=Math.max(this.audioMeterLevel,this.audioMeterPeak);
@@ -7548,6 +7590,7 @@ class TimelineController{
 
     meter.style.width=Math.round(width)+'px';
     meter.style.opacity=String(clamp(effective*1.15,0,1));
+    meter.classList.toggle('audioHot',mobileSpectrum&&effective>=.86);
 
     if(effective>.012){
       meter.classList.add('active');
@@ -7557,6 +7600,7 @@ class TimelineController{
       meter.style.opacity='0';
       this.audioMeterLevel=0;
       this.audioMeterPeak=0;
+      this.audioMeterPeakHoldUntil=0;
     }
 
     this.audioMeterLastTime=model.time;
@@ -14653,8 +14697,10 @@ class PlaybackClock{
     this.last=performance.now();
     this.lastMeterUpdate=0;
     timeline.resetRealtimeAudioMeter(false);
-    media.ensureLiveAudioAnalyser();
-    media.resetLiveSpectrumAnalysis();
+    if(media.usesMobileSpectrumVisualizer()){
+      media.ensureLiveAudioAnalyser();
+      media.resetLiveSpectrumAnalysis()
+    }
     // Resume without flushing an already-aligned decoder. If a real correction
     // is needed, keep the last cached frame visible until the new frame arrives.
     media.sync(model.time,true,false,{forceSeek:true,resumePlayback:true,preserveFrameCache:true});
@@ -14695,10 +14741,10 @@ class PlaybackClock{
     if(duration<=0){this.stop();return}
     this.playbackTime+=dt;
 
-    // Meter UI is capped at 30 Hz and is independent from project-frame/WebGL
-    // rendering. Audio analysis therefore stays responsive when video drops a
-    // frame on mobile, without increasing render load.
-    if(!this.lastMeterUpdate||now-this.lastMeterUpdate>=1000/30){
+    const mobileSpectrum=media.usesMobileSpectrumVisualizer();
+    // Mobile FFT is sampled at 45 Hz: quicker than the former 30 Hz meter while
+    // remaining substantially lighter than running analysis on every rAF.
+    if(mobileSpectrum&&(!this.lastMeterUpdate||now-this.lastMeterUpdate>=1000/45)){
       this.lastMeterUpdate=now;
       timeline.updateRealtimeAudioMeter()
     }
@@ -14718,6 +14764,7 @@ class PlaybackClock{
       model.time=nextFrame/timeline.projectFPS();
       // Boundary-aware follower: no per-frame hard seek during normal playback.
       media.tick(model.time,false);
+      if(!mobileSpectrum)timeline.updateRealtimeAudioMeter();
       renderer.render()
     }
 
@@ -19705,7 +19752,8 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   .blendModeGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.blendModeBtn{min-height:68px}.blendOpacityPanel{padding:12px}
 }
 </style>
-<!-- V4.64 — the realtime audio meter reads a 2048-point FFT playback mix, balances low/mid/high bands, preserves high-frequency spectral transients, and updates independently at a mobile-safe 30 Hz. -->
+<!-- V4.65 — mobile FFT uses a balanced 45 Hz low-latency envelope with a 100 ms peak hold and red high-energy zone; desktop retains the original waveform visualizer. -->
+<!-- V4.64 — the realtime audio meter reads a 2048-point FFT playback mix, balances low/mid/high bands, preserves high-frequency spectral transients, and updates independently from project rendering. -->
 <!-- V4.63 — alpha track mattes add shape/media-driven Mask and Exclude modes, with all-layers-below or explicit-target scope in Blending & Opacity. -->
 <!-- V4.62 — dedicated Blending & Opacity Inspector with keyframeable opacity, grouped compositing modes, WebGL backdrop compositing, and XML persistence. -->
 <!-- V4.61 — selected timeline layers move horizontally as a frame-aligned group, reorder vertically as a stable block, and suppress Android native text-selection callouts. -->
