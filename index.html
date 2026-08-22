@@ -4692,7 +4692,7 @@ class MediaManager{
     return this.pausedSeeks.cancel(l)
   }
 
-  sync(t,playing=false,muted=false,{forceSeek=false,interactiveScrub=false}={}){
+  sync(t,playing=false,muted=false,{forceSeek=false,interactiveScrub=false,preserveFrameCache=false,resumePlayback=false}={}){
     // Hard synchronization is reserved for explicit transport actions:
     // play start, scrub/seek, loop wrap, trim edits, and stop. During normal
     // playback use tick() below so Android's decoder is not repeatedly flushed.
@@ -4717,7 +4717,8 @@ class MediaManager{
       const edgeRegion=map.region!=='content';
       let didSeek=false;
       try{
-        const tolerance=forceSeek ? .0005 : (edgeRegion ? .010 : (playing ? .060 : .012));
+        const fps=Math.max(1,+this.model.project?.fps||30);
+        const tolerance=resumePlayback ? Math.max(.008,.55/fps) : (forceSeek ? .0005 : (edgeRegion ? .010 : (playing ? .060 : .012)));
 
         if(l.video&&!playing&&!forceSeek){
           // V4.21: use random-access WebCodecs preview when available; until it
@@ -4726,8 +4727,12 @@ class MediaManager{
           didSeek=this.queueSmartPausedVideoPreview(l,map.mediaTime,{interactive:interactiveScrub});
         }else{
           if(l.video)this.cancelSmartPausedVideoPreview(l);
-          if(forceSeek||Math.abs(el.currentTime-map.mediaTime)>tolerance){
-            if(l.video){l.frameCacheReady=false;l.frameCacheTime=-1}
+          if(Math.abs(el.currentTime-map.mediaTime)>tolerance){
+            // During pause -> play, keep the last verified video frame visible
+            // while an actually-needed decoder seek completes. This prevents a
+            // transient missing/loading surface on Android. Explicit timeline
+            // jumps still invalidate the cache through the default false option.
+            if(l.video&&!preserveFrameCache){l.frameCacheReady=false;l.frameCacheTime=-1}
             el.currentTime=map.mediaTime;
             didSeek=true;
           }
@@ -5501,7 +5506,7 @@ const Mat4={
 
 class WebGLRenderer{
   constructor(projectModel,canvas){
-    this.model=projectModel;this.canvas=canvas;this.fallback=null;this.domInteraction=null;this.interactionCache=null;this.exporting=false;this.interactivePreviewScale=1;this.textures=new Map();this.imageWatch=new WeakSet();this.overlay=$('#interactionAbove');this.interactionLayer=$('#interactionLayer');
+    this.model=projectModel;this.canvas=canvas;this.fallback=null;this.domInteraction=null;this.interactionCache=null;this.exporting=false;this.textures=new Map();this.imageWatch=new WeakSet();this.overlay=$('#interactionAbove');this.interactionLayer=$('#interactionLayer');
     bus.on('layer:disposed',id=>this.disposeTexture(id));
     bus.on('layer:texture-release',id=>this.disposeTexture(id));
     bus.on('model:reset',()=>this.disposeAllTextures());
@@ -5556,32 +5561,11 @@ class WebGLRenderer{
     const data=[],point=(a,b)=>{const st=Math.sin(a);return[.5*st*Math.cos(b),.5*Math.cos(a),.5*st*Math.sin(b)]},push=p=>{const n=[p[0]*2,p[1]*2,p[2]*2];data.push(...p,...n)};
     for(let y=0;y<lat;y++){const a0=y/lat*Math.PI,a1=(y+1)/lat*Math.PI;for(let x=0;x<lon;x++){const b0=x/lon*Math.PI*2,b1=(x+1)/lon*Math.PI*2,q0=point(a0,b0),q1=point(a1,b0),q2=point(a1,b1),q3=point(a0,b1);push(q0);push(q1);push(q2);push(q0);push(q2);push(q3)}}return this.makeMeshBuffer(data)
   }
-  applyPreviewBufferScale(scale=this.interactivePreviewScale){
-    if(this.fallback||!model.project)return false;
-    const safeScale=this.exporting?1:clamp(+scale||1,.2,1);
-    const width=Math.max(1,Math.round(model.project.width*safeScale));
-    const height=Math.max(1,Math.round(model.project.height*safeScale));
-    const changed=this.canvas.width!==width||this.canvas.height!==height;
-    if(changed){
-      this.canvas.width=width;
-      this.canvas.height=height;
-      if(this.interactionLayer){this.interactionLayer.width=width;this.interactionLayer.height=height}
-      if(this.overlay){this.overlay.width=width;this.overlay.height=height}
-    }
-    this.gl.viewport(0,0,width,height);
-    return changed
-  }
-  setInteractivePreviewScale(scale=1){
-    if(this.fallback)return false;
-    this.interactivePreviewScale=clamp(+scale||1,.2,1);
-    return this.applyPreviewBufferScale(this.interactivePreviewScale)
-  }
   resize(){
     if(this.fallback)return this.fallback.resize();if(!model.project)return;
-    this.interactivePreviewScale=1;
-    this.applyPreviewBufferScale(1);
-    if(this.interactionLayer){this.interactionLayer.style.display='none'}
-    if(this.overlay){this.overlay.style.display='block';this.overlay.style.transform='none'}
+    this.canvas.width=Math.max(1,model.project.width);this.canvas.height=Math.max(1,model.project.height);this.gl.viewport(0,0,this.canvas.width,this.canvas.height);
+    if(this.interactionLayer){this.interactionLayer.width=this.canvas.width;this.interactionLayer.height=this.canvas.height;this.interactionLayer.style.display='none'}
+    if(this.overlay){this.overlay.width=this.canvas.width;this.overlay.height=this.canvas.height;this.overlay.style.display='block';this.overlay.style.transform='none'}
     $('#canvasWrap')?.classList.remove('compositing')
   }
   orbitTargetWorld(cam,t=model.time){
@@ -5839,11 +5823,6 @@ class WebGLRenderer{
   render(){
     if(this.fallback){this.fallback.exporting=this.exporting;this.fallback.render();this.domInteraction=this.fallback.domInteraction;return}
     if(!model.project)return;
-
-    // Exports and still captures always restore the full project framebuffer.
-    // Interactive timeline scrubbing may temporarily use a smaller buffer.
-    if(this.exporting)this.interactivePreviewScale=1;
-    this.applyPreviewBufferScale(this.interactivePreviewScale);
 
     this.pruneTextures();
     const gl=this.gl;
@@ -6632,27 +6611,12 @@ class TimelineController{
     return this.transientGestures.cancelScrollFrameSettle()
   }
 
-  mobileScrubPreviewScale(){
-    const touchLayout=matchMedia('(pointer: coarse)').matches||document.documentElement.classList.contains('omsMobileLandscapeDesktop');
-    if(!model.project||!touchLayout)return 1;
-    const projectLong=Math.max(+model.project.width||1,+model.project.height||1);
-    const rect=renderer.canvas?.getBoundingClientRect?.();
-    const displayLong=Math.max(+rect?.width||0,+rect?.height||0);
-    const memory=Number(navigator.deviceMemory)||4;
-    const bufferCap=memory<=3?420:540;
-    const targetLong=Math.min(bufferCap,Math.max(240,displayLong||bufferCap));
-    return clamp(targetLong/projectLong,.25,1)
-  }
-
   beginScrollScrubPreview(){
     if(this.scrollScrubActive)return;
     this.scrollScrubActive=true;
     this.scrollScrubLastFlush=0;
-    const scale=this.mobileScrubPreviewScale();
-    this.scrollScrubInterval=scale<.999?1000/15:0;
-    // Resizing a canvas clears its framebuffer. Draw the current cached frame
-    // once at the temporary mobile resolution before the decoder catches up.
-    if(renderer.setInteractivePreviewScale?.(scale))renderer.render()
+    const touchLayout=matchMedia('(pointer: coarse)').matches||document.documentElement.classList.contains('omsMobileLandscapeDesktop');
+    this.scrollScrubInterval=touchLayout?1000/15:0
   }
 
   hasActiveScrubVideo(time){
@@ -6677,17 +6641,15 @@ class TimelineController{
     if(!this.hasActiveScrubVideo(target))renderer.render()
   }
 
-  cancelScrollScrubPreview({restoreScale=true}={}){
+  cancelScrollScrubPreview(){
     if(this.scrollScrubRAF)cancelAnimationFrame(this.scrollScrubRAF);
     if(this.scrollScrubTimer)clearTimeout(this.scrollScrubTimer);
     this.scrollScrubRAF=0;
     this.scrollScrubTimer=0;
     this.scrollScrubLastFlush=0;
     this.pendingScrollScrubTime=Number.NaN;
-    const wasActive=this.scrollScrubActive;
     this.scrollScrubActive=false;
-    this.scrollScrubInterval=0;
-    if(restoreScale&&wasActive)renderer.setInteractivePreviewScale?.(1)
+    this.scrollScrubInterval=0
   }
 
   scheduleScrollScrubPreview(time){
@@ -6731,10 +6693,8 @@ class TimelineController{
       this.manualScrollActive=false;
       this.cancelScrollScrubPreview();
       const activeVideo=this.hasActiveScrubVideo(model.time);
-      // Restoring the full-size canvas clears its pixels. Repaint the newest
-      // decoded scrub frame first, then request the exact release frame. The
-      // exact decoder completion owns the next video repaint.
-      if(activeVideo)renderer.render();
+      // Request the exact release frame without repainting a stale cached video.
+      // The decoder's video:frame event owns the next video composition repaint.
       media.sync(model.time,false,false,{interactiveScrub:false});
 
       if(Math.abs(sc.scrollLeft-target)>.01){
@@ -14040,11 +14000,22 @@ class PlaybackClock{
     window.omsSetPlayButtonVisual?.(true);
     this.last=performance.now();
     timeline.resetRealtimeAudioMeter(false);
-    media.sync(model.time,true,false,{forceSeek:true});
+    // Resume without flushing an already-aligned decoder. If a real correction
+    // is needed, keep the last cached frame visible until the new frame arrives.
+    media.sync(model.time,true,false,{forceSeek:true,resumePlayback:true,preserveFrameCache:true});
     timeline.updateRealtimeAudioMeter(true);
     this.raf=requestAnimationFrame(t=>this.loop(t))
   }
   stop({syncMedia=true,renderDecay=true}={}){
+    if(model.playing&&model.project&&Number.isFinite(this.playbackTime)){
+      // Commit the clock to the nearest project frame before pausing media. This
+      // leaves the HTML decoder within half a frame of the next Play start, so a
+      // needless pause -> seek -> decode cycle is normally avoided entirely.
+      model.time=timeline.snapTime(this.playbackTime,'round');
+      this.playbackTime=model.time;
+      this.lastRenderedFrame=timeline.frameIndex(model.time);
+      timeline.updatePlayhead()
+    }
     model.playing=false;
     window.omsSetPlayButtonVisual?.(false);
     cancelAnimationFrame(this.raf);
@@ -14074,7 +14045,7 @@ class PlaybackClock{
       this.playbackTime%=duration;
       wrapped=true;
       timeline.resetRealtimeAudioMeter(false);
-      media.sync(0,true,false,{forceSeek:true})
+      media.sync(0,true,false,{forceSeek:true,preserveFrameCache:true})
     }
 
     const nextFrame=timeline.frameIndex(this.playbackTime,'floor');
@@ -19025,7 +18996,7 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
   }
 }
 </style>
-<!-- V4.57 local preview — 15 FPS newest-target mobile scrub decoding and temporary low-resolution preview framebuffer. -->
+<!-- V4.59 local preview — user-owned Preview Quality plus seamless cached-frame pause/resume playback. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
@@ -19033,7 +19004,9 @@ html.omsMobileLandscapeDesktop .transportBalanced .transportLeft{
 <!-- V4.23 — Stable Presisi only: deterministic WebCodecs source-frame decoder plus strict HTML fallback validation prevents ±1–2 frame oscillation. Experimental and Realtime engines are unchanged. -->
 <!-- V4.55 — light timeline taps keep playback running; capture-phase drag detection pauses only after real movement, while horizontal wheel/trackpad scrolling keeps the V4.24 fallback. -->
 <!-- V4.56 — mobile timeline scrub pauses without decoding the old playhead, coalesces scroll samples to one latest frame per RAF, and performs one exact settle sync. -->
-<!-- V4.57 — interactive mobile scrubbing displays useful decoded intermediate frames, avoids stale duplicate composition renders, caps seek cadence at 15 FPS, and restores full framebuffer quality after settle/export. -->
+<!-- V4.57 — interactive mobile scrubbing displays useful decoded intermediate frames, avoids stale duplicate composition renders, and caps seek cadence at 15 FPS. -->
+<!-- V4.58 — removes automatic framebuffer downscaling during scrub; the existing Preview Quality setting is the only preview-resolution control. -->
+<!-- V4.59 — pause commits the nearest project frame; Play avoids redundant decoder seeks and retains the verified cached frame during any necessary correction. -->
 <!-- V4.25 — hardens timeline pointer ownership after keyframe moves, prevents interrupted pinch zoom from being persisted, and self-recovers the legacy exact-minimum stuck zoom state. -->
 <!-- V4.26 — project/export duration now shrinks to the furthest real content layer after trim/move/speed/delete; control layers and out-of-clip keyframes no longer create blank export tails. -->
 <!-- V4.27 — keyframes are Inspector-gated; long-press drag routes to the originating Inspector control via an extensible keyframe-origin metadata/resolver contract for current and future features/effects. -->
