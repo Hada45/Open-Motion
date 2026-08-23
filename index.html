@@ -7177,6 +7177,11 @@ class TimelineController{
     this.scrollScrubActive=false;
     this.scrollScrubInterval=0;
     this.pendingScrollScrubTime=Number.NaN;
+    // V4.90 — visual scrub is independent from media seek cadence. 3D/camera
+    // transforms may repaint every display frame while expensive paused video
+    // decoding remains throttled by scrollScrubInterval on touch devices.
+    this.scrollVisualRAF=0;
+    this.pendingScrollVisualTime=Number.NaN;
     this.longPressMs=280;
     this.longPressSlop=28;
     this.suppressClickUntil=0;
@@ -7556,12 +7561,44 @@ class TimelineController{
   cancelScrollScrubPreview(){
     if(this.scrollScrubRAF)cancelAnimationFrame(this.scrollScrubRAF);
     if(this.scrollScrubTimer)clearTimeout(this.scrollScrubTimer);
+    if(this.scrollVisualRAF)cancelAnimationFrame(this.scrollVisualRAF);
     this.scrollScrubRAF=0;
     this.scrollScrubTimer=0;
+    this.scrollVisualRAF=0;
     this.scrollScrubLastFlush=0;
     this.pendingScrollScrubTime=Number.NaN;
+    this.pendingScrollVisualTime=Number.NaN;
     this.scrollScrubActive=false;
     this.scrollScrubInterval=0
+  }
+
+  scheduleScrollVisualPreview(time){
+    this.pendingScrollVisualTime=+time;
+    if(this.scrollVisualRAF)return;
+    this.scrollVisualRAF=requestAnimationFrame(()=>{
+      this.scrollVisualRAF=0;
+      const target=this.pendingScrollVisualTime;
+      this.pendingScrollVisualTime=Number.NaN;
+      if(!model.project||!this.isCentered()||model.playing||!Number.isFinite(target))return;
+
+      // Do not wait for the 15 FPS mobile decoder throttle to move the scene.
+      // model.time drives keyframes, world matrices and the camera, so repaint the
+      // latest requested timeline frame immediately. Video textures are allowed
+      // to hold their last verified sample until the decoder catches up.
+      model.time=target;
+      const stamp=fmt(target,model.project.fps);
+      $('#previewTime').textContent=stamp;
+      $('#timeRead').textContent=stamp;
+      this.updatePlayhead();
+
+      const pre=window.omsTimelinePreRender;
+      const cached=pre?.tryShowAt(target,{scrub:true})||false;
+      if(!cached)renderer.render();
+
+      // Scroll events can arrive while this RAF is running. Preserve only the
+      // newest visual target, exactly like the interaction scheduler elsewhere.
+      if(Number.isFinite(this.pendingScrollVisualTime))this.scheduleScrollVisualPreview(this.pendingScrollVisualTime)
+    })
   }
 
   scheduleScrollScrubPreview(time){
@@ -9126,9 +9163,10 @@ class TimelineController{
       const t=this.snapTime(sc.scrollLeft/this.px);
       if(Math.abs(t-model.time)<.0000001)return;
       model.time=t;
-      // In centered mode horizontal swipe is direct timeline scrubbing. Keep
-      // model time responsive, but coalesce decoder/render work to one request
-      // per display frame; the settle pass performs the final exact sync.
+      // V4.90: visual scene motion and source-video seeking have different
+      // budgets. Camera/3D/keyframe transforms repaint at display cadence, while
+      // video decoding keeps the V4.57 touch-device throttle for stability.
+      this.scheduleScrollVisualPreview(model.time);
       this.scheduleScrollScrubPreview(model.time);
     }else{
       // In moving-playhead mode scrolling only pans/navigates the timeline;
@@ -22874,6 +22912,7 @@ html.omsMobileLandscapeDesktop #preRenderRecordBtn{left:35px!important}
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
 <!-- V4.89 — GPU Fast now prefers Mediabunny VideoSampleSink.samplesAtTimestamps() for monotonic presentation-order decoding, uploads raw VideoFrame-backed samples directly to WebGL textures, keeps CanvasSink as compatibility fallback, applies source rotation in shader, and reports per-stage export profiling. -->
+<!-- V4.90 — manual mobile timeline scrub decouples display-rate 3D/camera/keyframe repaint from the existing 15 FPS paused-video seek throttle, so world transforms stay smooth without flooding Android/Chromium decoders. -->
 <!-- V4.22 — adds a real third export engine: Experimental. It keeps dedicated WebCodecs source decoders alive across frames and overlaps decode of N+1 with encoding of N. Stabil Presisi is unchanged. -->
 <!-- V4.23 — Stable Presisi only: deterministic WebCodecs source-frame decoder plus strict HTML fallback validation prevents ±1–2 frame oscillation. Experimental and Realtime engines are unchanged. -->
 <!-- V4.55 — light timeline taps keep playback running; capture-phase drag detection pauses only after real movement, while horizontal wheel/trackpad scrolling keeps the V4.24 fallback. -->
