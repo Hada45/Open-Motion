@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+<!-- V5.29 — Desktop Native Pipeline: desktop multi-source preview now uses the same adaptive native HTMLVideo -> direct WebGL path as capable touch devices; GPU Fast chooses hardware-preferred source decode on desktop, preserves the mobile codec-budget policy, and downgrades an unsupported VideoSampleSink source to CanvasSink before falling back to HTMLVideo. -->
 <!-- V5.07 — Stage 5: worker-assisted off-main-thread multi-source preview decode. Different-source overlaps prefer a Blob module Worker running Mediabunny CanvasSink + OffscreenCanvas/createImageBitmap, transferable ImageBitmap frames feed the existing WebGL compositor, same-asset divergent cursors retain V5.06 HTMLVideo playback, and the entire V5.05 main-thread ring-buffer decoder remains an automatic fallback. Exporter remains unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -4243,7 +4244,18 @@ class ProjectModel{
             // decoded frames, so using currentTime as a texture signature caused
             // repeated full-size texSubImage2D uploads of the SAME video frame.
             l._nativePreviewFrameToken=(+l._nativePreviewFrameToken||0)+1;
-            l._nativePreviewMediaTime=Number.isFinite(+metadata?.mediaTime)?+metadata.mediaTime:(+v.currentTime||0);
+            const nextMediaTime=Number.isFinite(+metadata?.mediaTime)?+metadata.mediaTime:(+v.currentTime||0),prevMediaTime=+l._nativePreviewMediaTime;
+            l._nativePreviewMediaTime=nextMediaTime;
+            // Estimate nominal source cadence from the lower quartile of recent
+            // positive media-time deltas. Dropped callbacks are usually integer
+            // multiples of the frame period, so q25 is less biased than mean FPS.
+            const frameDt=nextMediaTime-prevMediaTime;
+            if(Number.isFinite(prevMediaTime)&&prevMediaTime>=0&&frameDt>=1/300&&frameDt<=.25){
+              const samples=Array.isArray(l._nativePreviewFrameIntervals)?l._nativePreviewFrameIntervals:(l._nativePreviewFrameIntervals=[]);
+              samples.push(frameDt);if(samples.length>48)samples.shift();
+              if(samples.length>=4){const sorted=[...samples].sort((a,b)=>a-b),q=sorted[Math.max(0,Math.min(sorted.length-1,Math.floor((sorted.length-1)*.25)))];if(q>0){const fps=1/q;if(fps>=4&&fps<=300)l._nativePreviewSourceFps=fps}}
+              l._nativePreviewFpsSampleCount=samples.length
+            }
             l._nativePreviewPresentedFrames=Number.isFinite(+metadata?.presentedFrames)?+metadata.presentedFrames:l._nativePreviewFrameToken;
             window.omsNativeFrameCallbacks=(+window.omsNativeFrameCallbacks||0)+1;
             // Keep the callback pump alive so normal preview can resume after
@@ -4574,7 +4586,7 @@ const OMS_DIAGNOSTICS_KEY='oms_diagnostics_v1';
 const OMS_DIAGNOSTIC_DEFS=[
   ['timeline','Timeline','Scrub, playhead, zoom, frame index, scroll timeline.'],
   ['playback','Playback / Clock','Play, pause, loop, frame cadence dan wall-clock.'],
-  ['video','Video / Decoder','HTMLVideo, WebCodecs, Worker, shared playback dan ring buffer.'],
+  ['video','Video / Decoder','Codec, source FPS, bitrate, drift, dropped frame, HTMLVideo/WebCodecs dan ring buffer.'],
   ['audio','Audio','Audio proxy, hard-sync, drift dan analyser.'],
   ['render','Render / WebGL','Waktu render, jumlah layer dan jalur GPU/Canvas.'],
   ['export','Export','Lifecycle export, output, frame dan mux.'],
@@ -4585,10 +4597,12 @@ const OMS_DIAGNOSTIC_DEFS=[
 ];
 
 
-// V5.27 — lightweight per-source video diagnostics. Resolution is read from
-// HTMLVideoElement.videoWidth/videoHeight (display dimensions after metadata).
-// A compact summary is safe for frequent snapshots; the detailed runtime event
-// is sampled much less often so 8–16 source tests do not distort playback.
+// V5.28 — low-overhead per-source video diagnostics. In addition to V5.27
+// resolution/callback cadence, this records container/codec hints, file bitrate,
+// observed source frame cadence, browser dropped-frame counters, signed decoder
+// surface drift (HTMLVideo.currentTime - rVFC mediaTime), timeline drift, and
+// per-layer native hard-sync counts. Codec probing reads only small head/tail
+// slices of an already-retained Blob and never fetches/copies a missing source.
 function omsVideoResolutionSummary(){
   let layers=[];try{layers=Array.isArray(model?.layers)?model.layers:[]}catch(e){}
   const counts={},items=[];let totalPixels=0,maxPixels=0,known=0,unknown=0;
@@ -4602,27 +4616,92 @@ function omsVideoResolutionSummary(){
   return{known,unknown,resolutions:counts,totalMegapixels:+(totalPixels/1e6).toFixed(3),maxMegapixels:+(maxPixels/1e6).toFixed(3)}
 }
 const omsVideoRuntimePrev=new Map();
+const omsVideoAssetMetaCache=new Map();
+const omsVideoAssetMetaInflight=new Map();
+function omsVideoContainerLabel(mime='',name=''){
+  const m=String(mime||'').toLowerCase(),n=String(name||'').toLowerCase();
+  if(m.includes('webm')||n.endsWith('.webm'))return'WebM';
+  if(m.includes('quicktime')||n.endsWith('.mov'))return'MOV';
+  if(m.includes('mp4')||n.endsWith('.mp4')||n.endsWith('.m4v'))return'MP4';
+  if(m.includes('matroska')||n.endsWith('.mkv'))return'Matroska';
+  if(m.includes('ogg')||n.endsWith('.ogv'))return'Ogg';
+  return m||'unknown'
+}
+function omsVideoCodecHintFromBytes(bytes,mime=''){
+  if(!(bytes instanceof Uint8Array)||!bytes.length)return String(mime||'').toLowerCase().includes('webm')?'unknown/WebM':'unknown';
+  // Convert only the small diagnostic slices, not the whole media file.
+  let ascii='';try{ascii=new TextDecoder('latin1').decode(bytes)}catch(e){for(let i=0;i<bytes.length;i++)ascii+=String.fromCharCode(bytes[i])}
+  const tests=[
+    [/avc1|avc3/i,'H.264/AVC'],[/hvc1|hev1/i,'HEVC/H.265'],[/av01|V_AV1/i,'AV1'],
+    [/vp09|V_VP9/i,'VP9'],[/vp08|V_VP8/i,'VP8'],[/mp4v/i,'MPEG-4 Visual'],
+    [/V_MPEG4\/ISO\/AVC/i,'H.264/AVC'],[/V_MPEGH\/ISO\/HEVC/i,'HEVC/H.265'],[/theora|V_THEORA/i,'Theora']
+  ];
+  for(const [re,label] of tests)if(re.test(ascii))return label;
+  return'unknown'
+}
+async function omsProbeVideoAssetMeta(l){
+  const key=omsVideoSourceKey(l)||String(l?.id||'');if(!key)return null;
+  if(omsVideoAssetMetaCache.has(key))return omsVideoAssetMetaCache.get(key);
+  if(omsVideoAssetMetaInflight.has(key))return omsVideoAssetMetaInflight.get(key);
+  const task=(async()=>{
+    const blob=l?.assetId&&mediaAssets?.blobs?.get?.(l.assetId);
+    if(!(blob instanceof Blob))return null;
+    const size=Math.max(0,+blob.size||0),duration=Math.max(0,+l?.video?.duration||+l?.sourceDuration||0),mime=String(blob.type||'');
+    const sliceSize=1024*1024,parts=[];
+    try{
+      const head=new Uint8Array(await blob.slice(0,Math.min(size,sliceSize)).arrayBuffer());parts.push(head);
+      if(size>sliceSize){const tailStart=Math.max(sliceSize,size-sliceSize),tail=new Uint8Array(await blob.slice(tailStart,size).arrayBuffer());parts.push(tail)}
+    }catch(e){}
+    let joined=new Uint8Array(0);if(parts.length){const total=parts.reduce((n,p)=>n+p.length,0);joined=new Uint8Array(total);let off=0;for(const p of parts){joined.set(p,off);off+=p.length}}
+    const meta={
+      container:omsVideoContainerLabel(mime,l?.name||''),mime:mime||'unknown',codec:omsVideoCodecHintFromBytes(joined,mime),
+      fileBytes:size,fileMiB:+(size/1048576).toFixed(2),bitrateMbpsEstimate:duration>0?+((size*8/duration)/1e6).toFixed(3):null
+    };
+    omsVideoAssetMetaCache.set(key,meta);return meta
+  })().catch(()=>null).finally(()=>omsVideoAssetMetaInflight.delete(key));
+  omsVideoAssetMetaInflight.set(key,task);return task
+}
+function omsEnsureVideoAssetMeta(l){
+  const key=omsVideoSourceKey(l)||String(l?.id||'');if(!key)return null;
+  const cached=omsVideoAssetMetaCache.get(key)||null;
+  if(!cached&&!omsVideoAssetMetaInflight.has(key))omsProbeVideoAssetMeta(l);
+  return cached
+}
+function omsVideoPlaybackQuality(v){
+  try{
+    const q=v?.getVideoPlaybackQuality?.();if(!q)return null;
+    const total=Math.max(0,+q.totalVideoFrames||0),dropped=Math.max(0,+q.droppedVideoFrames||0),corrupted=Math.max(0,+q.corruptedVideoFrames||0);
+    return{totalVideoFrames:total,droppedVideoFrames:dropped,corruptedVideoFrames:corrupted,dropRatePct:total?+((dropped/total)*100).toFixed(2):0}
+  }catch(e){return null}
+}
 function omsVideoSourceProfile(t=0,{runtime=false}={}){
   let layers=[];try{layers=Array.isArray(model?.layers)?model.layers:[]}catch(e){}
   const now=performance.now(),videos=[];
   for(const l of layers){
     if(l?.type!=='video'||l.hidden)continue;
     const v=l.video,w=Math.max(0,Math.round(+v?.videoWidth||0)),h=Math.max(0,Math.round(+v?.videoHeight||0));
-    const presented=Math.max(0,Math.round(+l._nativePreviewPresentedFrames||0)),id=String(l.id||l.name||videos.length);
-    let callbackFps=null;
+    const presented=Math.max(0,Math.round(+l._nativePreviewPresentedFrames||0)),hardSyncs=Math.max(0,Math.round(+l._nativePreviewHardSyncs||0)),id=String(l.id||l.name||videos.length);
+    let callbackFps=null,hardSyncsDelta=null;
     if(runtime){
       const prev=omsVideoRuntimePrev.get(id),dt=prev?Math.max(1,now-prev.now):0;
-      if(prev&&dt>0)callbackFps=+((Math.max(0,presented-prev.presented)*1000)/dt).toFixed(1);
-      omsVideoRuntimePrev.set(id,{now,presented})
+      if(prev&&dt>0){callbackFps=+((Math.max(0,presented-prev.presented)*1000)/dt).toFixed(1);hardSyncsDelta=Math.max(0,hardSyncs-(+prev.hardSyncs||0))}
+      omsVideoRuntimePrev.set(id,{now,presented,hardSyncs})
     }
+    const assetMeta=omsEnsureVideoAssetMeta(l),quality=omsVideoPlaybackQuality(v),current=+v?.currentTime||0,hasPresentedMediaTime=(+l._nativePreviewFrameToken||0)>0&&Number.isFinite(+l._nativePreviewMediaTime),mediaTime=hasPresentedMediaTime?+l._nativePreviewMediaTime:null;
+    let timelineMediaTime=null,timelineDriftMs=null;try{const map=mediaClipMap(l,t);if(map?.active){timelineMediaTime=+map.mediaTime||0;timelineDriftMs=+((current-timelineMediaTime)*1000).toFixed(2)}}catch(e){}
+    const surfaceDriftMs=mediaTime===null?null:+((current-mediaTime)*1000).toFixed(2);
+    const sourceFpsEstimate=Number.isFinite(+l._nativePreviewSourceFps)?+(+l._nativePreviewSourceFps).toFixed(2):null;
     videos.push({
-      name:String(l.name||'video'),
+      name:String(l.name||'video'),assetId:String(l.assetId||''),
       resolution:w&&h?`${w}x${h}`:'unknown',width:w,height:h,megapixels:w&&h?+((w*h)/1e6).toFixed(3):0,
       duration:Number.isFinite(+v?.duration)?+(+v.duration).toFixed(3):0,
+      container:assetMeta?.container||'pending/unknown',mime:assetMeta?.mime||'pending/unknown',codec:assetMeta?.codec||'pending/unknown',fileMiB:assetMeta?.fileMiB??null,bitrateMbpsEstimate:assetMeta?.bitrateMbpsEstimate??null,
+      sourceFpsEstimate,sourceFpsSamples:Math.max(0,+l._nativePreviewFpsSampleCount||0),
       sourceIn:+((+l.sourceIn||0).toFixed?.(3)||0),sourceOut:+((+l.sourceOut||0).toFixed?.(3)||0),
       readyState:+v?.readyState||0,paused:!!v?.paused,seeking:!!v?.seeking,
-      presentedFrames:presented,callbackFps,
-      mediaTime:+((+l._nativePreviewMediaTime||0).toFixed?.(3)||0),currentTime:+((+v?.currentTime||0).toFixed?.(3)||0)
+      presentedFrames:presented,callbackFps,throughputPct:sourceFpsEstimate&&callbackFps!==null?+((callbackFps/sourceFpsEstimate)*100).toFixed(1):null,
+      playbackQuality:quality,hardSyncs,hardSyncsDelta,lastHardSyncDriftMs:Number.isFinite(+l._nativePreviewLastHardSyncDriftMs)?+(+l._nativePreviewLastHardSyncDriftMs).toFixed(2):null,
+      mediaTime:mediaTime===null?null:+mediaTime.toFixed(3),currentTime:+current.toFixed(3),surfaceDriftMs,timelineMediaTime:timelineMediaTime===null?null:+timelineMediaTime.toFixed(3),timelineDriftMs
     })
   }
   const summary=omsVideoResolutionSummary();
@@ -4648,7 +4727,7 @@ class OMSDiagnosticsHub{
   sample(category,event,data,interval=500,detail=''){if(!this.is(category))return false;const key=`${category}:${event}`,now=performance.now(),last=this.sampleStamps.get(key)||-Infinity;if(now-last<interval)return false;this.sampleStamps.set(key,now);return this.log(category,event,detail,data)}
   clear(category='all'){if(category==='all')this.logs.length=0;else this.logs=this.logs.filter(x=>x.category!==category);this.sampleStamps.clear();this.refreshPanel()}
   snapshot(){let m=null,md=null,r=null;try{m=model}catch(e){}try{md=media}catch(e){}try{r=renderer}catch(e){}const heap=performance.memory?{usedJSHeapSize:performance.memory.usedJSHeapSize,totalJSHeapSize:performance.memory.totalJSHeapSize,jsHeapSizeLimit:performance.memory.jsHeapSizeLimit}:null;return{time:Number(m?.time)||0,playing:!!m?.playing,fps:Number(m?.project?.fps)||0,layers:Array.isArray(m?.layers)?m.layers.length:0,activeVideo:Array.isArray(m?.layers)?m.layers.filter(l=>l.type==='video'&&!l.hidden).length:0,videoResolutionSummary:omsVideoResolutionSummary(),sharedPlayback:!!md?.sharedPlaybackMode,nativeMultiSource:!!md?.nativeMultiSourcePlayback,nativeSources:Number(md?.nativeMultiSourceSourceCount)||0,nativeDirect:!!window.omsNativeMultiSourceDirectPlayback,nativeGpuUploads:Number(r?.previewNativeVideoUploads)||0,nativeFrameCallbacks:+window.omsNativeFrameCallbacks||0,nativeTextureReuses:Number(r?.previewNativeTextureReuses)||0,nativeAdaptiveSkips:Number(r?.previewNativeAdaptiveSkips)||0,nativeCapacity:omsNativeCapacity.snapshot(),nativeUploadAvgMs:(Number(r?.previewNativeVideoUploads)||0)?Number(((Number(r?.previewNativeUploadMsTotal)||0)/Math.max(1,Number(r?.previewNativeVideoUploads)||0)).toFixed(3)):0,nativeUploadMaxMs:Number((Number(r?.previewNativeUploadMsMax)||0).toFixed(3)),nativeHardSyncs:Number(md?.nativeMultiSourceHardSyncs)||0,clockJank:Number(window.omsPlaybackClock?.pacingJankEvents)||0,clockMaxDtMs:Number(window.omsPlaybackClock?.pacingMaxDtMs)||0,clockSkippedFrames:Number(window.omsPlaybackClock?.pacingSkippedFrames)||0,sharedJobs:Number(md?.sharedPlaybackActiveJobs)||0,workerActive:!!md?.previewDecodeWorkerActive,workerFrames:Number(md?.previewDecodeWorkerFrames)||0,workerDrops:Number(md?.previewDecodeWorkerDrops)||0,ringHits:Number(md?.sharedPlaybackRingHits)||0,ringMisses:Number(md?.sharedPlaybackRingMisses)||0,dropped:Number(md?.sharedPlaybackDroppedFrames)||0,audioHardSyncs:Number(md?.sharedAudioHardSyncs)||0,htmlHardSyncs:Number(md?.htmlDivergentHardSyncs)||0,rendererExporting:!!r?.exporting,heap}}
-  text(filter='enabled'){const selected=filter==='enabled'?new Set(this.enabledCategories()):filter==='all'?null:new Set([filter]);const lines=['Open Motion Diagnostics Hub V5.27',`Master: ${this.prefs.enabled?'ON':'OFF'}`,`Enabled: ${this.enabledCategories().join(', ')||'-'}`,`Snapshot: ${JSON.stringify(this.snapshot())}`,'','Log:'];for(const x of this.logs){if(selected&&!selected.has(x.category))continue;let tail=x.detail||'';if(x.data!==null&&x.data!==undefined)tail+=`${tail?' | ':''}${JSON.stringify(x.data)}`;lines.push(`${x.t}ms [${x.category.toUpperCase()}] [${x.event}] ${tail}`)}return lines.join('\n')}
+  text(filter='enabled'){const selected=filter==='enabled'?new Set(this.enabledCategories()):filter==='all'?null:new Set([filter]);const lines=['Open Motion Diagnostics Hub V5.29',`Master: ${this.prefs.enabled?'ON':'OFF'}`,`Enabled: ${this.enabledCategories().join(', ')||'-'}`,`Snapshot: ${JSON.stringify(this.snapshot())}`,'','Log:'];for(const x of this.logs){if(selected&&!selected.has(x.category))continue;let tail=x.detail||'';if(x.data!==null&&x.data!==undefined)tail+=`${tail?' | ':''}${JSON.stringify(x.data)}`;lines.push(`${x.t}ms [${x.category.toUpperCase()}] [${x.event}] ${tail}`)}return lines.join('\n')}
   refreshTimers(){if(this.memoryTimer){clearInterval(this.memoryTimer);this.memoryTimer=0}if(this.is('memory'))this.memoryTimer=setInterval(()=>this.sample('memory','SYSTEM_SNAPSHOT',this.snapshot(),1000),1000)}
   schedulePanelRefresh(){if(this.liveTimer)return;this.liveTimer=setTimeout(()=>{this.liveTimer=0;this.refreshPanel()},180)}
   updateSettingState(){const el=document.getElementById('diagnosticSettingState');if(!el)return;const n=this.enabledCategories().length;el.textContent=this.prefs.enabled?`${n} aktif`:'Nonaktif'}
@@ -4669,7 +4748,7 @@ const omsDiagnostics=new OMSDiagnosticsHub();
 window.omsDiagnostics=omsDiagnostics;
 
 
-// V5.27 — Adaptive N-Source Native Preview + per-source resolution/runtime diagnostics.
+// V5.29 — Adaptive N-Source Native Preview on desktop + touch, with codec/FPS/bitrate/drift runtime diagnostics.
 // The old fixed four-source gate is replaced by a device/profile manager. The
 // manager keeps native HTMLVideo ownership for as many sources as the device can
 // sustain, while progressively reducing GPU texture cadence for low-priority
@@ -4811,16 +4890,16 @@ class MediaManager{
     this.previewDecodeWorkerDrops=0;
     this.previewDecodeWorkerFallbacks=0;
 
-    // V5.21 — Android/touch multi-source timeline preview. Up to four
-    // genuinely different video sources may stay on their own HTMLVideo clocks
-    // instead of being forced through Stage 5 Worker / Stage 4 CanvasSink.
-    // Chromium can then let the platform media pipeline schedule the decoders.
+    // V5.29 — desktop and touch multi-source timeline preview. Genuinely
+    // different video sources may stay on their own HTMLVideo clocks up to the
+    // adaptive device capacity instead of being forced through Stage 5 Worker /
+    // Stage 4 CanvasSink. Chromium can then use the platform media pipeline.
     this.nativeMultiSourcePlayback=false;
     this.nativeMultiSourceSourceCount=0;
     this.nativeMultiSourceActivations=0;
     this.nativeMultiSourceHardSyncs=0;
     this.nativeMultiSourceSyncStamps=new Map();
-    // V5.22 — while capable Android/touch multi-source playback is live, draw
+    // V5.29 — while capable desktop/touch multi-source playback is live, draw
     // HTMLVideo surfaces directly into the compositor. Do not copy every decoded
     // frame through an intermediate frameCanvas first.
     window.omsNativeMultiSourceDirectPlayback=false;
@@ -5923,7 +6002,11 @@ self.onmessage=e=>{
     if(groups.length<2)return false;
     const sourceKeys=new Set(groups.map(g=>g.sourceKey).filter(Boolean));
     if(sourceKeys.size<2)return false;
-    const d=omsNativeCapacity.device();if(!d.coarse)return false;
+    // V5.29 — desktop is no longer excluded. V5.27 already has a desktop
+    // capacity heuristic (6/8/10 recommended depending on CPU) plus a hard
+    // limit and adaptive texture cadence, so pointer type must not veto the
+    // faster native media pipeline on a PC. Shared WebCodecs remains the
+    // fallback only when the adaptive capacity is actually exceeded.
     if(!omsNativeCapacity.permits(groups.length))return false;
     return groups.every(g=>!!g.layer?.video)
   }
@@ -5933,14 +6016,14 @@ self.onmessage=e=>{
     omsNativeCapacity.setActive(groups,active);
     if(active!==this.nativeMultiSourcePlayback){
       this.nativeMultiSourcePlayback=active;this.nativeMultiSourceSourceCount=active?sourceCount:0;
-      if(active){this.nativeMultiSourceActivations++;omsDiagnostics.log('video','NATIVE_MULTISOURCE_ENTER','',{time:+t.toFixed?.(4)||+t||0,groups:groups.length,sources:sourceCount,memory:+navigator.deviceMemory||0,cores:+navigator.hardwareConcurrency||0,recommended:omsNativeCapacity.recommendedMax(),hardLimit:omsNativeCapacity.hardLimit()})}
+      if(active){const d=omsNativeCapacity.device();this.nativeMultiSourceActivations++;omsDiagnostics.log('video','NATIVE_MULTISOURCE_ENTER','',{time:+t.toFixed?.(4)||+t||0,groups:groups.length,sources:sourceCount,deviceClass:d.coarse?'touch/mobile':'desktop',memory:d.memory||0,cores:d.cores||0,recommended:omsNativeCapacity.recommendedMax(),hardLimit:omsNativeCapacity.hardLimit()})}
       else omsDiagnostics.log('video','NATIVE_MULTISOURCE_EXIT','',{time:+t.toFixed?.(4)||+t||0})
     }else if(active)this.nativeMultiSourceSourceCount=sourceCount;
     window.omsNativeMultiSourceDirectPlayback=!!(active&&this.model.playing);
     return active
   }
   sharedPlaybackRequired(t=this.model.time){
-    // V5.27: same-asset divergent cursors and adaptive N-source Android/touch
+    // V5.29: same-asset divergent cursors and adaptive N-source desktop/touch
     // overlaps stay on HTMLVideo up to the current device capacity. Stage 4/5
     // WebCodecs remains the compatibility fallback beyond the adaptive hard limit.
     const groups=this.sharedPlaybackGroupsAt(t);
@@ -6380,7 +6463,7 @@ self.onmessage=e=>{
       const audible=!v.muted&&clamp(l.volume??1,0,1)>.001,threshold=audible?Math.max(.75,20/fps):Math.max(.28,8/fps);
       if(drift<=threshold)continue;
       const last=this.nativeMultiSourceSyncStamps.get(l.id)||-Infinity,cooldown=audible?2400:1200;if(now-last<cooldown)continue;
-      try{v.currentTime=Math.max(0,+map.mediaTime||0);this.nativeMultiSourceSyncStamps.set(l.id,now);this.nativeMultiSourceHardSyncs++;omsDiagnostics.log('video','NATIVE_MULTISOURCE_HARD_SYNC','',{layer:l.name||l.id,drift:+drift.toFixed(4),audible,threshold:+threshold.toFixed(4)})}catch(e){}
+      try{v.currentTime=Math.max(0,+map.mediaTime||0);this.nativeMultiSourceSyncStamps.set(l.id,now);this.nativeMultiSourceHardSyncs++;l._nativePreviewHardSyncs=(+l._nativePreviewHardSyncs||0)+1;l._nativePreviewLastHardSyncDriftMs=drift*1000;omsDiagnostics.log('video','NATIVE_MULTISOURCE_HARD_SYNC','',{layer:l.name||l.id,drift:+drift.toFixed(4),driftMs:+(drift*1000).toFixed(2),layerHardSyncs:+l._nativePreviewHardSyncs||0,audible,threshold:+threshold.toFixed(4)})}catch(e){}
     }
   }
 
@@ -19161,7 +19244,7 @@ class Exporter{
   gpuDiagnosticText(){
     const d=this.gpuFastDiag||{};
     const lines=[
-      'Open Motion GPU Fast Diagnostic V5.25',
+      'Open Motion GPU Fast Diagnostic V5.29',
       `Stage: ${d.stage||'UNKNOWN'}`,
       `Frame: ${Number.isFinite(d.frame)?d.frame:'-'}`,
       `Error: ${d.error?.name||'-'}: ${d.error?.message||'-'}`,
@@ -19547,14 +19630,16 @@ class Exporter{
     const multiAsset=uniqueAssets.size>1;
     // V5.12 — GPU Fast iterator-null recovery + actual video-track timestamp bounds.
     // V5.11 — GPU Fast diagnostic isolation. V5.10 codec-budget behavior is preserved; this build adds visible stage/error/source diagnostics without changing preview behavior.
-    // V5.10 — GPU Fast multi-source codec budget. Android often has enough codec
-    // capacity for one decoder + one hardware encoder, but not 3–4 independent
-    // hardware decoders plus the encoder. Keep the encoder on hardware and ask
-    // source decoders to use software when several distinct assets are present.
-    // This trades some decode speed for reliability while preserving GPU
-    // compositing/direct uploads. Single-asset GPU Fast keeps prefer-hardware.
+    // V5.29 — split GPU Fast source-decoder policy by device class. The old
+    // V5.10 Android codec-budget rule was accidentally applied to desktop too,
+    // forcing 3–4 PC sources into software decode. Desktop now starts with
+    // hardware-preferred decode; touch/mobile preserves the conservative rule
+    // so the hardware encoder still has codec headroom. Unsupported sample
+    // configurations can be downgraded per-source to CanvasSink at runtime.
+    let coarseSourceDevice=false;try{coarseSourceDevice=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0}catch(e){}
+    const sourceDeviceClass=coarseSourceDevice?'touch/mobile':'desktop';
     const sourceAcceleration=preferHardware
-      ?(preferNativeSamples&&multiAsset?'prefer-software':(cursorKeys.size<=1?'prefer-hardware':'no-preference'))
+      ?(!coarseSourceDevice?'prefer-hardware':(preferNativeSamples&&multiAsset?'prefer-software':(cursorKeys.size<=1?'prefer-hardware':'no-preference')))
       :'no-preference';
     let videoLayers=0;
     for(const l of eligible){
@@ -19585,7 +19670,7 @@ class Exporter{
             catch(err){console.warn('GPU Fast native sample tidak tersedia; memakai CanvasSink:',l.name,err)}
           }
           if(!sink)sink=new mb.CanvasSink(track,{width:displayW,poolSize:(Number.isFinite(+poolSize)&&+poolSize>0)?Math.max(2,Math.round(+poolSize)):(cursorKeys.size>1?3:(preferHardware?4:3)),decoderOptions:{hardwareAcceleration:sourceAcceleration}});
-          source={key:sourceKey,input,track,sink,sinkKind,sourceRotation,displayW,displayH,trackFirst,trackEnd,requestTail:Promise.resolve(),gpuCurrentSample:null,gpuCurrentSamples:new Set(),nativeIterator:null,disposed:false};
+          source={key:sourceKey,input,track,sink,sinkKind,sourceRotation,displayW,displayH,trackFirst,trackEnd,requestTail:Promise.resolve(),gpuCurrentSample:null,gpuCurrentSamples:new Set(),nativeIterator:null,disposed:false,gpuLayerNames:new Set([String(l.name||'video')])};
           sources.set(sourceKey,source);
           if(this._gpuDiagActive)this.gpuDiagSource({key:sourceKey,name:l.name||'video',status:'decoder-ready',sinkKind,acceleration:sourceAcceleration,size:`${displayW}x${displayH}`})
         }catch(err){
@@ -19593,12 +19678,13 @@ class Exporter{
           failedSources.add(sourceKey);fallbackIds.add(l.id);if(this._gpuDiagActive)this.gpuDiagSource({key:sourceKey,name:l.name||'video',status:'decoder-init-failed',sinkKind:'-',acceleration:sourceAcceleration,size:'-',error:String(err?.message||err)});console.warn('Shared source decoder fallback ke HTMLVideo:',l.name,err);continue
         }
       }
+      source.gpuLayerNames?.add?.(String(l.name||'video'));
       states.set(l.id,{layer:l,sourceKey,source,lastTarget:Number.NaN,lastTimestamp:Number.NaN,disposed:false,hwBuffers:null,hwWriteIndex:0,hwCurrentIndex:-1})
     }
     // If one decode cursor failed, exact duplicate consumers of that mapping use
     // the same fallback; other mappings of the same asset may still decode.
     for(const l of model.layers){if(l.type==='video'&&failedSources.has(decoderSourceKey(l)))fallbackIds.add(l.id)}
-    this.sharedDecodeStats={videoLayers,uniqueSources:uniqueAssets.size,registryAssets:uniqueAssets.size,contentFiles:sourceIdentity?.contentFiles??null,sourceClassification:sourceIdentity?.classification||null,sourceRegistryRelation:sourceIdentity?.registryRelation||null,decodeCursors:sources.size,sharedConsumers:Math.max(0,states.size-sources.size),sourceAcceleration,fallbackLayers:fallbackIds.size,multiAsset};
+    this.sharedDecodeStats={videoLayers,uniqueSources:uniqueAssets.size,registryAssets:uniqueAssets.size,contentFiles:sourceIdentity?.contentFiles??null,sourceClassification:sourceIdentity?.classification||null,sourceRegistryRelation:sourceIdentity?.registryRelation||null,decodeCursors:sources.size,sharedConsumers:Math.max(0,states.size-sources.size),sourceAcceleration,sourceDeviceClass,fallbackLayers:fallbackIds.size,multiAsset};
     if(this._gpuDiagActive&&this.gpuFastDiag){this.gpuFastDiag.stats={...this.sharedDecodeStats};this.gpuDiag('SOURCE_DECODERS_READY',JSON.stringify(this.sharedDecodeStats))}
     console.info('Open Motion V4.93 shared decode pool',this.sharedDecodeStats);
     return{states,sources,fallbackIds,stats:this.sharedDecodeStats}
@@ -19940,6 +20026,31 @@ class Exporter{
     }
   }
 
+  async downgradeGpuFastSampleSourceToCanvas(source,reason='sample decoder unsupported'){
+    if(!source||source.disposed||source.sinkKind!=='sample'||!source.track)return false;
+    const mb=await this.offlineEncoderModule();
+    if(!mb?.CanvasSink)return false;
+    let coarse=false;try{coarse=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0}catch(e){}
+    try{
+      if(source.nativeIterator){try{await source.nativeIterator.return?.()}catch(e){};source.nativeIterator=null}
+      const oldSink=source.sink;
+      const poolSize=coarse?3:4;
+      source.sink=new mb.CanvasSink(source.track,{width:Math.max(2,+source.displayW||2),poolSize,decoderOptions:{hardwareAcceleration:'no-preference'}});
+      source.sinkKind='canvas';
+      source.runtimeAcceleration='no-preference';
+      try{oldSink?.dispose?.()}catch(e){}
+      try{oldSink?.close?.()}catch(e){}
+      if(this._gpuDiagActive){
+        this.gpuDiag('SOURCE_DECODER_DOWNGRADE',`${source.key}: VideoSampleSink → CanvasSink | ${String(reason?.message||reason||'')}`);
+        this.gpuDiagSource({key:source.key,name:[...((source?.gpuLayerNames)||[])][0]||source.key,status:'decoder-downgraded',sinkKind:'canvas',acceleration:'no-preference',size:`${source.displayW}x${source.displayH}`,error:String(reason?.message||reason||'')})
+      }
+      return true
+    }catch(err){
+      if(this._gpuDiagActive)this.gpuDiag('SOURCE_DECODER_DOWNGRADE_FAILED',`${source.key}: ${String(err?.message||err)}`);
+      return false
+    }
+  }
+
   async prepareGpuFastVideoFrame(t,bundle,{preparedItems=null,skipSourceKeys=null}={}){
     if(!bundle){await this.prepareOfflineVideoFrame(t);return{time:t,items:[],fallbackOnly:true}}
     const items=Array.isArray(preparedItems)?preparedItems.slice():[];
@@ -19986,8 +20097,24 @@ class Exporter{
         items.push({source,states,layers,sample,frame,target,presented})
       }catch(err){
         try{sample?.close?.()}catch(e){}
-        if(this._gpuDiagActive)this.gpuDiag('SOURCE_FRAME_DECODE_FALLBACK',`${layers[0]?.name||source?.key}: ${String(err?.message||err)}`);
-        console.warn('GPU Fast source decoder turun ke compatibility path:',layers[0]?.name||source?.key,err);
+        let finalErr=err;
+        // V5.29 — a VideoSampleSink configuration failure (notably HEVC on some
+        // Chromium/Windows combinations) no longer jumps straight to the slow
+        // HTMLVideo deterministic fallback. Rebuild only that source as a
+        // CanvasSink with no-preference and retry the exact target once.
+        if(source?.sinkKind==='sample'&&await this.downgradeGpuFastSampleSourceToCanvas(source,err)){
+          try{
+            const retry=await this.serializedSourceRequest(source,()=>source.sink.getCanvas(target));
+            if(!retry?.canvas)throw Error(`GPU Fast CanvasSink retry tidak memperoleh frame: ${layers[0]?.name||source.key}`);
+            const retryPresented=Number(retry.timestamp),retryFrame=this.copyDecodedCanvas(retry.canvas,{desynchronized:true});
+            for(const st of states)this.validatePresentedOrder(st,target,retryPresented,'GPU Fast Canvas retry');
+            items.push({source,states,layers,sample:null,frame:retryFrame,target,presented:retryPresented,downgraded:true});
+            if(this._gpuDiagActive)this.gpuDiag('SOURCE_FRAME_DECODE_RECOVERED',`${layers[0]?.name||source.key} @ ${target.toFixed(4)}s → CanvasSink ${Number.isFinite(retryPresented)?retryPresented.toFixed(4)+'s':'timestamp unknown'}`);
+            return
+          }catch(retryErr){finalErr=retryErr}
+        }
+        if(this._gpuDiagActive)this.gpuDiag('SOURCE_FRAME_DECODE_FALLBACK',`${layers[0]?.name||source?.key}: ${String(finalErr?.message||finalErr)}`);
+        console.warn('GPU Fast source decoder turun ke compatibility path:',layers[0]?.name||source?.key,finalErr);
         // A single source failure must not abort the whole GPU Fast export. Disable
         // the whole media source (all timeline consumers of it), release its
         // WebCodecs input, and restore only those HTMLVideo owners.
@@ -20290,7 +20417,7 @@ class Exporter{
         shareByAsset:gpuFast
       });
       if(stableDecoders?.fallbackIds?.size)this.restorePreviewVideoDecoders(stableDecoders.fallbackIds);
-      // V5.19 — adaptive N+1 overlap policy. V5.18 proved that overlapping four
+      // V5.29 — adaptive N+1 overlap policy. Preserve the mobile V5.19 rule while allowing desktop hardware fanout. V5.18 proved that overlapping four
       // prefer-software source decoders with WebGL + hardware encode increases
       // decoder contention (6.78 -> 12.55 ms/frame on the reference 4-file test).
       // Keep overlap for genuinely cheap/native cases, but use the V5.17 sequential
@@ -20301,7 +20428,10 @@ class Exporter{
       const uniqueSourceCount=Math.max(0,stableDecoders?.stats?.uniqueSources||0);
       const sourceAcceleration=stableDecoders?.stats?.sourceAcceleration||'no-preference';
       const touchOverlapOK=!coarseExport||((!deviceMemory||deviceMemory>4)&&(deviceCores>=6||deviceMemory>=6));
-      const softwareFanout=sourceAcceleration==='prefer-software'&&uniqueSourceCount>=3;
+      // V5.29 — software-fanout serialization is an Android/touch codec-budget
+      // workaround, not a desktop rule. Desktop hardware-preferred sources keep
+      // source/encode overlap unless an actual fallback is detected.
+      const softwareFanout=coarseExport&&sourceAcceleration==='prefer-software'&&uniqueSourceCount>=3;
       const overlapBase=!(stableDecoders?.fallbackIds?.size)&&allNativeSamples&&touchOverlapOK;
       const canOverlapSource=!gpuFast?!(stableDecoders?.fallbackIds?.size):!!(overlapBase&&!softwareFanout);
       const sourceOverlapReason=!gpuFast?'video-hw-legacy':
@@ -20309,7 +20439,7 @@ class Exporter{
         (!allNativeSamples?'non-native-source':
         (!touchOverlapOK?'device-budget':
         (softwareFanout?'software-fanout':'native-budget-ok'))));
-      if(gpuFast)this.gpuDiag('SOURCE_PIPELINE_OVERLAP',JSON.stringify({enabled:canOverlapSource,reason:sourceOverlapReason,allNativeSamples,uniqueSources:uniqueSourceCount,sourceAcceleration,memory:deviceMemory||null,cores:deviceCores}));
+      if(gpuFast)this.gpuDiag('SOURCE_PIPELINE_OVERLAP',JSON.stringify({enabled:canOverlapSource,reason:sourceOverlapReason,allNativeSamples,uniqueSources:uniqueSourceCount,sourceAcceleration,sourceDeviceClass:stableDecoders?.stats?.sourceDeviceClass||(!coarseExport?'desktop':'touch/mobile'),memory:deviceMemory||null,cores:deviceCores}));
       if(gpuFast){
         if(renderer.fallback||!renderer.gl)throw Error('GPU Fast membutuhkan WebGL renderer');
         renderer.fastExportRenderer=true;
