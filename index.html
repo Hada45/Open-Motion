@@ -2,6 +2,7 @@
 <html lang="id">
 <head>
 <!-- V5.29 — Desktop Native Pipeline: desktop multi-source preview now uses the same adaptive native HTMLVideo -> direct WebGL path as capable touch devices; GPU Fast chooses hardware-preferred source decode on desktop, preserves the mobile codec-budget policy, and downgrades an unsupported VideoSampleSink source to CanvasSink before falling back to HTMLVideo. -->
+<!-- V5.30 — Mobile GPU Fast regression hotfix: desktop-only CanvasSink recovery is now strictly isolated from coarse/touch devices. Mobile restores the V5.28 compatibility fallback after an unsupported VideoSampleSink, avoiding persistent CanvasSink decode/copy overhead while preserving all V5.29 desktop native/hardware fixes. -->
 <!-- V5.07 — Stage 5: worker-assisted off-main-thread multi-source preview decode. Different-source overlaps prefer a Blob module Worker running Mediabunny CanvasSink + OffscreenCanvas/createImageBitmap, transferable ImageBitmap frames feed the existing WebGL compositor, same-asset divergent cursors retain V5.06 HTMLVideo playback, and the entire V5.05 main-thread ring-buffer decoder remains an automatic fallback. Exporter remains unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -4727,7 +4728,7 @@ class OMSDiagnosticsHub{
   sample(category,event,data,interval=500,detail=''){if(!this.is(category))return false;const key=`${category}:${event}`,now=performance.now(),last=this.sampleStamps.get(key)||-Infinity;if(now-last<interval)return false;this.sampleStamps.set(key,now);return this.log(category,event,detail,data)}
   clear(category='all'){if(category==='all')this.logs.length=0;else this.logs=this.logs.filter(x=>x.category!==category);this.sampleStamps.clear();this.refreshPanel()}
   snapshot(){let m=null,md=null,r=null;try{m=model}catch(e){}try{md=media}catch(e){}try{r=renderer}catch(e){}const heap=performance.memory?{usedJSHeapSize:performance.memory.usedJSHeapSize,totalJSHeapSize:performance.memory.totalJSHeapSize,jsHeapSizeLimit:performance.memory.jsHeapSizeLimit}:null;return{time:Number(m?.time)||0,playing:!!m?.playing,fps:Number(m?.project?.fps)||0,layers:Array.isArray(m?.layers)?m.layers.length:0,activeVideo:Array.isArray(m?.layers)?m.layers.filter(l=>l.type==='video'&&!l.hidden).length:0,videoResolutionSummary:omsVideoResolutionSummary(),sharedPlayback:!!md?.sharedPlaybackMode,nativeMultiSource:!!md?.nativeMultiSourcePlayback,nativeSources:Number(md?.nativeMultiSourceSourceCount)||0,nativeDirect:!!window.omsNativeMultiSourceDirectPlayback,nativeGpuUploads:Number(r?.previewNativeVideoUploads)||0,nativeFrameCallbacks:+window.omsNativeFrameCallbacks||0,nativeTextureReuses:Number(r?.previewNativeTextureReuses)||0,nativeAdaptiveSkips:Number(r?.previewNativeAdaptiveSkips)||0,nativeCapacity:omsNativeCapacity.snapshot(),nativeUploadAvgMs:(Number(r?.previewNativeVideoUploads)||0)?Number(((Number(r?.previewNativeUploadMsTotal)||0)/Math.max(1,Number(r?.previewNativeVideoUploads)||0)).toFixed(3)):0,nativeUploadMaxMs:Number((Number(r?.previewNativeUploadMsMax)||0).toFixed(3)),nativeHardSyncs:Number(md?.nativeMultiSourceHardSyncs)||0,clockJank:Number(window.omsPlaybackClock?.pacingJankEvents)||0,clockMaxDtMs:Number(window.omsPlaybackClock?.pacingMaxDtMs)||0,clockSkippedFrames:Number(window.omsPlaybackClock?.pacingSkippedFrames)||0,sharedJobs:Number(md?.sharedPlaybackActiveJobs)||0,workerActive:!!md?.previewDecodeWorkerActive,workerFrames:Number(md?.previewDecodeWorkerFrames)||0,workerDrops:Number(md?.previewDecodeWorkerDrops)||0,ringHits:Number(md?.sharedPlaybackRingHits)||0,ringMisses:Number(md?.sharedPlaybackRingMisses)||0,dropped:Number(md?.sharedPlaybackDroppedFrames)||0,audioHardSyncs:Number(md?.sharedAudioHardSyncs)||0,htmlHardSyncs:Number(md?.htmlDivergentHardSyncs)||0,rendererExporting:!!r?.exporting,heap}}
-  text(filter='enabled'){const selected=filter==='enabled'?new Set(this.enabledCategories()):filter==='all'?null:new Set([filter]);const lines=['Open Motion Diagnostics Hub V5.29',`Master: ${this.prefs.enabled?'ON':'OFF'}`,`Enabled: ${this.enabledCategories().join(', ')||'-'}`,`Snapshot: ${JSON.stringify(this.snapshot())}`,'','Log:'];for(const x of this.logs){if(selected&&!selected.has(x.category))continue;let tail=x.detail||'';if(x.data!==null&&x.data!==undefined)tail+=`${tail?' | ':''}${JSON.stringify(x.data)}`;lines.push(`${x.t}ms [${x.category.toUpperCase()}] [${x.event}] ${tail}`)}return lines.join('\n')}
+  text(filter='enabled'){const selected=filter==='enabled'?new Set(this.enabledCategories()):filter==='all'?null:new Set([filter]);const lines=['Open Motion Diagnostics Hub V5.30',`Master: ${this.prefs.enabled?'ON':'OFF'}`,`Enabled: ${this.enabledCategories().join(', ')||'-'}`,`Snapshot: ${JSON.stringify(this.snapshot())}`,'','Log:'];for(const x of this.logs){if(selected&&!selected.has(x.category))continue;let tail=x.detail||'';if(x.data!==null&&x.data!==undefined)tail+=`${tail?' | ':''}${JSON.stringify(x.data)}`;lines.push(`${x.t}ms [${x.category.toUpperCase()}] [${x.event}] ${tail}`)}return lines.join('\n')}
   refreshTimers(){if(this.memoryTimer){clearInterval(this.memoryTimer);this.memoryTimer=0}if(this.is('memory'))this.memoryTimer=setInterval(()=>this.sample('memory','SYSTEM_SNAPSHOT',this.snapshot(),1000),1000)}
   schedulePanelRefresh(){if(this.liveTimer)return;this.liveTimer=setTimeout(()=>{this.liveTimer=0;this.refreshPanel()},180)}
   updateSettingState(){const el=document.getElementById('diagnosticSettingState');if(!el)return;const n=this.enabledCategories().length;el.textContent=this.prefs.enabled?`${n} aktif`:'Nonaktif'}
@@ -19244,7 +19245,7 @@ class Exporter{
   gpuDiagnosticText(){
     const d=this.gpuFastDiag||{};
     const lines=[
-      'Open Motion GPU Fast Diagnostic V5.29',
+      'Open Motion GPU Fast Diagnostic V5.30',
       `Stage: ${d.stage||'UNKNOWN'}`,
       `Frame: ${Number.isFinite(d.frame)?d.frame:'-'}`,
       `Error: ${d.error?.name||'-'}: ${d.error?.message||'-'}`,
@@ -20028,18 +20029,27 @@ class Exporter{
 
   async downgradeGpuFastSampleSourceToCanvas(source,reason='sample decoder unsupported'){
     if(!source||source.disposed||source.sinkKind!=='sample'||!source.track)return false;
+    let coarse=false;try{coarse=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0}catch(e){}
+    // V5.30 — the V5.29 CanvasSink recovery was introduced for desktop codec
+    // compatibility (notably HEVC on Chromium/Windows). Do not let that desktop
+    // recovery path alter Android/touch GPU Fast. On mobile, return false so the
+    // existing V5.28 HTMLVideo compatibility fallback handles the failed source.
+    // This avoids keeping a full-resolution CanvasSink decoder/canvas pool alive
+    // for every subsequent export frame on memory/bandwidth-constrained devices.
+    if(coarse){
+      if(this._gpuDiagActive)this.gpuDiag('SOURCE_DECODER_DOWNGRADE_SKIPPED',`${source.key}: mobile → preserve V5.28 HTMLVideo fallback | ${String(reason?.message||reason||'')}`);
+      return false
+    }
     const mb=await this.offlineEncoderModule();
     if(!mb?.CanvasSink)return false;
-    let coarse=false;try{coarse=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0}catch(e){}
     try{
       if(source.nativeIterator){try{await source.nativeIterator.return?.()}catch(e){};source.nativeIterator=null}
-      const oldSink=source.sink;
-      const poolSize=coarse?3:4;
-      source.sink=new mb.CanvasSink(source.track,{width:Math.max(2,+source.displayW||2),poolSize,decoderOptions:{hardwareAcceleration:'no-preference'}});
+      // Base media sinks do not expose a public close/dispose contract. Creating
+      // the replacement sink is sufficient; the owning Input is disposed by the
+      // normal source lifecycle. Avoid a second decoder-close attempt here.
+      source.sink=new mb.CanvasSink(source.track,{width:Math.max(2,+source.displayW||2),poolSize:4,decoderOptions:{hardwareAcceleration:'no-preference'}});
       source.sinkKind='canvas';
       source.runtimeAcceleration='no-preference';
-      try{oldSink?.dispose?.()}catch(e){}
-      try{oldSink?.close?.()}catch(e){}
       if(this._gpuDiagActive){
         this.gpuDiag('SOURCE_DECODER_DOWNGRADE',`${source.key}: VideoSampleSink → CanvasSink | ${String(reason?.message||reason||'')}`);
         this.gpuDiagSource({key:source.key,name:[...((source?.gpuLayerNames)||[])][0]||source.key,status:'decoder-downgraded',sinkKind:'canvas',acceleration:'no-preference',size:`${source.displayW}x${source.displayH}`,error:String(reason?.message||reason||'')})
@@ -20098,10 +20108,10 @@ class Exporter{
       }catch(err){
         try{sample?.close?.()}catch(e){}
         let finalErr=err;
-        // V5.29 — a VideoSampleSink configuration failure (notably HEVC on some
-        // Chromium/Windows combinations) no longer jumps straight to the slow
-        // HTMLVideo deterministic fallback. Rebuild only that source as a
-        // CanvasSink with no-preference and retry the exact target once.
+        // V5.30 — desktop-only recovery. A VideoSampleSink configuration failure
+        // (notably HEVC on some Chromium/Windows combinations) may rebuild that
+        // source as CanvasSink. Touch/mobile deliberately skips this branch and
+        // falls through to the proven V5.28 HTMLVideo compatibility path.
         if(source?.sinkKind==='sample'&&await this.downgradeGpuFastSampleSourceToCanvas(source,err)){
           try{
             const retry=await this.serializedSourceRequest(source,()=>source.sink.getCanvas(target));
