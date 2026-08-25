@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<!-- V5.31 — Installable PWA shell: Chrome/Android install promotion, branded Open Motion icons, standalone display, service worker offline shell, and in-app install fallback. -->
+<!-- V5.37 — Ambient export preview + simplified playhead + clean export header. -->
+<!-- V5.36 — Smooth rAF export playhead + redesigned export result controls. -->
+<!-- V5.32 — PWA install UX: promotion waits for explicit experimental-notice acceptance and auto-hides after 6 seconds. -->
 <!-- V5.29 — Desktop Native Pipeline: desktop multi-source preview now uses the same adaptive native HTMLVideo -> direct WebGL path as capable touch devices; GPU Fast chooses hardware-preferred source decode on desktop, preserves the mobile codec-budget policy, and downgrades an unsupported VideoSampleSink source to CanvasSink before falling back to HTMLVideo. -->
 <!-- V5.30 — Mobile GPU Fast regression hotfix: desktop-only CanvasSink recovery is now strictly isolated from coarse/touch devices. Mobile restores the V5.28 compatibility fallback after an unsupported VideoSampleSink, avoiding persistent CanvasSink decode/copy overhead while preserving all V5.29 desktop native/hardware fixes. -->
 <!-- V5.07 — Stage 5: worker-assisted off-main-thread multi-source preview decode. Different-source overlaps prefer a Blob module Worker running Mediabunny CanvasSink + OffscreenCanvas/createImageBitmap, transferable ImageBitmap frames feed the existing WebGL compositor, same-asset divergent cursors retain V5.06 HTMLVideo playback, and the entire V5.05 main-thread ring-buffer decoder remains an automatic fallback. Exporter remains unchanged. -->
@@ -3168,61 +3170,186 @@ input[type=range]{accent-color:var(--accent)}
   .editor.topBarCollapsed #modeBadge{top:10px!important;right:82px!important}
 }
 
-/* V5.31 — installable PWA promotion. Browser-native install UI remains under
-   Chrome's control; this in-app card is a deterministic fallback. */
-.omsPwaInstallBanner{
-  display:none;
-  width:min(690px,calc(100% - 24px));
-  margin:12px auto 0;
-  padding:12px 12px 12px 13px;
-  grid-template-columns:48px minmax(0,1fr) auto 30px;
-  align-items:center;
-  gap:11px;
-  border:1px solid rgba(255,255,255,.11);
-  border-radius:16px;
-  background:#191b22;
-  color:#f5f7fb;
-  box-shadow:0 14px 38px rgba(0,0,0,.24);
+/* V5.33 — compact persistent PWA install action in the Home header.
+   Chrome still controls whether a native install prompt is available. */
+.simpleHome .homeInstallBtn{
+  min-width:58px;
+  padding:0 10px;
+  justify-content:center;
+  border-color:#bfeadd;
+  background:#effbf7;
+  color:#25866b;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.055em;
 }
-.omsPwaInstallBanner.show{display:grid}
-.omsPwaInstallLogo{
-  width:48px;height:48px;display:block;object-fit:cover;
-  border-radius:12px;background:#000;
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+.simpleHome .homeInstallBtn.ready{
+  border-color:#6edbbb;
+  background:#73e2bd;
+  color:#071b17;
 }
-.omsPwaInstallCopy{min-width:0}
-.omsPwaInstallCopy b{
-  display:block;font-size:13px;line-height:1.15;letter-spacing:.005em
-}
-.omsPwaInstallCopy small{
-  display:block;margin-top:4px;color:#9da3af;font-size:9px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
-}
-.omsPwaInstallBtn{
-  min-width:76px;height:36px;padding:0 14px;border:0;border-radius:10px;
-  background:#73e2bd;color:#071b17;font-weight:850;font-size:10px;
-}
-.omsPwaInstallBtn:disabled{opacity:.58}
-.omsPwaInstallClose{
-  width:30px;height:30px;border:0;border-radius:9px;background:transparent;
-  color:#a8adb7;font-size:21px;line-height:1
-}
-.omsPwaInstallClose:active{background:rgba(255,255,255,.08)}
+.simpleHome .homeInstallBtn:active{background:#dff7ee}
+.simpleHome .homeInstallBtn.ready:active{background:#62d4ae}
+.simpleHome .homeInstallBtn[aria-busy="true"]{opacity:.64;pointer-events:none}
 @media(max-width:520px){
-  .omsPwaInstallBanner{
-    width:calc(100% - 20px);margin-top:10px;padding:10px;
-    grid-template-columns:44px minmax(0,1fr) auto 26px;gap:9px;border-radius:14px
-  }
-  .omsPwaInstallLogo{width:44px;height:44px;border-radius:11px}
-  .omsPwaInstallCopy b{font-size:12px}
-  .omsPwaInstallBtn{min-width:64px;height:34px;padding:0 11px}
-  .omsPwaInstallClose{width:26px;height:30px}
+  .simpleHome .homeInstallBtn{min-width:52px;padding:0 7px;font-size:7.5px}
+}
+@media(max-width:390px){
+  .simpleHome .homeTopActions{gap:4px}
+  .simpleHome .homeInstallBtn{min-width:48px;padding:0 6px;font-size:7px}
 }
 @media(display-mode:standalone){
-  .omsPwaInstallBanner{display:none!important}
+  .simpleHome .homeInstallBtn{display:none!important}
 }
 
 </style>
+
+<style id="omsExportResultPreviewStyles">
+/* V5.39 — temporally smoothed dual-canvas ambient preview + minimal export scrubber. */
+.exportResultPreview{position:fixed;inset:0;z-index:150000;background:#0d1220;color:#f7f8fc;display:flex;flex-direction:column;overscroll-behavior:contain;touch-action:manipulation}
+.exportResultPreview.hidden{display:none!important}
+.exportResultTop{height:70px;min-height:70px;display:flex;align-items:center;justify-content:center;background:#151827;border-bottom:1px solid #2b3044;padding:0 max(18px,env(safe-area-inset-right)) 0 max(18px,env(safe-area-inset-left))}
+.exportResultTopText{min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center}.exportResultTopText small{font-size:9px;letter-spacing:.17em;color:#7f879c;font-weight:850}.exportResultTopText b{font-size:17px;line-height:1.12;color:#f6f8fd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exportResultStage{flex:1;min-height:0;display:flex;flex-direction:column;background:#0c111e}
+.exportResultMediaWrap{position:relative;isolation:isolate;flex:1;min-height:180px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#070b13}
+.exportResultAmbient{position:absolute;z-index:0;inset:-14%;width:128%;height:128%;display:block;opacity:0;filter:blur(34px) saturate(1.28) brightness(.62);transform:scale(1.10);pointer-events:none;will-change:opacity,filter,transform;transition:opacity 2400ms cubic-bezier(.22,.61,.36,1)}
+.exportResultAmbient.active{opacity:.72}
+.exportResultAmbientShade{position:absolute;z-index:1;inset:0;background:radial-gradient(circle at center,rgba(5,8,15,.06) 0%,rgba(5,8,15,.26) 56%,rgba(5,8,15,.68) 100%);pointer-events:none}
+.exportResultMediaWrap video{position:relative;z-index:2;display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;background:#000;outline:0;box-shadow:0 18px 54px rgba(0,0,0,.34)}
+.exportResultControls{height:72px;min-height:72px;display:grid;grid-template-columns:42px 1fr auto;gap:10px;align-items:center;padding:0 max(18px,env(safe-area-inset-left)) 0 max(18px,env(safe-area-inset-right));background:#0c111e;border-top:1px solid rgba(255,255,255,.035)}
+.exportResultPlay{width:36px;height:36px;border:1px solid #293043;background:#151a29;color:#f1f3f8;display:grid;place-items:center;border-radius:10px;padding:0;box-shadow:0 3px 10px rgba(0,0,0,.16)}
+.exportResultPlay:active{transform:scale(.96);background:#202638}.exportResultPlay svg{width:19px;height:19px;fill:currentColor}
+.exportResultSeekWrap{--seek-progress:0%;position:relative;height:34px;min-width:0;display:flex;align-items:center;touch-action:none}
+.exportResultSeekTrack{position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);overflow:hidden;pointer-events:none;background:#2b3244;border-radius:999px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.025)}
+.exportResultSeekTrack:before{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--seek-progress);background:var(--accent);border-radius:inherit;opacity:.9}
+.exportResultSeekTrack:after{display:none}
+.exportResultSeek{position:absolute;inset:0;width:100%;height:34px;margin:0;opacity:0;cursor:pointer;touch-action:none}
+.exportResultTime{font-size:9px;color:#b8c0d3;background:#111622;border:1px solid #2b3246;border-radius:7px;padding:5px 8px;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:78px;text-align:center}
+.exportResultBottom{background:#151827;padding:20px max(20px,env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));border-top:1px solid #2b3044}
+.exportResultActions{display:grid;grid-template-columns:1.15fr .85fr;gap:10px;max-width:760px;margin:0 auto}
+.exportResultAction{height:68px;border-radius:14px;font-size:15px;font-weight:850;display:flex;align-items:center;justify-content:center;gap:10px;padding:0 15px;transition:transform .12s ease,background .12s ease,border-color .12s ease}
+#exportResultSave{border:1px solid rgba(0,215,167,.35);background:var(--accent);color:#06251e;box-shadow:0 8px 24px rgba(0,215,167,.14)}
+#exportResultShare{border:1px solid #343b50;background:#202538;color:#f4f6fb}
+.exportResultAction:active{transform:scale(.975)}#exportResultSave:active{background:#16e0b2}#exportResultShare:active{background:#292f44}
+.exportResultAction svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.exportResultClose{display:flex;align-items:center;justify-content:center;gap:7px;margin:12px auto 0;border:1px solid transparent;background:transparent;color:#aeb6c9;font-size:11px;font-weight:800;letter-spacing:.015em;padding:8px 14px;border-radius:9px}
+.exportResultClose:before{content:"×";font-size:17px;line-height:1;color:#7f879c}.exportResultClose:active{background:#202538;color:#fff;border-color:#30374c}
+.exportResultMeta{max-width:760px;margin:0 auto 10px;text-align:center;color:#8f98ad;font-size:10px;min-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exportResultPreview[data-share-supported="false"] #exportResultShare{opacity:.58}
+@media (orientation:landscape) and (max-height:650px){.exportResultTop{height:56px;min-height:56px}.exportResultTopText b{font-size:14px}.exportResultTopText small{font-size:8px}.exportResultControls{height:56px;min-height:56px}.exportResultAmbient{filter:blur(26px) saturate(1.22) brightness(.6)}.exportResultBottom{padding-top:12px;padding-bottom:calc(10px + env(safe-area-inset-bottom))}.exportResultAction{height:54px;font-size:14px;border-radius:12px}.exportResultAction svg{width:21px;height:21px}.exportResultClose{margin-top:6px;padding:6px 12px}.exportResultMeta{margin-bottom:6px}}
+@media (min-width:900px){.exportResultPreview{background:#101522}.exportResultStage{width:min(1100px,100%);align-self:center}.exportResultBottom{padding-left:max(24px,calc((100vw - 900px)/2));padding-right:max(24px,calc((100vw - 900px)/2))}.exportResultAction{height:64px}}
+@media (prefers-reduced-motion:reduce){.exportResultAmbient{filter:blur(28px) saturate(1.12) brightness(.58)}}
+</style>
+
+
+<style id="oms-editor-ambient-v540">
+/* =========================================================
+   V5.42 — Optional temporally smoothed Editor Ambient Mode with white suppression and adjustable intensity.
+   OFF by default. A tiny 40×24 sampler reads the rendered composition about
+   once every two seconds. Typed color custom properties interpolate for 2.4s,
+   giving the workspace slow lighting inertia instead of frame-synchronous
+   flashing. The effect is UI-only and never enters export pixels.
+   ========================================================= */
+@property --oms-editor-ambient-a{
+  syntax:'<color>';
+  inherits:true;
+  initial-value:#10131b;
+}
+@property --oms-editor-ambient-b{
+  syntax:'<color>';
+  inherits:true;
+  initial-value:#151923;
+}
+@property --oms-editor-ambient-c{
+  syntax:'<color>';
+  inherits:true;
+  initial-value:#0b0d13;
+}
+.editor{
+  --oms-editor-ambient-a:#10131b;
+  --oms-editor-ambient-b:#151923;
+  --oms-editor-ambient-c:#0b0d13;
+}
+.editor.editorAmbientEnabled{
+  transition:
+    --oms-editor-ambient-a 2400ms cubic-bezier(.22,.61,.36,1),
+    --oms-editor-ambient-b 2400ms cubic-bezier(.22,.61,.36,1),
+    --oms-editor-ambient-c 2400ms cubic-bezier(.22,.61,.36,1);
+  background:color-mix(in srgb,var(--oms-editor-ambient-a) 8%,#0b0d13);
+}
+.editor.editorAmbientEnabled .editorTop{
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb,var(--oms-editor-ambient-a) 15%,#171b25),
+      color-mix(in srgb,var(--oms-editor-ambient-b) 8%,#11151e));
+}
+.editor.editorAmbientEnabled .previewArea{
+  background:color-mix(in srgb,var(--oms-editor-ambient-a) 9%,#0a0c12);
+}
+.editor.editorAmbientEnabled .viewport{
+  background-image:
+    radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--oms-editor-ambient-a) 24%,transparent),transparent 42%),
+    radial-gradient(circle at 18% 86%,color-mix(in srgb,var(--oms-editor-ambient-b) 11%,transparent),transparent 48%),
+    radial-gradient(circle at 88% 72%,color-mix(in srgb,var(--oms-editor-ambient-c) 9%,transparent),transparent 52%),
+    linear-gradient(45deg,rgba(255,255,255,.014) 25%,transparent 25%,transparent 75%,rgba(255,255,255,.014) 75%),
+    linear-gradient(45deg,rgba(255,255,255,.014) 25%,transparent 25%,transparent 75%,rgba(255,255,255,.014) 75%);
+  background-position:0 0,0 0,0 0,0 0,8px 8px;
+  background-size:auto,auto,auto,16px 16px,16px 16px;
+}
+.editor.editorAmbientEnabled .canvasWrap{
+  box-shadow:
+    0 18px 50px rgba(0,0,0,.55),
+    0 0 48px color-mix(in srgb,var(--oms-editor-ambient-a) 13%,transparent)!important;
+}
+.editor.editorAmbientEnabled .previewTools,
+.editor.editorAmbientEnabled .transport{
+  background:color-mix(in srgb,var(--oms-editor-ambient-a) 8%,#121620);
+}
+.editor.editorAmbientEnabled .timelineArea{
+  background:
+    radial-gradient(circle at 76% 28%,color-mix(in srgb,var(--oms-editor-ambient-b) 10%,transparent),transparent 42%),
+    radial-gradient(circle at 25% 86%,color-mix(in srgb,var(--oms-editor-ambient-a) 8%,transparent),transparent 48%),
+    color-mix(in srgb,var(--oms-editor-ambient-c) 7%,#11151e);
+}
+.editor.editorAmbientEnabled .ruler{
+  background:color-mix(in srgb,var(--oms-editor-ambient-a) 5%,#0c1017);
+}
+.editor.editorAmbientEnabled .trackHead{
+  background:color-mix(in srgb,var(--oms-editor-ambient-b) 5%,#161b26);
+}
+.editor.editorAmbientEnabled .trackHead.sel{
+  background:color-mix(in srgb,var(--oms-editor-ambient-a) 10%,#222b38);
+}
+.editor.editorAmbientEnabled .drawer{
+  /* Keep ambient present behind Inspector, but weaker so existing action cards
+     retain their original visual separation. Card backgrounds are untouched. */
+  background:color-mix(in srgb,var(--oms-editor-ambient-a) 3.5%,#151a25);
+}
+.editor.editorAmbientEnabled .drawerHead{
+  background:color-mix(in srgb,var(--oms-editor-ambient-b) 3%,#111620);
+}
+.editor.editorAmbientEnabled .drawer .insBtn{
+  /* Readability only: preserve the original surface/background. */
+  color:#c8d0df;
+}
+.editor.editorAmbientEnabled .drawer .insBtn span{
+  color:#d9e0ec;
+}
+.editor.editorAmbientEnabled .drawer .propTitle,
+.editor.editorAmbientEnabled .drawer .drawerHead,
+.editor.editorAmbientEnabled .drawer .drawerHead b{
+  color:#eef2f8;
+}
+.editor.editorAmbientEnabled .drawer small{
+  color:#9da8bb;
+}
+.editor.editorAmbientEnabled .bottomTools{
+  background:color-mix(in srgb,var(--oms-editor-ambient-c) 6%,#11151e);
+}
+/* Text, icons, clips, keyframes and active controls deliberately keep their
+   original colors. Ambient only changes dark workspace surfaces. */
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -3239,6 +3366,9 @@ input[type=range]{accent-color:var(--accent)}
           <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3.5 12h17M12 3c2.2 2.5 3.3 5.5 3.3 9S14.2 18.5 12 21M12 3C9.8 5.5 8.7 8.5 8.7 12S9.8 18.5 12 21"/></svg>
           <span id="homeLanguageCode" class="langCode">ID</span>
         </button>
+        <button id="homeInstallBtn" class="rightBtn homeInstallBtn" type="button" title="Instal Open Motion" aria-label="Instal Open Motion">
+          <span>INSTAL</span>
+        </button>
         <button id="homeImportMain" class="rightBtn" type="button" title="Buka paket Open Motion atau XML">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 13v6h14v-6"/></svg>
           <span id="homeImportLabel">IMPOR</span>
@@ -3246,15 +3376,7 @@ input[type=range]{accent-color:var(--accent)}
       </div>
     </header>
 
-    <aside id="omsPwaInstallBanner" class="omsPwaInstallBanner" aria-live="polite" aria-label="Instal Open Motion">
-      <img class="omsPwaInstallLogo" src="./icons/open-motion-192.png" alt="" />
-      <div class="omsPwaInstallCopy">
-        <b id="omsPwaInstallTitle">Instal Open Motion</b>
-        <small id="omsPwaInstallSubtitle">Buka seperti aplikasi dan buat pintasan di perangkat</small>
-      </div>
-      <button id="omsPwaInstallBtn" class="omsPwaInstallBtn" type="button">INSTAL</button>
-      <button id="omsPwaInstallClose" class="omsPwaInstallClose" type="button" aria-label="Tutup">×</button>
-    </aside>
+
 
     <main class="homeMain">
       <section class="projectsWrap" aria-labelledby="workspaceTitle">
@@ -3455,6 +3577,46 @@ input[type=range]{accent-color:var(--accent)}
 </div>
 
 <div id="toast" class="toast"></div>
+
+
+<section id="exportResultPreview" class="exportResultPreview hidden" role="dialog" aria-modal="true" aria-labelledby="exportResultTitle">
+  <div class="exportResultTop" id="exportResultTitle">
+    <div class="exportResultTopText"><small>HASIL EKSPOR</small><b>Pratinjau video</b></div>
+  </div>
+  <div class="exportResultStage">
+    <div class="exportResultMediaWrap">
+      <canvas id="exportResultAmbientA" class="exportResultAmbient active" width="64" height="36" aria-hidden="true"></canvas>
+      <canvas id="exportResultAmbientB" class="exportResultAmbient" width="64" height="36" aria-hidden="true"></canvas>
+      <div class="exportResultAmbientShade" aria-hidden="true"></div>
+      <video id="exportResultVideo" playsinline preload="metadata" aria-label="Preview video hasil ekspor"></video>
+    </div>
+    <div class="exportResultControls">
+      <button id="exportResultPlay" class="exportResultPlay" type="button" aria-label="Putar video">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 5.2v13.6L18.4 12z"/></svg>
+      </button>
+      <div id="exportResultSeekWrap" class="exportResultSeekWrap">
+        <div class="exportResultSeekTrack" aria-hidden="true"></div>
+        <input id="exportResultSeek" class="exportResultSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Posisi video">
+      </div>
+      <div id="exportResultTime" class="exportResultTime">0:00 / 0:00</div>
+    </div>
+  </div>
+  <div class="exportResultBottom">
+    <div id="exportResultMeta" class="exportResultMeta"></div>
+    <div class="exportResultActions">
+      <button id="exportResultSave" class="exportResultAction" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 16v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
+        <span>Simpan</span>
+      </button>
+      <button id="exportResultShare" class="exportResultAction" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
+        <span>Bagikan</span>
+      </button>
+    </div>
+    <button id="exportResultClose" class="exportResultClose" type="button">Kembali ke editor</button>
+  </div>
+</section>
+
 
 <section id="exportSheet" class="exportSheet hidden">
   <div class="exportTop"><button id="closeExport">×</button><b>Ekspor &amp; Bagikan</b><span></span></div>
@@ -19240,6 +19402,352 @@ class ExportSessionGuard{
   }
 }
 
+
+
+// ============================================================
+// V5.39 — Smooth minimal scrubber + temporally smoothed ambient preview
+// Encode finishes into one Blob. Nothing is downloaded automatically.
+// The same Blob backs preview/save; File wrapping is created lazily for Share.
+// ============================================================
+class OMSExportResultPreview{
+  constructor(){
+    this.blob=null;this.filename='';this.url='';this.shareFile=null;this.scrubbing=false;this.bound=false;this.timelineRaf=0;this.ambientTimer=0;this.ambientActiveIndex=0;this.ambientRunning=false;this.ambientSampleMs=2000;this.ambientSeekFadeMs=650;
+  }
+  el(id){return document.getElementById(id)}
+  ensureBound(){
+    if(this.bound)return;this.bound=true;
+    const video=this.el('exportResultVideo'),play=this.el('exportResultPlay'),seek=this.el('exportResultSeek');
+    this.el('exportResultSave')?.addEventListener('click',()=>this.save());
+    this.el('exportResultShare')?.addEventListener('click',()=>this.share());
+    this.el('exportResultClose')?.addEventListener('click',()=>this.close());
+    play?.addEventListener('click',()=>this.togglePlayback());
+    video?.addEventListener('click',()=>this.togglePlayback());
+    video?.addEventListener('play',()=>{this.refreshPlayButton();this.startTimelineLoop();this.startAmbientLoop()});
+    video?.addEventListener('pause',()=>{this.refreshPlayButton();this.stopTimelineLoop();this.stopAmbientLoop();this.refreshTimeline();this.captureAmbient({quick:false})});
+    video?.addEventListener('ended',()=>{this.refreshPlayButton();this.stopTimelineLoop();this.stopAmbientLoop();this.refreshTimeline();this.captureAmbient({quick:false})});
+    video?.addEventListener('loadedmetadata',()=>{this.refreshTimeline();this.captureAmbient({quick:true,initial:true})});
+    video?.addEventListener('loadeddata',()=>this.captureAmbient({quick:true,initial:true}));
+    video?.addEventListener('seeked',()=>this.captureAmbient({quick:true}));
+    video?.addEventListener('durationchange',()=>this.refreshTimeline());
+    video?.addEventListener('timeupdate',()=>{if(!this.scrubbing)this.refreshTimeline()});
+    video?.addEventListener('error',()=>{
+      const meta=this.el('exportResultMeta');
+      if(meta&&this.blob)meta.textContent='Preview tidak dapat diputar di browser ini • file tetap dapat disimpan';
+    });
+    seek?.addEventListener('pointerdown',()=>{this.scrubbing=true});
+    seek?.addEventListener('pointerup',()=>{this.scrubbing=false;this.seekFromControl()});
+    seek?.addEventListener('change',()=>{this.scrubbing=false;this.seekFromControl()});
+    seek?.addEventListener('input',()=>this.seekFromControl(true));
+    window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!this.el('exportResultPreview')?.classList.contains('hidden'))this.close()});
+  }
+  formatTime(sec){
+    sec=Math.max(0,Number.isFinite(+sec)?+sec:0);const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=Math.floor(sec%60);
+    return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`
+  }
+  formatBytes(bytes){
+    bytes=Math.max(0,+bytes||0);if(bytes<1024)return `${bytes} B`;if(bytes<1048576)return `${(bytes/1024).toFixed(1)} KB`;if(bytes<1073741824)return `${(bytes/1048576).toFixed(1)} MB`;return `${(bytes/1073741824).toFixed(2)} GB`
+  }
+  setTimelineProgress(value){
+    const wrap=this.el('exportResultSeekWrap');if(!wrap)return;
+    const p=clamp((+value||0)/1000,0,1)*100;wrap.style.setProperty('--seek-progress',`${p.toFixed(4)}%`)
+  }
+  ambientCanvases(){return [this.el('exportResultAmbientA'),this.el('exportResultAmbientB')]}
+  drawAmbientFrame(canvas){
+    const video=this.el('exportResultVideo');
+    if(!video||!canvas||video.readyState<2||!video.videoWidth||!video.videoHeight)return false;
+    const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)return false;
+    const cw=canvas.width||64,ch=canvas.height||36,sw=video.videoWidth,sh=video.videoHeight;
+    const srcAspect=sw/sh,dstAspect=cw/ch;let sx=0,sy=0,sWidth=sw,sHeight=sh;
+    if(srcAspect>dstAspect){sWidth=sh*dstAspect;sx=(sw-sWidth)/2}else if(srcAspect<dstAspect){sHeight=sw/dstAspect;sy=(sh-sHeight)/2}
+    try{ctx.drawImage(video,sx,sy,sWidth,sHeight,0,0,cw,ch);return true}catch(e){return false}
+  }
+  captureAmbient({quick=false,initial=false}={}){
+    const canvases=this.ambientCanvases(),current=canvases[this.ambientActiveIndex],nextIndex=this.ambientActiveIndex?0:1,next=canvases[nextIndex];
+    if(!current||!next)return false;
+    if(initial){
+      if(!this.drawAmbientFrame(current))return false;
+      current.style.transitionDuration=quick?`${this.ambientSeekFadeMs}ms`:'2400ms';
+      next.style.transitionDuration=current.style.transitionDuration;
+      current.classList.add('active');next.classList.remove('active');
+      return true
+    }
+    if(!this.drawAmbientFrame(next))return false;
+    const duration=quick?this.ambientSeekFadeMs:2400;
+    current.style.transitionDuration=`${duration}ms`;next.style.transitionDuration=`${duration}ms`;
+    // Force the newly drawn state to remain hidden for one paint before crossfade.
+    next.classList.remove('active');
+    void next.offsetWidth;
+    requestAnimationFrame(()=>{
+      if(!this.blob)return;
+      current.classList.remove('active');
+      next.classList.add('active');
+      this.ambientActiveIndex=nextIndex
+    });
+    return true
+  }
+  clearAmbient(){
+    const canvases=this.ambientCanvases();this.ambientActiveIndex=0;
+    canvases.forEach((canvas,i)=>{if(!canvas)return;try{canvas.getContext('2d')?.clearRect(0,0,canvas.width,canvas.height)}catch(e){}canvas.classList.toggle('active',i===0);canvas.style.transitionDuration='2400ms'})
+  }
+  scheduleAmbientSample(delay=this.ambientSampleMs){
+    if(!this.ambientRunning)return;
+    if(this.ambientTimer)clearTimeout(this.ambientTimer);
+    this.ambientTimer=setTimeout(()=>{
+      this.ambientTimer=0;
+      const video=this.el('exportResultVideo');
+      if(!this.ambientRunning||!video||video.paused||video.ended)return;
+      this.captureAmbient({quick:false});
+      this.scheduleAmbientSample(this.ambientSampleMs)
+    },Math.max(250,delay|0))
+  }
+  startAmbientLoop(){
+    const video=this.el('exportResultVideo');
+    if(!video||this.ambientRunning)return;
+    this.ambientRunning=true;
+    // Start from the current visual state, then sample slowly like ambient lighting.
+    this.captureAmbient({quick:true,initial:true});
+    this.scheduleAmbientSample(this.ambientSampleMs)
+  }
+  stopAmbientLoop(){
+    this.ambientRunning=false;
+    if(this.ambientTimer){clearTimeout(this.ambientTimer);this.ambientTimer=0}
+  }
+  startTimelineLoop(){
+    if(this.timelineRaf)return;
+    const tick=(now)=>{
+      this.timelineRaf=0;
+      const video=this.el('exportResultVideo'),panel=this.el('exportResultPreview');
+      if(!video||panel?.classList.contains('hidden')||video.paused||video.ended)return;
+      if(!this.scrubbing)this.refreshTimeline();
+      this.timelineRaf=requestAnimationFrame(tick)
+    };
+    this.timelineRaf=requestAnimationFrame(tick)
+  }
+  stopTimelineLoop(){
+    if(this.timelineRaf){cancelAnimationFrame(this.timelineRaf);this.timelineRaf=0}
+  }
+  show(blob,filename,{engine=''}={}){
+    if(!(blob instanceof Blob)||!blob.size)throw Error('Hasil ekspor video kosong');
+    this.ensureBound();this.stopTimelineLoop();this.stopAmbientLoop();this.releaseCurrent();
+    this.blob=blob;this.filename=String(filename||'open-motion-export.mp4');
+    this.url=URL.createObjectURL(blob);
+    const video=this.el('exportResultVideo'),panel=this.el('exportResultPreview');
+    video.pause();video.removeAttribute('src');video.load();this.clearAmbient();video.src=this.url;video.currentTime=0;video.load();
+    this.el('exportResultSeek').value='0';this.setTimelineProgress(0);
+    const type=blob.type?blob.type.replace('video/','').toUpperCase():'VIDEO';
+    const detail=[engine,type,this.formatBytes(blob.size)].filter(Boolean).join(' • ');
+    this.el('exportResultMeta').textContent=detail;
+    const shareSupported=!!navigator.share;
+    panel.dataset.shareSupported=String(shareSupported);
+    panel.classList.remove('hidden');
+    document.getElementById('exportSheet')?.classList.add('hidden');
+    this.refreshPlayButton();this.refreshTimeline();
+    omsDiagnostics.log('export','EXPORT_PREVIEW_OPEN','',{filename:this.filename,size:blob.size,type:blob.type,engine});
+    try{panel.focus?.({preventScroll:true})}catch(e){}
+  }
+  releaseCurrent(){
+    const video=this.el('exportResultVideo');
+    try{video?.pause()}catch(e){}
+    if(video){try{video.removeAttribute('src');video.load()}catch(e){}}
+    this.stopTimelineLoop();this.stopAmbientLoop();this.clearAmbient();
+    if(this.url){try{URL.revokeObjectURL(this.url)}catch(e){}}
+    this.url='';this.blob=null;this.filename='';this.shareFile=null;this.scrubbing=false
+  }
+  close(){
+    const panel=this.el('exportResultPreview');if(panel?.classList.contains('hidden'))return;
+    omsDiagnostics.log('export','EXPORT_PREVIEW_CLOSE','');
+    panel.classList.add('hidden');this.releaseCurrent();
+  }
+  togglePlayback(){
+    const video=this.el('exportResultVideo');if(!video||!this.blob)return;
+    if(video.paused||video.ended){if(video.ended)video.currentTime=0;video.play().catch(()=>toast('Video belum dapat diputar'))}
+    else video.pause()
+  }
+  refreshPlayButton(){
+    const video=this.el('exportResultVideo'),btn=this.el('exportResultPlay');if(!video||!btn)return;
+    const playing=!video.paused&&!video.ended;
+    btn.setAttribute('aria-label',playing?'Jeda video':'Putar video');
+    btn.innerHTML=playing
+      ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.8 5h3.7v14H6.8zm6.7 0h3.7v14h-3.7z"/></svg>'
+      :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 5.2v13.6L18.4 12z"/></svg>'
+  }
+  refreshTimeline(){
+    const video=this.el('exportResultVideo'),seek=this.el('exportResultSeek'),time=this.el('exportResultTime');if(!video||!seek||!time)return;
+    const d=Number.isFinite(video.duration)&&video.duration>0?video.duration:0,c=Number.isFinite(video.currentTime)?video.currentTime:0;
+    const continuous=d?clamp(c/d,0,1)*1000:0;
+    if(!this.scrubbing){seek.value=String(Math.round(continuous));this.setTimelineProgress(continuous)}
+    else this.setTimelineProgress(seek.value);
+    time.textContent=`${this.formatTime(c)} / ${this.formatTime(d)}`
+  }
+  seekFromControl(previewOnly=false){
+    const video=this.el('exportResultVideo'),seek=this.el('exportResultSeek'),time=this.el('exportResultTime');if(!video||!seek)return;
+    const d=Number.isFinite(video.duration)&&video.duration>0?video.duration:0;if(!d)return;
+    const target=clamp((+seek.value||0)/1000,0,1)*d;
+    this.setTimelineProgress(seek.value);
+    try{video.currentTime=target}catch(e){}
+    if(time)time.textContent=`${this.formatTime(target)} / ${this.formatTime(d)}`;
+    if(!previewOnly){this.refreshTimeline();this.captureAmbient({quick:true})}
+  }
+  save(){
+    if(!(this.blob instanceof Blob))return;
+    try{
+      download(this.blob,this.filename);
+      omsDiagnostics.log('export','EXPORT_RESULT_SAVE','',{filename:this.filename,size:this.blob.size,type:this.blob.type});
+      toast('Menyimpan video…')
+    }catch(err){console.warn('Simpan hasil ekspor gagal:',err);toast('Video gagal disimpan')}
+  }
+  async share(){
+    if(!(this.blob instanceof Blob))return;
+    if(!navigator.share){toast('Bagikan file tidak didukung browser ini');return}
+    try{
+      this.shareFile ||= new File([this.blob],this.filename,{type:this.blob.type||'video/mp4',lastModified:Date.now()});
+      const data={files:[this.shareFile],title:'Open Motion',text:'Video dibuat dengan Open Motion'};
+      if(typeof navigator.canShare==='function'&&!navigator.canShare({files:data.files})){
+        toast('Perangkat ini tidak mendukung berbagi file video');return
+      }
+      await navigator.share(data);
+      omsDiagnostics.log('export','EXPORT_RESULT_SHARE','',{filename:this.filename,size:this.blob.size,type:this.blob.type})
+    }catch(err){
+      if(err?.name==='AbortError')return;
+      console.warn('Bagikan hasil ekspor gagal:',err);toast('Video gagal dibagikan')
+    }
+  }
+}
+const omsExportResultPreview=new OMSExportResultPreview();
+window.omsExportResultPreview=omsExportResultPreview;
+
+// ============================================================
+// V5.40 — YouTube-inspired, temporally smoothed editor ambient lighting.
+// Device-local preference; default ON at 100% intensity. Sampling is deliberately sparse so the
+// workspace has visual inertia and the editor playback pipeline keeps priority.
+// ============================================================
+// V5.43 — Ambient Editor defaults ON at 100% intensity on fresh storage.
+class OMSEditorAmbientController{
+  constructor(){
+    this.key='oms_editor_ambient_v1';
+    this.intensityKey='oms_editor_ambient_intensity_v1';
+    this.sampleMs=2000;
+    this.timer=0;
+    this.enabled=this.readPreference();
+    this.intensity=this.readIntensity();
+    this.sampleCanvas=document.createElement('canvas');
+    this.sampleCanvas.width=40;this.sampleCanvas.height=24;
+    this.sampleCtx=this.sampleCanvas.getContext('2d',{alpha:false,willReadFrequently:true});
+    this.lastSignature='';
+    this.rawColors=null;
+    this.syncClass();
+    if(this.enabled)this.start();
+  }
+  readPreference(){try{const v=localStorage.getItem(this.key);return v===null?true:v==='1'}catch(e){return true}}
+  writePreference(){try{localStorage.setItem(this.key,this.enabled?'1':'0')}catch(e){}}
+  readIntensity(){try{const raw=localStorage.getItem(this.intensityKey);if(raw===null)return 100;const v=Number(raw);return Number.isFinite(v)?Math.max(0,Math.min(100,v)):100}catch(e){return 100}}
+  writeIntensity(){try{localStorage.setItem(this.intensityKey,String(this.intensity))}catch(e){}}
+  editor(){return document.getElementById('editor')}
+  stage(){return document.getElementById('stage')}
+  syncClass(){
+    const editor=this.editor();if(!editor)return;
+    editor.classList.toggle('editorAmbientEnabled',!!this.enabled);
+    editor.dataset.ambient=String(!!this.enabled)
+  }
+  setEnabled(on){
+    this.enabled=!!on;this.writePreference();this.syncClass();
+    if(this.enabled){this.sample(true);this.start()}else{this.stop();this.resetColors()}
+    try{omsDiagnostics.log('ui','EDITOR_AMBIENT_TOGGLE',this.enabled?'ON':'OFF',{sampleMs:this.sampleMs,intensity:this.intensity})}catch(e){}
+    return this.enabled
+  }
+  setIntensity(value){
+    const next=Math.max(0,Math.min(100,Math.round(Number(value)||0)));
+    this.intensity=next;this.writeIntensity();
+    if(this.enabled){if(this.rawColors)this.applyColors(this.rawColors);else this.sample(true)}
+    try{omsDiagnostics.log('ui','EDITOR_AMBIENT_INTENSITY',String(next),{intensity:next})}catch(e){}
+    return next
+  }
+  resetColors(){
+    const editor=this.editor();if(!editor)return;
+    editor.style.setProperty('--oms-editor-ambient-a','#10131b');
+    editor.style.setProperty('--oms-editor-ambient-b','#151923');
+    editor.style.setProperty('--oms-editor-ambient-c','#0b0d13');
+    this.lastSignature='';this.rawColors=null
+  }
+  shouldSample(){
+    const editor=this.editor(),stage=this.stage();
+    if(!this.enabled||!editor||editor.classList.contains('hidden')||!stage||!stage.width||!stage.height||!model?.project)return false;
+    try{if(renderer?.exporting)return false}catch(e){}
+    return true
+  }
+  clampByte(v){return Math.max(0,Math.min(255,Math.round(v||0)))}
+  hex(r,g,b){return '#'+[r,g,b].map(v=>this.clampByte(v).toString(16).padStart(2,'0')).join('')}
+  rgbFromHex(hex){const h=String(hex||'').replace('#','');if(!/^[0-9a-f]{6}$/i.test(h))return[0,0,0];return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]}
+  mixHex(base,target,t){const a=this.rgbFromHex(base),b=this.rgbFromHex(target),k=Math.max(0,Math.min(1,Number(t)||0));return this.hex(a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k,a[2]+(b[2]-a[2])*k)}
+  applyColors(colors){
+    if(!colors)return false;this.rawColors=colors;
+    const editor=this.editor();if(!editor)return false;
+    const k=this.intensity/100;
+    editor.style.setProperty('--oms-editor-ambient-a',this.mixHex('#10131b',colors.a,k));
+    editor.style.setProperty('--oms-editor-ambient-b',this.mixHex('#151923',colors.b,k));
+    editor.style.setProperty('--oms-editor-ambient-c',this.mixHex('#0b0d13',colors.c,k));
+    return true
+  }
+  tone(r,g,b,{sat=1,light=1}={}){
+    const avg=(r+g+b)/3;
+    r=(avg+(r-avg)*sat)*light;g=(avg+(g-avg)*sat)*light;b=(avg+(b-avg)*sat)*light;
+    return [this.clampByte(r),this.clampByte(g),this.clampByte(b)]
+  }
+  analyze(){
+    const ctx=this.sampleCtx;if(!ctx)return null;
+    let data;try{data=ctx.getImageData(0,0,this.sampleCanvas.width,this.sampleCanvas.height).data}catch(e){return null}
+    let ar=0,ag=0,ab=0,aw=0,vr=0,vg=0,vb=0,vw=0,dr=0,dg=0,db=0,dw=0;
+    for(let i=0;i<data.length;i+=4){
+      const r=data[i],g=data[i+1],b=data[i+2];
+      const max=Math.max(r,g,b),min=Math.min(r,g,b),lum=(r*.2126+g*.7152+b*.0722)/255,sat=max?((max-min)/max):0;
+      // V5.42 — suppress near-white/low-chroma pixels so white canvas bars and
+      // highlights do not overpower genuinely colored content. Bright saturated
+      // pixels keep their influence; neutral white is still represented weakly.
+      const whiteLum=Math.max(0,Math.min(1,(lum-.68)/.32));
+      const lowChroma=Math.max(0,Math.min(1,(.30-sat)/.30));
+      const whitePenalty=1-whiteLum*lowChroma*.92;
+      const chromaBias=.26+.74*Math.pow(sat,.68);
+      const base=(.16+.84*Math.pow(lum,.55))*chromaBias*whitePenalty;
+      ar+=r*base;ag+=g*base;ab+=b*base;aw+=base;
+      const vivid=(.025+Math.pow(sat,1.5)*(.42+lum*.90))*whitePenalty;
+      vr+=r*vivid;vg+=g*vivid;vb+=b*vivid;vw+=vivid;
+      const dark=(.08+Math.pow(1-lum,1.4)*.8)*(.65+.35*whitePenalty);
+      dr+=r*dark;dg+=g*dark;db+=b*dark;dw+=dark
+    }
+    if(!aw||!vw||!dw)return null;
+    const a=this.tone(ar/aw,ag/aw,ab/aw,{sat:1.18,light:.92});
+    const b=this.tone(vr/vw,vg/vw,vb/vw,{sat:1.28,light:.90});
+    const c=this.tone(dr/dw,dg/dw,db/dw,{sat:1.08,light:.58});
+    return{a:this.hex(...a),b:this.hex(...b),c:this.hex(...c)}
+  }
+  sample(force=false){
+    if(!this.shouldSample())return false;
+    const stage=this.stage(),ctx=this.sampleCtx;if(!ctx)return false;
+    try{ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.drawImage(stage,0,0,this.sampleCanvas.width,this.sampleCanvas.height)}catch(e){return false}
+    const colors=this.analyze();if(!colors)return false;
+    const sig=`${colors.a}|${colors.b}|${colors.c}`;
+    if(!force&&sig===this.lastSignature)return true;
+    this.lastSignature=sig;
+    return this.applyColors(colors)
+  }
+  schedule(delay=this.sampleMs){
+    if(!this.enabled)return;
+    if(this.timer)clearTimeout(this.timer);
+    this.timer=setTimeout(()=>{this.timer=0;if(!this.enabled)return;this.sample(false);this.schedule(this.sampleMs)},Math.max(500,delay|0))
+  }
+  start(){if(!this.enabled)return;this.syncClass();this.schedule(120)}
+  stop(){if(this.timer){clearTimeout(this.timer);this.timer=0}}
+  nudge(delay=420){
+    if(!this.enabled)return;
+    if(this.timer)clearTimeout(this.timer);
+    this.timer=setTimeout(()=>{this.timer=0;this.sample(false);this.schedule(this.sampleMs)},Math.max(80,delay|0))
+  }
+}
+const omsEditorAmbient=new OMSEditorAmbientController();
+window.omsEditorAmbient=omsEditorAmbient;
+
+
+
 class Exporter{
   constructor(){this.running=false;this.exportSessionGuard=new ExportSessionGuard(this);this.layerSelectionPlan=null;this._suspendedPreviewVideos=new Map();this.sharedDecodeStats=null;this._gpuDiagActive=false;this.gpuFastDiag=null;this._offlineAudioDecodeCache=new Map();this._offlineAudioDecodeInflight=new Map()}
   resetGpuFastDiagnostic(){
@@ -20774,7 +21282,8 @@ class Exporter{
 
       const mime=webm?'video/webm':'video/mp4';
       const ext=webm?'webm':'mp4';
-      download(new Blob([target.buffer],{type:mime}),this.exportFilename(ext));
+      const outputBlob=new Blob([target.buffer],{type:mime});
+      omsExportResultPreview.show(outputBlob,this.exportFilename(ext),{engine:gpuFast?'GPU Fast':'Video HW'});
       if(gpuFast){
         const elapsed=Math.max(1,performance.now()-profile.started),actualFps=profile.frames/(elapsed/1000),n=Math.max(1,profile.frames);
         const chunk=stableDecoders?.gpuFastChunkStats||{chunks:0,requests:0,decodeMs:0,nullRecoveries:0};
@@ -21192,10 +21701,8 @@ class Exporter{
 
       const mime=webm?'video/webm':'video/mp4';
       const ext=webm?'webm':'mp4';
-      download(
-        new Blob([target.buffer],{type:mime}),
-        this.exportFilename(ext)
-      );
+      const outputBlob=new Blob([target.buffer],{type:mime});
+      omsExportResultPreview.show(outputBlob,this.exportFilename(ext),{engine:'Eksperimental'});
 
       toast(`Eksperimental selesai • ${fps} FPS • WebCodecs pipeline`)
     }finally{
@@ -21344,7 +21851,8 @@ class Exporter{
       if(!target.buffer)throw Error('Encoder tidak menghasilkan buffer');
       const mime=webm?'video/webm':'video/mp4';
       const ext=webm?'webm':'mp4';
-      download(new Blob([target.buffer],{type:mime}),this.exportFilename(ext));
+      const outputBlob=new Blob([target.buffer],{type:mime});
+      omsExportResultPreview.show(outputBlob,this.exportFilename(ext),{engine:forceSafeWebM?'Stabil Presisi • Safe VP9':'Stabil Presisi'});
       toast(`Ekspor frame-by-frame selesai • ${fps} FPS${forceHardware?' • Video HW':''}${forceSafeWebM?' • Safe VP9':''}`);
     }finally{
       this.disposeStableVideoDecoders(stableDecoders);
@@ -21402,20 +21910,25 @@ class Exporter{
     const settleSuccess=(actualMime,ext)=>{
       if(terminal!=='pending')return false;
       terminal='success';
-      let outputError=null;
+      let outputError=null,outputBlob=null;
+      const filename=this.exportFilename(ext);
       try{
-        const outputBlob=new Blob(chunks,{type:actualMime});
-        download(outputBlob,this.exportFilename(ext))
+        outputBlob=new Blob(chunks,{type:actualMime});
+        if(!outputBlob.size)throw Error('Hasil ekspor Realtime kosong')
       }catch(e){
         terminal='failure';
         outputError=e
       }
       chunks.length=0;
+      // Realtime export owns live tracks/recorder resources, so release those
+      // before the result Blob is handed to the preview player.
       restoreAndCleanup();
       if(outputError){
         console.warn('Penyelesaian ekspor Realtime gagal:',outputError);
         toast('Terjadi kesalahan saat encoding '+codec.label)
       }else{
+        try{omsExportResultPreview.show(outputBlob,filename,{engine:'Cepat Realtime'})}
+        catch(e){console.warn('Preview hasil Realtime gagal:',e);download(outputBlob,filename)}
         toast('Ekspor selesai: '+codec.label)
       }
       return !outputError
@@ -22040,7 +22553,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#languageModal'
 $('#projectSort').onchange=()=>ui.loadProjectList();
 applyHomeLanguage();
 $('#projectInput').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const text=await f.text(),isXML=/\.xml$/i.test(f.name)||/^\s*</.test(text),raw=isXML?XMLBridge.parse(text,f.name):JSON.parse(text),payload=!isXML&&['open-motion-v3','open-motion-v4'].includes(raw.format)?{project:raw.project,layers:raw.layers,selected:raw.selected,time:raw.time,mode3d:raw.mode3d,cameraView:raw.cameraView,snap:raw.snap}:raw;if(!payload.project||!Array.isArray(payload.layers))throw Error('schema');model.restore(payload,{timeOverride:0});history.clear();ui.authorizeEditorOpen();ui.showEditor();toast(isXML?'XML dimigrasikan ke scene 3D':'Paket proyek dibuka')}catch(err){console.error(err);toast('File proyek/XML tidak valid')}e.target.value=''};
-$('#settingsBtn').onclick=()=>{if(!model.project)return;omsDiagnostics.log('ui','OPEN_SETTINGS','',{time:model.time});const d=ui.drawerShell('Project & Environment',`<div class="drawerBody propPanel"><div class="true3dCard"><i>4</i><div><b>Open Motion Scene 4</b><small>WebGL • matriks 4×4 • XML interchange • satu file HTML</small></div></div><div class="propRow"><label>Nama</label><input id="projectNameEdit" value="${esc(model.project.name)}"><span></span></div><div class="colorRow"><input id="bgEdit" type="color" value="${model.project.bg}"><input value="Background" disabled></div><div class="switchRow"><span>Grid Dunia 3D</span><input id="gridEdit" type="checkbox" ${model.project.grid?'checked':''}></div><div class="propRow"><label>Playhead</label><select id="playheadModeSelect"><option value="center">Tetap di Tengah</option><option value="moving">Bergerak (Mode Lama)</option></select><span></span></div><div class="miniNote" id="playheadModeHelp">Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.</div><div class="propRow"><label>Layout 9:16</label><select id="portraitLayoutSelect"><option value="side">Samping (Baru)</option><option value="classic">Horizontal (Klasik)</option></select><span></span></div><div class="miniNote" id="portraitLayoutHelp">Khusus komposisi 9:16 atau lebih tinggi pada mobile. Pilihan ini disimpan di perangkat.</div><div class="propRow"><label>Kualitas Preview</label><select id="previewQualitySelect"><option value="auto">Otomatis</option><option value="1">Penuh — 100%</option><option value="0.75">Tinggi — 75%</option><option value="0.5">Sedang — 50%</option><option value="0.25">Rendah — 25%</option></select><span></span></div><div class="miniNote" id="previewQualityHelp">Kualitas preview hanya memengaruhi editor. Ekspor tetap memakai kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.</div><div class="propRow"><label>Diagnostik</label><button id="openDiagnosticsHub" class="preRenderSettingButton" type="button">BUKA</button><span id="diagnosticSettingState">Nonaktif</span></div><div class="miniNote">Diagnostik modular untuk Timeline, Playback, Video, Audio, Render, Export, GPU Fast, Cache, Memory, dan UI. Semua nonaktif secara default; aktifkan hanya kategori yang sedang diuji.</div><div class="propRow"><label>Uji 1080p</label><select id="nativeCapacityTestTarget"><option value="auto">Auto 4→16</option><option value="4">4 layer</option><option value="6">6 layer</option><option value="8">8 layer</option><option value="10">10 layer</option><option value="12">12 layer</option><option value="16">16 layer</option></select><button id="runNativeCapacityBenchmark" class="diamond" type="button" title="Uji kapasitas native 1080p">▶</button></div><div class="miniNote" id="nativeCapacityStatus">${omsNativeCapacity.summary()}</div><div class="miniNote">Adaptive N-Source mempertahankan sebanyak mungkin video pada decoder native. Saat beban melewati kapasitas terukur, Open Motion menurunkan cadence upload texture layer berprioritas rendah secara progresif sebelum memakai fallback WebCodecs.</div><div class="switchRow"><span>Pre-render Timeline</span><input id="timelinePreRenderToggle" type="checkbox" ${timelinePreRender.enabled?'checked':''}></div><div class="propRow"><label>Mode Pre-render</label><select id="timelinePreRenderMode"><option value="normal">Normal — Real-time</option><option value="follow">Real-time Mengejar — Tanpa Celah</option><option value="semi">Semi Kuat — Prioritas Cache</option><option value="complete">Kuat — Tanpa Lewat Frame</option></select><span></span></div><div class="miniNote" id="timelinePreRenderModeHelp">Normal menjaga real-time dan boleh melewatkan cache jika decoder tertinggal. Real-time Mengejar juga menjaga playhead/audio real-time, tetapi pre-render mempertahankan antrean frame berurutan di belakang playhead dan mengejar tanpa sengaja membuat celah. Semi Kuat memberi frame yang hilang waktu singkat untuk masuk cache sehingga playback boleh sedikit melambat. Kuat menunggu setiap frame. Tombol Rekam Pre-render tetap memaksa Mode Kuat selama aktif.</div><div class="propRow"><label>Mode Cache</label><select id="timelinePreRenderStorage"><option value="lossless">Lossless — Hemat RAM</option><option value="classic">Klasik — RAM Besar, CPU Ringan</option><option value="video">Video HW — Hemat RAM & CPU</option></select><span></span></div><div class="miniNote" id="timelinePreRenderStorageHelp">Lossless memakai Hot ImageBitmap + PNG lossless. Klasik menyimpan ImageBitmap mentah dengan CPU paling ringan. Video HW memakai WebCodecs prefer-hardware untuk kompresi preview berkualitas tinggi: RAM jauh lebih hemat tanpa biaya PNG yang berat; ekspor tidak terpengaruh. ⚠️ Kompatibilitas Video HW bergantung pada browser, SoC, dan driver codec; prefer-hardware tidak menjamin encoder hardware benar-benar dipakai. Jika jalur video tidak didukung atau gagal, Open Motion akan fallback ke Cache Klasik.</div><div class="propRow"><label>Cache Preview</label><button id="clearTimelinePreRender" class="preRenderSettingButton" type="button">BERSIHKAN</button><span></span></div><div class="miniNote" id="timelinePreRenderStatus">${timelinePreRender.statsText()}</div><div class="miniNote">Pre-render Timeline nonaktif secara default agar preview live mendapat prioritas penuh. Jika diaktifkan manual, pilihan disimpan di perangkat. Pada mobile/touch, Mode Normal dan Real-time Mengejar tidak menjalankan decoder pre-render kedua selama Play; Semi Kuat, Kuat, dan Rekam tetap tersedia sebagai mode eksplisit. Garis hijau menunjukkan frame yang benar-benar masih tersedia.</div><div class="miniNote">Editor Camera hanya mengubah sudut pandang kerja. PNG dan video selalu dirender melalui Main Camera tanpa grid atau gizmo editor.</div></div>`);ui.drawerMode='settings';timeline.refreshKeyframeInteractionState?.();$('#projectNameEdit').onchange=e=>{history.push();model.project.name=e.target.value;ui.syncProject()};$('#bgEdit').oninput=e=>{timelinePreRender.invalidate('background');model.project.bg=e.target.value;renderer.render()};$('#gridEdit').onchange=e=>{timelinePreRender.invalidate('grid');model.project.grid=e.target.checked;renderer.render()};const ph=$('#playheadModeSelect');ph.value=model.project.playheadMode||'center';const updateHelp=()=>{$('#playheadModeHelp').textContent=ph.value==='center'?'Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.':'Bergerak (Mode Lama): timeline tetap pada posisi scroll dan playhead bergerak mengikuti waktu.'};updateHelp();ph.onchange=e=>{history.push();model.project.playheadMode=e.target.value;const sc=$('#timelineScroll');if(model.project.playheadMode==='moving')sc.scrollLeft=0;timeline.rebuild();renderer.render();updateHelp()};const portraitSel=$('#portraitLayoutSelect');if(portraitSel){portraitSel.value=portraitSideControls?.layoutPreference?.()||'side';portraitSel.onchange=e=>{portraitSideControls?.setLayoutPreference?.(e.target.value);const changed=portraitSideControls?.sync?.({refit:false});requestAnimationFrame(()=>{ui.fit();timeline.rebuild();if(editorSplit?.isDrawerOpen?.())editorSplit.autoForDrawer(0);else editorSplit?.scheduleFit?.({render:true});if(changed)renderer.render()})}}const diagBtn=$('#openDiagnosticsHub');if(diagBtn)diagBtn.onclick=()=>omsDiagnostics.openPanel();omsDiagnostics.updateSettingState();omsNativeCapacity.updateSettingState();const nativeBenchBtn=$('#runNativeCapacityBenchmark'),nativeBenchTarget=$('#nativeCapacityTestTarget');if(nativeBenchBtn)nativeBenchBtn.onclick=()=>omsNativeBenchmark.open(nativeBenchTarget?.value||'auto');const previewSel=$('#previewQualitySelect'),previewHelp=$('#previewQualityHelp');if(previewSel){previewSel.value=omsPreviewQualityPreference();const updatePreviewHelp=()=>{if(previewHelp)previewHelp.textContent=`Kualitas preview editor saat ini ${omsPreviewQualityPercent()}%. Ekspor tetap kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.`};updatePreviewHelp();previewSel.onchange=e=>{omsSetPreviewQuality(e.target.value);updatePreviewHelp();toast(`Kualitas preview ${omsPreviewQualityPercent()}%`)}}const preRenderToggle=$('#timelinePreRenderToggle');if(preRenderToggle)preRenderToggle.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const enabled=timelinePreRender.setEnabled(e.target.checked);omsDiagnostics.log('cache','PRERENDER_TOGGLE',enabled?'ON':'OFF',{mode:timelinePreRender.mode,storage:timelinePreRender.storageMode});toast(enabled?'Pre-render timeline aktif':'Pre-render timeline nonaktif');if(wasPlaying)clock.start()};const preRenderMode=$('#timelinePreRenderMode'),preRenderModeHelp=$('#timelinePreRenderModeHelp');if(preRenderMode){preRenderMode.value=timelinePreRender.mode;const updatePreRenderModeHelp=()=>{if(!preRenderModeHelp)return;if(preRenderMode.value==='complete')preRenderModeHelp.textContent='Kuat: setiap frame wajib masuk cache sebelum timeline maju. Area yang belum tercache boleh melambat dan hening agar audio tidak lari; saat playhead kembali ke area cache yang siap, audio otomatis diputar sinkron.';else if(preRenderMode.value==='semi')preRenderModeHelp.textContent='Semi Kuat: setiap frame yang hilang diberi waktu singkat untuk exact seek + capture. Playback boleh sedikit melambat dan audio dapat tertahan sesaat, tetapi satu frame berat tidak bisa menghentikan playback tanpa batas.';else if(preRenderMode.value==='follow')preRenderModeHelp.textContent='Real-time Mengejar: playhead dan audio tetap real-time. Pre-render B-frame-safe berjalan sebagai cursor berurutan di belakang playhead; jika perangkat lambat garis hijau akan tertinggal, bukan melompat ke depan dan meninggalkan celah. Worker terus mengejar sampai menyamai bagian timeline yang sudah dilewati.';else preRenderModeHelp.textContent='Normal: playback dan audio tetap real-time, tetapi frame yang masuk pre-render didecode melalui pipeline sequential presentation-order yang sama dengan Kuat/Rekam agar video B-frame aman. Jika decoder tidak sempat mengejar, frame cache boleh terlewat tanpa memperlambat playback.'};updatePreRenderModeHelp();preRenderMode.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const mode=timelinePreRender.setMode(e.target.value);omsDiagnostics.log('cache','PRERENDER_MODE',mode,{enabled:timelinePreRender.enabled});updatePreRenderModeHelp();toast(mode==='complete'?'Pre-render Kuat aktif':mode==='semi'?'Pre-render Semi Kuat aktif':mode==='follow'?'Pre-render Real-time Mengejar aktif':'Pre-render Normal aktif');if(wasPlaying)clock.start()}}const preRenderStorage=$('#timelinePreRenderStorage'),preRenderStorageHelp=$('#timelinePreRenderStorageHelp');if(preRenderStorage){preRenderStorage.value=timelinePreRender.storageMode;const updatePreRenderStorageHelp=()=>{if(!preRenderStorageHelp)return;preRenderStorageHelp.textContent=preRenderStorage.value==='classic'?'Klasik: semua frame cache tetap sebagai ImageBitmap mentah. CPU paling ringan, tetapi RAM jauh lebih besar dan frame lama dieviksi saat batas tercapai.':preRenderStorage.value==='video'?'Video HW: frame dekat playhead tetap ImageBitmap, frame jauh dikompresi sebagai keyframe video WebCodecs dengan preferensi hardware. RAM dan CPU biasanya jauh lebih hemat daripada PNG; kualitas preview sangat tinggi tetapi tidak pixel-identical. Ekspor tetap asli. ⚠️ Kompatibilitas bergantung pada browser, SoC, dan driver codec. prefer-hardware hanya preferensi dan tidak menjamin encoder hardware digunakan; jika encoder/decoder tidak didukung atau gagal, Open Motion otomatis fallback ke Cache Klasik.':'Lossless: frame dekat playhead tetap ImageBitmap, frame jauh dikompresi PNG lossless. FPS/kualitas pixel cache tetap sama, RAM lebih hemat dengan biaya CPU tambahan.'};updatePreRenderStorageHelp();preRenderStorage.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const mode=timelinePreRender.setStorageMode(e.target.value);omsDiagnostics.log('cache','CACHE_STORAGE_MODE',mode,{enabled:timelinePreRender.enabled});updatePreRenderStorageHelp();renderer.render();toast(mode==='classic'?'Cache Klasik aktif • CPU paling ringan':mode==='video'?'Cache Video HW aktif • RAM & CPU hemat':'Cache Lossless aktif • RAM lebih hemat');if(wasPlaying)clock.start()}}const clearPreRender=$('#clearTimelinePreRender');if(clearPreRender)clearPreRender.onclick=()=>{omsDiagnostics.log('cache','CACHE_CLEAR','manual',{stats:timelinePreRender.statsText?.()});timelinePreRender.clear('manual');renderer.render();toast('Cache pre-render dibersihkan')}};
+$('#settingsBtn').onclick=()=>{if(!model.project)return;omsDiagnostics.log('ui','OPEN_SETTINGS','',{time:model.time});const d=ui.drawerShell('Project & Environment',`<div class="drawerBody propPanel"><div class="true3dCard"><i>4</i><div><b>Open Motion Scene 4</b><small>WebGL • matriks 4×4 • XML interchange • satu file HTML</small></div></div><div class="propRow"><label>Nama</label><input id="projectNameEdit" value="${esc(model.project.name)}"><span></span></div><div class="colorRow"><input id="bgEdit" type="color" value="${model.project.bg}"><input value="Background" disabled></div><div class="switchRow"><span>Grid Dunia 3D</span><input id="gridEdit" type="checkbox" ${model.project.grid?'checked':''}></div><div class="propRow"><label>Playhead</label><select id="playheadModeSelect"><option value="center">Tetap di Tengah</option><option value="moving">Bergerak (Mode Lama)</option></select><span></span></div><div class="miniNote" id="playheadModeHelp">Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.</div><div class="propRow"><label>Layout 9:16</label><select id="portraitLayoutSelect"><option value="side">Samping (Baru)</option><option value="classic">Horizontal (Klasik)</option></select><span></span></div><div class="miniNote" id="portraitLayoutHelp">Khusus komposisi 9:16 atau lebih tinggi pada mobile. Pilihan ini disimpan di perangkat.</div><div class="propRow"><label>Kualitas Preview</label><select id="previewQualitySelect"><option value="auto">Otomatis</option><option value="1">Penuh — 100%</option><option value="0.75">Tinggi — 75%</option><option value="0.5">Sedang — 50%</option><option value="0.25">Rendah — 25%</option></select><span></span></div><div class="miniNote" id="previewQualityHelp">Kualitas preview hanya memengaruhi editor. Ekspor tetap memakai kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.</div><div class="switchRow"><span>Ambient Editor</span><input id="editorAmbientToggle" type="checkbox" ${omsEditorAmbient.enabled?'checked':''}></div><div class="miniNote" id="editorAmbientHelp">Aktif secara default dengan intensitas 100%. Warna workspace mengikuti komposisi dengan sampling berkala dan transisi lambat seperti pencahayaan ambient; efek hanya pada UI editor dan tidak masuk ke hasil ekspor. Pilihan disimpan di perangkat.</div><div class="propRow"><label>Intensitas Ambient</label><input id="editorAmbientIntensity" type="range" min="0" max="100" step="5" value="${omsEditorAmbient.intensity}"><span id="editorAmbientIntensityValue">${omsEditorAmbient.intensity}%</span></div><div class="miniNote">Mengatur kekuatan warna ambient tanpa mengubah tampilan dasar UI. Piksel putih/abu terang otomatis diberi bobot lebih kecil agar tidak mendominasi ambient.</div><div class="propRow"><label>Diagnostik</label><button id="openDiagnosticsHub" class="preRenderSettingButton" type="button">BUKA</button><span id="diagnosticSettingState">Nonaktif</span></div><div class="miniNote">Diagnostik modular untuk Timeline, Playback, Video, Audio, Render, Export, GPU Fast, Cache, Memory, dan UI. Semua nonaktif secara default; aktifkan hanya kategori yang sedang diuji.</div><div class="propRow"><label>Uji 1080p</label><select id="nativeCapacityTestTarget"><option value="auto">Auto 4→16</option><option value="4">4 layer</option><option value="6">6 layer</option><option value="8">8 layer</option><option value="10">10 layer</option><option value="12">12 layer</option><option value="16">16 layer</option></select><button id="runNativeCapacityBenchmark" class="diamond" type="button" title="Uji kapasitas native 1080p">▶</button></div><div class="miniNote" id="nativeCapacityStatus">${omsNativeCapacity.summary()}</div><div class="miniNote">Adaptive N-Source mempertahankan sebanyak mungkin video pada decoder native. Saat beban melewati kapasitas terukur, Open Motion menurunkan cadence upload texture layer berprioritas rendah secara progresif sebelum memakai fallback WebCodecs.</div><div class="switchRow"><span>Pre-render Timeline</span><input id="timelinePreRenderToggle" type="checkbox" ${timelinePreRender.enabled?'checked':''}></div><div class="propRow"><label>Mode Pre-render</label><select id="timelinePreRenderMode"><option value="normal">Normal — Real-time</option><option value="follow">Real-time Mengejar — Tanpa Celah</option><option value="semi">Semi Kuat — Prioritas Cache</option><option value="complete">Kuat — Tanpa Lewat Frame</option></select><span></span></div><div class="miniNote" id="timelinePreRenderModeHelp">Normal menjaga real-time dan boleh melewatkan cache jika decoder tertinggal. Real-time Mengejar juga menjaga playhead/audio real-time, tetapi pre-render mempertahankan antrean frame berurutan di belakang playhead dan mengejar tanpa sengaja membuat celah. Semi Kuat memberi frame yang hilang waktu singkat untuk masuk cache sehingga playback boleh sedikit melambat. Kuat menunggu setiap frame. Tombol Rekam Pre-render tetap memaksa Mode Kuat selama aktif.</div><div class="propRow"><label>Mode Cache</label><select id="timelinePreRenderStorage"><option value="lossless">Lossless — Hemat RAM</option><option value="classic">Klasik — RAM Besar, CPU Ringan</option><option value="video">Video HW — Hemat RAM & CPU</option></select><span></span></div><div class="miniNote" id="timelinePreRenderStorageHelp">Lossless memakai Hot ImageBitmap + PNG lossless. Klasik menyimpan ImageBitmap mentah dengan CPU paling ringan. Video HW memakai WebCodecs prefer-hardware untuk kompresi preview berkualitas tinggi: RAM jauh lebih hemat tanpa biaya PNG yang berat; ekspor tidak terpengaruh. ⚠️ Kompatibilitas Video HW bergantung pada browser, SoC, dan driver codec; prefer-hardware tidak menjamin encoder hardware benar-benar dipakai. Jika jalur video tidak didukung atau gagal, Open Motion akan fallback ke Cache Klasik.</div><div class="propRow"><label>Cache Preview</label><button id="clearTimelinePreRender" class="preRenderSettingButton" type="button">BERSIHKAN</button><span></span></div><div class="miniNote" id="timelinePreRenderStatus">${timelinePreRender.statsText()}</div><div class="miniNote">Pre-render Timeline nonaktif secara default agar preview live mendapat prioritas penuh. Jika diaktifkan manual, pilihan disimpan di perangkat. Pada mobile/touch, Mode Normal dan Real-time Mengejar tidak menjalankan decoder pre-render kedua selama Play; Semi Kuat, Kuat, dan Rekam tetap tersedia sebagai mode eksplisit. Garis hijau menunjukkan frame yang benar-benar masih tersedia.</div><div class="miniNote">Editor Camera hanya mengubah sudut pandang kerja. PNG dan video selalu dirender melalui Main Camera tanpa grid atau gizmo editor.</div></div>`);ui.drawerMode='settings';timeline.refreshKeyframeInteractionState?.();$('#projectNameEdit').onchange=e=>{history.push();model.project.name=e.target.value;ui.syncProject()};$('#bgEdit').oninput=e=>{timelinePreRender.invalidate('background');model.project.bg=e.target.value;renderer.render()};$('#gridEdit').onchange=e=>{timelinePreRender.invalidate('grid');model.project.grid=e.target.checked;renderer.render()};const ph=$('#playheadModeSelect');ph.value=model.project.playheadMode||'center';const updateHelp=()=>{$('#playheadModeHelp').textContent=ph.value==='center'?'Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.':'Bergerak (Mode Lama): timeline tetap pada posisi scroll dan playhead bergerak mengikuti waktu.'};updateHelp();ph.onchange=e=>{history.push();model.project.playheadMode=e.target.value;const sc=$('#timelineScroll');if(model.project.playheadMode==='moving')sc.scrollLeft=0;timeline.rebuild();renderer.render();updateHelp()};const portraitSel=$('#portraitLayoutSelect');if(portraitSel){portraitSel.value=portraitSideControls?.layoutPreference?.()||'side';portraitSel.onchange=e=>{portraitSideControls?.setLayoutPreference?.(e.target.value);const changed=portraitSideControls?.sync?.({refit:false});requestAnimationFrame(()=>{ui.fit();timeline.rebuild();if(editorSplit?.isDrawerOpen?.())editorSplit.autoForDrawer(0);else editorSplit?.scheduleFit?.({render:true});if(changed)renderer.render()})}}const diagBtn=$('#openDiagnosticsHub');if(diagBtn)diagBtn.onclick=()=>omsDiagnostics.openPanel();omsDiagnostics.updateSettingState();omsNativeCapacity.updateSettingState();const nativeBenchBtn=$('#runNativeCapacityBenchmark'),nativeBenchTarget=$('#nativeCapacityTestTarget');if(nativeBenchBtn)nativeBenchBtn.onclick=()=>omsNativeBenchmark.open(nativeBenchTarget?.value||'auto');const previewSel=$('#previewQualitySelect'),previewHelp=$('#previewQualityHelp');if(previewSel){previewSel.value=omsPreviewQualityPreference();const updatePreviewHelp=()=>{if(previewHelp)previewHelp.textContent=`Kualitas preview editor saat ini ${omsPreviewQualityPercent()}%. Ekspor tetap kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.`};updatePreviewHelp();previewSel.onchange=e=>{omsSetPreviewQuality(e.target.value);updatePreviewHelp();toast(`Kualitas preview ${omsPreviewQualityPercent()}%`)}}const ambientToggle=$('#editorAmbientToggle'),ambientHelp=$('#editorAmbientHelp');if(ambientToggle){ambientToggle.checked=!!omsEditorAmbient.enabled;ambientToggle.onchange=e=>{const enabled=omsEditorAmbient.setEnabled(e.target.checked);if(ambientHelp)ambientHelp.textContent=enabled?'Aktif • workspace mengikuti warna komposisi dengan sampling ±2 detik dan transisi ±2,4 detik. Hanya UI editor; ekspor tidak terpengaruh.':'Ambient Editor nonaktif. Aktifkan untuk membuat warna workspace mengikuti komposisi dengan sampling berkala dan transisi lambat; efek hanya pada UI editor dan tidak masuk ke hasil ekspor. Pilihan disimpan di perangkat.';toast(enabled?'Ambient Editor aktif':'Ambient Editor nonaktif')}}const ambientIntensity=$('#editorAmbientIntensity'),ambientIntensityValue=$('#editorAmbientIntensityValue');if(ambientIntensity){ambientIntensity.value=String(omsEditorAmbient.intensity);const updateAmbientIntensity=()=>{const v=omsEditorAmbient.setIntensity(ambientIntensity.value);if(ambientIntensityValue)ambientIntensityValue.textContent=`${v}%`};ambientIntensity.oninput=updateAmbientIntensity;ambientIntensity.onchange=updateAmbientIntensity}const preRenderToggle=$('#timelinePreRenderToggle');if(preRenderToggle)preRenderToggle.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const enabled=timelinePreRender.setEnabled(e.target.checked);omsDiagnostics.log('cache','PRERENDER_TOGGLE',enabled?'ON':'OFF',{mode:timelinePreRender.mode,storage:timelinePreRender.storageMode});toast(enabled?'Pre-render timeline aktif':'Pre-render timeline nonaktif');if(wasPlaying)clock.start()};const preRenderMode=$('#timelinePreRenderMode'),preRenderModeHelp=$('#timelinePreRenderModeHelp');if(preRenderMode){preRenderMode.value=timelinePreRender.mode;const updatePreRenderModeHelp=()=>{if(!preRenderModeHelp)return;if(preRenderMode.value==='complete')preRenderModeHelp.textContent='Kuat: setiap frame wajib masuk cache sebelum timeline maju. Area yang belum tercache boleh melambat dan hening agar audio tidak lari; saat playhead kembali ke area cache yang siap, audio otomatis diputar sinkron.';else if(preRenderMode.value==='semi')preRenderModeHelp.textContent='Semi Kuat: setiap frame yang hilang diberi waktu singkat untuk exact seek + capture. Playback boleh sedikit melambat dan audio dapat tertahan sesaat, tetapi satu frame berat tidak bisa menghentikan playback tanpa batas.';else if(preRenderMode.value==='follow')preRenderModeHelp.textContent='Real-time Mengejar: playhead dan audio tetap real-time. Pre-render B-frame-safe berjalan sebagai cursor berurutan di belakang playhead; jika perangkat lambat garis hijau akan tertinggal, bukan melompat ke depan dan meninggalkan celah. Worker terus mengejar sampai menyamai bagian timeline yang sudah dilewati.';else preRenderModeHelp.textContent='Normal: playback dan audio tetap real-time, tetapi frame yang masuk pre-render didecode melalui pipeline sequential presentation-order yang sama dengan Kuat/Rekam agar video B-frame aman. Jika decoder tidak sempat mengejar, frame cache boleh terlewat tanpa memperlambat playback.'};updatePreRenderModeHelp();preRenderMode.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const mode=timelinePreRender.setMode(e.target.value);omsDiagnostics.log('cache','PRERENDER_MODE',mode,{enabled:timelinePreRender.enabled});updatePreRenderModeHelp();toast(mode==='complete'?'Pre-render Kuat aktif':mode==='semi'?'Pre-render Semi Kuat aktif':mode==='follow'?'Pre-render Real-time Mengejar aktif':'Pre-render Normal aktif');if(wasPlaying)clock.start()}}const preRenderStorage=$('#timelinePreRenderStorage'),preRenderStorageHelp=$('#timelinePreRenderStorageHelp');if(preRenderStorage){preRenderStorage.value=timelinePreRender.storageMode;const updatePreRenderStorageHelp=()=>{if(!preRenderStorageHelp)return;preRenderStorageHelp.textContent=preRenderStorage.value==='classic'?'Klasik: semua frame cache tetap sebagai ImageBitmap mentah. CPU paling ringan, tetapi RAM jauh lebih besar dan frame lama dieviksi saat batas tercapai.':preRenderStorage.value==='video'?'Video HW: frame dekat playhead tetap ImageBitmap, frame jauh dikompresi sebagai keyframe video WebCodecs dengan preferensi hardware. RAM dan CPU biasanya jauh lebih hemat daripada PNG; kualitas preview sangat tinggi tetapi tidak pixel-identical. Ekspor tetap asli. ⚠️ Kompatibilitas bergantung pada browser, SoC, dan driver codec. prefer-hardware hanya preferensi dan tidak menjamin encoder hardware digunakan; jika encoder/decoder tidak didukung atau gagal, Open Motion otomatis fallback ke Cache Klasik.':'Lossless: frame dekat playhead tetap ImageBitmap, frame jauh dikompresi PNG lossless. FPS/kualitas pixel cache tetap sama, RAM lebih hemat dengan biaya CPU tambahan.'};updatePreRenderStorageHelp();preRenderStorage.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const mode=timelinePreRender.setStorageMode(e.target.value);omsDiagnostics.log('cache','CACHE_STORAGE_MODE',mode,{enabled:timelinePreRender.enabled});updatePreRenderStorageHelp();renderer.render();toast(mode==='classic'?'Cache Klasik aktif • CPU paling ringan':mode==='video'?'Cache Video HW aktif • RAM & CPU hemat':'Cache Lossless aktif • RAM lebih hemat');if(wasPlaying)clock.start()}}const clearPreRender=$('#clearTimelinePreRender');if(clearPreRender)clearPreRender.onclick=()=>{omsDiagnostics.log('cache','CACHE_CLEAR','manual',{stats:timelinePreRender.statsText?.()});timelinePreRender.clear('manual');renderer.render();toast('Cache pre-render dibersihkan')}};
 
 document.addEventListener('keydown',e=>{const tag=document.activeElement?.tagName;if(['INPUT','SELECT','TEXTAREA'].includes(tag))return;if(e.code==='Space'){e.preventDefault();clock.toggle()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?history.redo():history.undo()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();ui.saveLocal()}if(e.key==='Delete'&&model.selected){history.push();model.removeLayer(model.selected);ui.rebuildAll()}});
 window.addEventListener('resize',()=>{
@@ -22054,8 +22567,8 @@ window.addEventListener('resize',()=>{
   }
 });
 
-bus.on('model:restored',()=>{renderer.resize();ui.rebuildAll()});
-bus.on('project:duration',()=>{timeline.rebuild();renderer.render()});
+bus.on('model:restored',()=>{renderer.resize();ui.rebuildAll();omsEditorAmbient?.nudge?.(260)});
+bus.on('project:duration',()=>{timeline.rebuild();renderer.render();omsEditorAmbient?.nudge?.(420)});
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     persistentStore.saveLiteSync();
@@ -22070,6 +22583,7 @@ document.addEventListener('visibilitychange',()=>{
     renderer.endInteraction();
     media.releaseTransientCaches()
   }else if(model.project){
+    omsEditorAmbient?.nudge?.(300);
     media.sync(model.time,false);
     renderer.render()
   }
@@ -22946,7 +23460,14 @@ scheduleWholeAppLanguage();
   if (!notice || !accept) return;
 
   const closeNotice = () => notice.setAttribute('aria-hidden', 'true');
-  accept.addEventListener('click', closeNotice);
+  accept.addEventListener('click', () => {
+    closeNotice();
+    // V5.32 — PWA promotion is allowed only after the user explicitly accepts
+    // the experimental notice. This prevents the install card from competing
+    // with the first-run notice or covering the Home UI during startup.
+    window.__omsExperimentalNoticeAccepted = true;
+    window.dispatchEvent(new CustomEvent('oms:experimental-notice-accepted'));
+  });
   notice.addEventListener('click', (event) => {
     if (event.target === notice) closeNotice();
   });
@@ -25017,74 +25538,69 @@ html.omsMobileLandscapeDesktop #preRenderRecordBtn{left:35px!important}
 <!-- V5.14 — Divergent Chunk Decode + Diagnostics Hub: selective Timeline/Playback/Video/Audio/Render/Export/GPU/Cache/Memory/UI diagnostics in Project & Environment; all categories default OFF. -->
 <!-- V5.27 — Video Resolution + Runtime Diagnostics: retains V5.26 Adaptive N-Source and 1080p benchmark, adds per-source videoWidth/videoHeight/megapixels and sampled callback FPS/seeking/presented-frame runtime data to diagnose which high-resolution decoder stalls under 8–16 simultaneous sources. V5.24 fallback remains untouched. -->
 
-<script id="oms-v531-pwa-install-script">
+<script id="oms-v533-pwa-install-script">
 (() => {
   'use strict';
-  const banner=document.getElementById('omsPwaInstallBanner');
-  const installBtn=document.getElementById('omsPwaInstallBtn');
-  const closeBtn=document.getElementById('omsPwaInstallClose');
-  if(!banner||!installBtn||!closeBtn)return;
+  const installBtn=document.getElementById('homeInstallBtn');
+  if(!installBtn)return;
 
   let deferredInstallPrompt=null;
-  const DISMISS_KEY='oms_pwa_install_dismissed_until_v531';
   const isStandalone=()=>window.matchMedia?.('(display-mode: standalone)').matches===true ||
     window.navigator.standalone===true;
-  const dismissed=()=>{
-    try{return Date.now()<Number(localStorage.getItem(DISMISS_KEY)||0)}catch(_){return false}
+  const refreshState=()=>{
+    const standalone=isStandalone();
+    installBtn.hidden=standalone;
+    installBtn.classList.toggle('ready',!!deferredInstallPrompt&&!standalone);
+    installBtn.title=deferredInstallPrompt?'Instal Open Motion':'Instal Open Motion';
   };
-  const show=()=>{
-    if(!isStandalone()&&!dismissed())banner.classList.add('show');
-  };
-  const hide=()=>banner.classList.remove('show');
 
   window.addEventListener('beforeinstallprompt',event=>{
-    // Do not preventDefault here: Chrome remains free to show its own native
-    // install promotion (the style seen in Chromium's browser UI).
+    // Keep Chrome's install event so the persistent Home button can invoke it.
+    event.preventDefault();
     deferredInstallPrompt=event;
-    show();
+    refreshState();
   });
 
   installBtn.addEventListener('click',async()=>{
-    if(isStandalone()){hide();return}
+    if(isStandalone()){refreshState();return}
     if(!deferredInstallPrompt){
-      try{window.toast?.('Di Chrome, buka menu ⋮ lalu pilih Instal aplikasi / Tambahkan ke layar utama.')}catch(_){}
+      const local=location.protocol==='file:'||location.protocol==='content:';
+      try{
+        window.toast?.(local
+          ? 'Instal PWA hanya tersedia dari situs HTTPS. Buka Open Motion melalui GitHub Pages.'
+          : 'Chrome belum menyiapkan prompt instal. Coba menu ⋮ → Instal aplikasi / Tambahkan ke layar utama.');
+      }catch(_){}
       return;
     }
-    installBtn.disabled=true;
-    const original=installBtn.textContent;
-    installBtn.textContent='...';
+
+    installBtn.setAttribute('aria-busy','true');
     try{
-      const result=await deferredInstallPrompt.prompt();
-      if(result?.outcome==='accepted'){
-        hide();
-      }else{
-        installBtn.textContent=original;
+      const promptEvent=deferredInstallPrompt;
+      const result=await promptEvent.prompt();
+      // A captured beforeinstallprompt can only be used once.
+      deferredInstallPrompt=null;
+      refreshState();
+      if(result?.outcome==='dismissed'){
+        try{window.toast?.('Instalasi dibatalkan. Tombol INSTAL akan aktif lagi saat Chrome menawarkan prompt baru.')}catch(_){}
       }
     }catch(error){
       console.warn('[Open Motion PWA] install prompt gagal:',error);
-      try{window.toast?.('Prompt instal belum tersedia. Coba menu ⋮ Chrome → Instal aplikasi.')}catch(_){}
-      installBtn.textContent=original;
-    }finally{
       deferredInstallPrompt=null;
-      installBtn.disabled=false;
+      refreshState();
+      try{window.toast?.('Prompt instal belum tersedia. Coba menu ⋮ Chrome → Instal aplikasi.')}catch(_){}
+    }finally{
+      installBtn.removeAttribute('aria-busy');
     }
-  });
-
-  closeBtn.addEventListener('click',()=>{
-    hide();
-    try{localStorage.setItem(DISMISS_KEY,String(Date.now()+7*24*60*60*1000))}catch(_){}
   });
 
   window.addEventListener('appinstalled',()=>{
     deferredInstallPrompt=null;
-    hide();
-    try{localStorage.removeItem(DISMISS_KEY)}catch(_){}
+    refreshState();
     try{window.toast?.('Open Motion berhasil diinstal.')}catch(_){}
   });
 
-  window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change',e=>{
-    if(e.matches)hide();
-  });
+  window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change',refreshState);
+  refreshState();
 
   if('serviceWorker' in navigator && (location.protocol==='https:' ||
       location.hostname==='localhost' || location.hostname==='127.0.0.1')){
@@ -25095,8 +25611,9 @@ html.omsMobileLandscapeDesktop #preRenderRecordBtn{left:35px!important}
   }
 })();
 </script>
-<!-- V5.31 — PWA install prompt + branded launcher/home-screen icon. -->
+<!-- V5.33 — persistent INSTAL action moved into the Home header beside the language button; temporary install banner removed. -->
 
+<!-- V5.42 — Optional YouTube-inspired editor ambient mode: OFF by default, white-suppressed color sampling, adjustable intensity, sparse 40×24 sampling, and slow UI-only color transitions. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
