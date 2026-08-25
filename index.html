@@ -1,12 +1,24 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+<!-- V5.31 — Installable PWA shell: Chrome/Android install promotion, branded Open Motion icons, standalone display, service worker offline shell, and in-app install fallback. -->
 <!-- V5.29 — Desktop Native Pipeline: desktop multi-source preview now uses the same adaptive native HTMLVideo -> direct WebGL path as capable touch devices; GPU Fast chooses hardware-preferred source decode on desktop, preserves the mobile codec-budget policy, and downgrades an unsupported VideoSampleSink source to CanvasSink before falling back to HTMLVideo. -->
 <!-- V5.30 — Mobile GPU Fast regression hotfix: desktop-only CanvasSink recovery is now strictly isolated from coarse/touch devices. Mobile restores the V5.28 compatibility fallback after an unsupported VideoSampleSink, avoiding persistent CanvasSink decode/copy overhead while preserving all V5.29 desktop native/hardware fixes. -->
 <!-- V5.07 — Stage 5: worker-assisted off-main-thread multi-source preview decode. Different-source overlaps prefer a Blob module Worker running Mediabunny CanvasSink + OffscreenCanvas/createImageBitmap, transferable ImageBitmap frames feed the existing WebGL compositor, same-asset divergent cursors retain V5.06 HTMLVideo playback, and the entire V5.05 main-thread ring-buffer decoder remains an automatic fallback. Exporter remains unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>Open Motion Studio 4.0 — True 3D</title>
+<!-- V5.31 — Installable PWA: manifest, branded icons, Chrome install promotion and offline shell. -->
+<meta name="theme-color" content="#10121d">
+<meta name="application-name" content="Open Motion">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Open Motion">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="64x64" href="./icons/favicon-64.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+
 <style>
 :root{
   --bg:#10121d;--bg2:#151827;--panel:#1a1d2d;--panel2:#202437;--line:#30364c;
@@ -3155,6 +3167,61 @@ input[type=range]{accent-color:var(--accent)}
   .editor.topBarCollapsed .editorTop .topActions{top:10px!important;right:12px!important;width:58px!important;height:27px!important}
   .editor.topBarCollapsed #modeBadge{top:10px!important;right:82px!important}
 }
+
+/* V5.31 — installable PWA promotion. Browser-native install UI remains under
+   Chrome's control; this in-app card is a deterministic fallback. */
+.omsPwaInstallBanner{
+  display:none;
+  width:min(690px,calc(100% - 24px));
+  margin:12px auto 0;
+  padding:12px 12px 12px 13px;
+  grid-template-columns:48px minmax(0,1fr) auto 30px;
+  align-items:center;
+  gap:11px;
+  border:1px solid rgba(255,255,255,.11);
+  border-radius:16px;
+  background:#191b22;
+  color:#f5f7fb;
+  box-shadow:0 14px 38px rgba(0,0,0,.24);
+}
+.omsPwaInstallBanner.show{display:grid}
+.omsPwaInstallLogo{
+  width:48px;height:48px;display:block;object-fit:cover;
+  border-radius:12px;background:#000;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.omsPwaInstallCopy{min-width:0}
+.omsPwaInstallCopy b{
+  display:block;font-size:13px;line-height:1.15;letter-spacing:.005em
+}
+.omsPwaInstallCopy small{
+  display:block;margin-top:4px;color:#9da3af;font-size:9px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.omsPwaInstallBtn{
+  min-width:76px;height:36px;padding:0 14px;border:0;border-radius:10px;
+  background:#73e2bd;color:#071b17;font-weight:850;font-size:10px;
+}
+.omsPwaInstallBtn:disabled{opacity:.58}
+.omsPwaInstallClose{
+  width:30px;height:30px;border:0;border-radius:9px;background:transparent;
+  color:#a8adb7;font-size:21px;line-height:1
+}
+.omsPwaInstallClose:active{background:rgba(255,255,255,.08)}
+@media(max-width:520px){
+  .omsPwaInstallBanner{
+    width:calc(100% - 20px);margin-top:10px;padding:10px;
+    grid-template-columns:44px minmax(0,1fr) auto 26px;gap:9px;border-radius:14px
+  }
+  .omsPwaInstallLogo{width:44px;height:44px;border-radius:11px}
+  .omsPwaInstallCopy b{font-size:12px}
+  .omsPwaInstallBtn{min-width:64px;height:34px;padding:0 11px}
+  .omsPwaInstallClose{width:26px;height:30px}
+}
+@media(display-mode:standalone){
+  .omsPwaInstallBanner{display:none!important}
+}
+
 </style>
 </head>
 <body>
@@ -3178,6 +3245,16 @@ input[type=range]{accent-color:var(--accent)}
         </button>
       </div>
     </header>
+
+    <aside id="omsPwaInstallBanner" class="omsPwaInstallBanner" aria-live="polite" aria-label="Instal Open Motion">
+      <img class="omsPwaInstallLogo" src="./icons/open-motion-192.png" alt="" />
+      <div class="omsPwaInstallCopy">
+        <b id="omsPwaInstallTitle">Instal Open Motion</b>
+        <small id="omsPwaInstallSubtitle">Buka seperti aplikasi dan buat pintasan di perangkat</small>
+      </div>
+      <button id="omsPwaInstallBtn" class="omsPwaInstallBtn" type="button">INSTAL</button>
+      <button id="omsPwaInstallClose" class="omsPwaInstallClose" type="button" aria-label="Tutup">×</button>
+    </aside>
 
     <main class="homeMain">
       <section class="projectsWrap" aria-labelledby="workspaceTitle">
@@ -24939,6 +25016,87 @@ html.omsMobileLandscapeDesktop #preRenderRecordBtn{left:35px!important}
 <!-- V4.93 — shared media decode pool: exact duplicate preview clips share one active visual decoder; offline WebCodecs engines allocate one decoder per assetId/source and fan one decoded frame out to all matching layers; preview codec surfaces are suspended during offline export to free mobile decoder slots. -->
 <!-- V5.14 — Divergent Chunk Decode + Diagnostics Hub: selective Timeline/Playback/Video/Audio/Render/Export/GPU/Cache/Memory/UI diagnostics in Project & Environment; all categories default OFF. -->
 <!-- V5.27 — Video Resolution + Runtime Diagnostics: retains V5.26 Adaptive N-Source and 1080p benchmark, adds per-source videoWidth/videoHeight/megapixels and sampled callback FPS/seeking/presented-frame runtime data to diagnose which high-resolution decoder stalls under 8–16 simultaneous sources. V5.24 fallback remains untouched. -->
+
+<script id="oms-v531-pwa-install-script">
+(() => {
+  'use strict';
+  const banner=document.getElementById('omsPwaInstallBanner');
+  const installBtn=document.getElementById('omsPwaInstallBtn');
+  const closeBtn=document.getElementById('omsPwaInstallClose');
+  if(!banner||!installBtn||!closeBtn)return;
+
+  let deferredInstallPrompt=null;
+  const DISMISS_KEY='oms_pwa_install_dismissed_until_v531';
+  const isStandalone=()=>window.matchMedia?.('(display-mode: standalone)').matches===true ||
+    window.navigator.standalone===true;
+  const dismissed=()=>{
+    try{return Date.now()<Number(localStorage.getItem(DISMISS_KEY)||0)}catch(_){return false}
+  };
+  const show=()=>{
+    if(!isStandalone()&&!dismissed())banner.classList.add('show');
+  };
+  const hide=()=>banner.classList.remove('show');
+
+  window.addEventListener('beforeinstallprompt',event=>{
+    // Do not preventDefault here: Chrome remains free to show its own native
+    // install promotion (the style seen in Chromium's browser UI).
+    deferredInstallPrompt=event;
+    show();
+  });
+
+  installBtn.addEventListener('click',async()=>{
+    if(isStandalone()){hide();return}
+    if(!deferredInstallPrompt){
+      try{window.toast?.('Di Chrome, buka menu ⋮ lalu pilih Instal aplikasi / Tambahkan ke layar utama.')}catch(_){}
+      return;
+    }
+    installBtn.disabled=true;
+    const original=installBtn.textContent;
+    installBtn.textContent='...';
+    try{
+      const result=await deferredInstallPrompt.prompt();
+      if(result?.outcome==='accepted'){
+        hide();
+      }else{
+        installBtn.textContent=original;
+      }
+    }catch(error){
+      console.warn('[Open Motion PWA] install prompt gagal:',error);
+      try{window.toast?.('Prompt instal belum tersedia. Coba menu ⋮ Chrome → Instal aplikasi.')}catch(_){}
+      installBtn.textContent=original;
+    }finally{
+      deferredInstallPrompt=null;
+      installBtn.disabled=false;
+    }
+  });
+
+  closeBtn.addEventListener('click',()=>{
+    hide();
+    try{localStorage.setItem(DISMISS_KEY,String(Date.now()+7*24*60*60*1000))}catch(_){}
+  });
+
+  window.addEventListener('appinstalled',()=>{
+    deferredInstallPrompt=null;
+    hide();
+    try{localStorage.removeItem(DISMISS_KEY)}catch(_){}
+    try{window.toast?.('Open Motion berhasil diinstal.')}catch(_){}
+  });
+
+  window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change',e=>{
+    if(e.matches)hide();
+  });
+
+  if('serviceWorker' in navigator && (location.protocol==='https:' ||
+      location.hostname==='localhost' || location.hostname==='127.0.0.1')){
+    window.addEventListener('load',()=>{
+      navigator.serviceWorker.register('./sw.js',{scope:'./'})
+        .catch(error=>console.warn('[Open Motion PWA] service worker gagal:',error));
+    },{once:true});
+  }
+})();
+</script>
+<!-- V5.31 — PWA install prompt + branded launcher/home-screen icon. -->
+
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
