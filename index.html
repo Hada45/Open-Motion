@@ -1,11 +1,15 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+<!-- V5.76 — True fullscreen export preview. Fullscreen video now occupies the entire viewport; transport controls are an overlay that starts hidden, appears on desktop mouse movement or mobile touch, then auto-hides again after inactivity. V5.75 fast tail finalize + native-resolution GPU Fast export are preserved. -->
+<!-- V5.73 — GPU Fast native-resolution export: the WebGL drawing buffer temporarily switches to the selected export resolution, so full-resolution video textures are composited directly at output pixel density instead of rasterizing at project resolution and letting VideoEncoder upscale the whole frame. The editor/preview returns to project resolution after export. -->
 <!-- V5.37 — Ambient export preview + simplified playhead + clean export header. -->
 <!-- V5.36 — Smooth rAF export playhead + redesigned export result controls. -->
 <!-- V5.32 — PWA install UX: promotion waits for explicit experimental-notice acceptance and auto-hides after 6 seconds. -->
 <!-- V5.29 — Desktop Native Pipeline: desktop multi-source preview now uses the same adaptive native HTMLVideo -> direct WebGL path as capable touch devices; GPU Fast chooses hardware-preferred source decode on desktop, preserves the mobile codec-budget policy, and downgrades an unsupported VideoSampleSink source to CanvasSink before falling back to HTMLVideo. -->
+<!-- V5.74 — GPU Fast tail-frame hold: final source timestamps that fall after the last decodable presentation reuse the most recent valid frame instead of downgrading/aborting; offline compatibility decode gets the same bounded tail hold. -->
 <!-- V5.30 — Mobile GPU Fast regression hotfix: desktop-only CanvasSink recovery is now strictly isolated from coarse/touch devices. Mobile restores the V5.28 compatibility fallback after an unsupported VideoSampleSink, avoiding persistent CanvasSink decode/copy overhead while preserving all V5.29 desktop native/hardware fixes. -->
+<!-- V5.78 — GPU Fast root EOS fix: derive the final presentation target from the last encoded video packet start (not the packet end/container duration), deduplicate repeated terminal timestamps, and reuse the already-decoded terminal frame. V5.76 true fullscreen auto-hide controls are preserved. V5.74/V5.75 tail holds remain emergency-only fallbacks. -->
 <!-- V5.07 — Stage 5: worker-assisted off-main-thread multi-source preview decode. Different-source overlaps prefer a Blob module Worker running Mediabunny CanvasSink + OffscreenCanvas/createImageBitmap, transferable ImageBitmap frames feed the existing WebGL compositor, same-asset divergent cursors retain V5.06 HTMLVideo playback, and the entire V5.05 main-thread ring-buffer decoder remains an automatic fallback. Exporter remains unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -1214,7 +1218,7 @@ input[type=range]{accent-color:var(--accent)}
 }
 .easeEditorHead b{
   color:#eef3ff;
-  font-size:9px;
+  font-size:8.5px;
   letter-spacing:.35px;
   text-transform:uppercase;
 }
@@ -2467,6 +2471,302 @@ input[type=range]{accent-color:var(--accent)}
   .cameraLensFocalRow{grid-template-columns:92px minmax(0,1fr)}
 }
 
+
+/* V5.46 — Curve Editor: advanced Value / Speed graph built on the existing
+   keyframe graph. Easing remains the quick-control surface; this drawer is the
+   precise editor for the same keyframe/easing data. */
+.drawer.curveGraphDrawer{
+  height:min(82dvh,760px)!important;
+  max-height:82dvh!important;
+}
+.curveGraphBody{
+  padding:10px 12px 12px!important;
+  gap:6px!important;
+  overflow:hidden!important;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr);
+  flex:1 1 auto;
+  min-height:0;
+  height:auto;
+  box-sizing:border-box;
+}
+.curveGraphTop{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto auto;
+  gap:8px;
+  align-items:center;
+}
+.curveGraphProp{
+  min-width:0;
+  height:38px;
+  border:1px solid #343c51;
+  border-radius:10px;
+  background:#171c2a;
+  color:#eef2fa;
+  padding:0 10px;
+}
+.curveGraphTabs{
+  display:flex;
+  padding:3px;
+  border:1px solid #31394d;
+  border-radius:10px;
+  background:#111622;
+}
+.curveGraphTabs button{
+  min-width:58px;
+  height:30px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#929db2;
+  font-weight:800;
+  font-size:10px;
+}
+.curveGraphTabs button.active{
+  background:#283146;
+  color:#f7f9ff;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.curveAddKey{
+  width:38px;height:38px;border-radius:10px;
+  border:1px solid rgba(0,215,167,.4)!important;
+  background:rgba(0,215,167,.09)!important;
+  color:#64e6c8!important;font-size:19px;
+}
+.curveAddKey.transformKeyOn{
+  color:#ff6da9!important;
+  border-color:#ff6da9!important;
+  background:rgba(255,109,169,.09)!important;
+}
+.curveGraphStage{
+  position:relative;
+  overflow:hidden;
+  min-height:0;
+  border:1px solid #30384d;
+  border-radius:12px;
+  background:linear-gradient(180deg,#101521,#0d111b);
+  box-shadow:inset 0 1px rgba(255,255,255,.025);
+}
+.curveGraphCanvas{
+  display:block;
+  width:100%;
+  height:250px;
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  touch-action:none;
+}
+.curveGraphHint{
+  position:absolute;
+  left:10px;bottom:8px;
+  pointer-events:none;
+  color:#6f7b91;
+  font-size:9px;
+  letter-spacing:.02em;
+}
+
+.curveKeyMetaBar{
+  display:none;
+}
+.curveKeyChip{
+  position:static;
+  align-self:center;
+  justify-self:stretch;
+  min-width:0;
+  max-width:100%;
+  height:30px;
+  padding:0 10px;
+  border:1px solid rgba(99,226,198,.34);
+  border-radius:999px;
+  background:rgba(14,20,31,.88);
+  color:#bfeee2;
+  font-size:9px;
+  font-weight:800;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+.curveKeyChip:disabled{opacity:.38}
+.curveKeyPopover{
+  position:absolute;
+  left:8px;
+  right:8px;
+  bottom:8px;
+  z-index:9;
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  border:1px solid #384158;
+  border-radius:11px;
+  background:rgba(16,21,32,.96);
+  box-shadow:0 12px 34px rgba(0,0,0,.38);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+.curveKeyPopover.hidden{display:none}
+.curveKeyPopoverHead{
+  display:grid;
+  grid-template-columns:28px minmax(0,1fr) 28px 28px;
+  gap:5px;
+  align-items:center;
+}
+.curveKeyPopoverHead button{
+  height:28px;
+  border:1px solid #30384b;
+  border-radius:7px;
+  background:#1b2130;
+  color:#d3dbea;
+  font-size:15px;
+  font-weight:900;
+}
+.curveKeyPopoverHead b{
+  min-width:0;
+  text-align:center;
+  color:#bfc9dc;
+  font-size:9px;
+  letter-spacing:.03em;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.curveKeyPopover .curveSelection{grid-template-columns:1fr 1fr minmax(92px,1.15fr)}
+.curveKeyPopover .curvePresetGrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+.curveKeyPopover .curvePresetGrid button{height:27px;font-size:8px;padding:0 3px}
+.curveGraphPlayhead{
+  position:absolute;
+  top:6.6667%;
+  bottom:10%;
+  left:7.5556%;
+  width:1.5px;
+  background:rgba(255,255,255,.82);
+  transform:translateX(-50%);
+  pointer-events:none;
+  z-index:4;
+  will-change:left;
+  box-shadow:0 0 0 .35px rgba(255,255,255,.15);
+}
+.curveCompactArea{
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:8px;
+  border:1px solid #30384b;
+  border-radius:12px;
+  background:#151b28;
+  overflow:hidden;
+}
+.curveSelection{
+  display:grid;
+  grid-template-columns:1fr 1fr minmax(96px,1.15fr);
+  gap:7px;
+  align-items:end;
+}
+.curveSelection label{display:grid;gap:4px;color:#7f899d;font-size:9px;font-weight:750}
+.curveSelection input{
+  width:100%;height:34px;border:1px solid #343d53;border-radius:8px;
+  background:#101520;color:#edf2fc;padding:0 8px;font-size:11px;
+}
+.curveEaseBox{min-width:0}
+.curveEaseReadout{
+  height:34px;border:1px solid #343d53;border-radius:8px;background:#101520;
+  color:#dce5f5;padding:0 9px;display:flex;align-items:center;justify-content:space-between;gap:7px;
+  font-size:10px;white-space:nowrap;overflow:hidden;
+}
+.curveEaseReadout b{overflow:hidden;text-overflow:ellipsis}
+.curveEaseReadout button{
+  border:0;border-radius:6px;background:#283248;color:#dffaf3;height:24px;padding:0 7px;font-size:9px;font-weight:850;
+}
+.curvePresetGrid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+}
+.curvePresetGrid button{
+  min-width:0;height:31px;border:1px solid #343d52;border-radius:8px;background:#1c2231;
+  color:#9aa5ba;padding:0 7px;font-size:9px;font-weight:800;
+}
+.curvePresetGrid button.active{border-color:rgba(0,215,167,.7);color:#6fe9cd;background:rgba(0,215,167,.08)}
+.curveKeyNavigator{
+  display:grid;
+  grid-template-columns:34px minmax(0,1fr) 34px;
+  gap:7px;
+  align-items:center;
+}
+.curveKeyNavigator button{
+  height:30px;border:1px solid #30384b;border-radius:8px;background:#1b2130;color:#cfd7e6;font-size:17px;font-weight:900;
+}
+.curveKeyNavigator button:disabled{opacity:.32}
+.curveKeyNavigator b{font-size:10px;color:#b8c2d6;text-align:center;letter-spacing:.04em}
+.curveKeyList{display:grid;gap:6px;min-height:0}
+.curveKeyRow{
+  display:grid;grid-template-columns:22px 58px minmax(0,1fr) 30px;gap:6px;align-items:center;
+  padding:5px 6px;border:1px solid #2c3448;border-radius:9px;background:#111722;
+}
+.curveKeyRow.selected{border-color:rgba(0,215,167,.52);background:rgba(0,215,167,.055)}
+.curveKeyRow .curveDiamond{width:10px;height:10px;transform:rotate(45deg);border:1.5px solid #dce4f3;margin-left:4px;background:#151a27}
+.curveKeyRow.selected .curveDiamond{background:#65e1c5;border-color:#8bf0da}
+.curveKeyRow small{color:#8590a5;font-variant-numeric:tabular-nums;font-size:10px}
+.curveKeyRow input{height:30px;min-width:0;border:1px solid #313a50;border-radius:7px;background:#0f141f;color:#e5ebf6;padding:0 7px}
+.curveKeyRow button{height:30px;border:0;border-radius:7px;background:#252c3d;color:#aab4c7}
+.curveGraphNote{color:#768196;font-size:9px;line-height:1.4;padding:0 1px}
+.curveCompactEdit,.curveCompactKeys{display:flex;flex-direction:column;gap:8px;min-height:0}
+.easeEditorFoot #openCurveEditor{border-color:rgba(0,215,167,.42);color:#76ead1;background:rgba(0,215,167,.08)}
+@media(max-width:520px){
+  .drawer.curveGraphDrawer{height:min(72dvh,560px)!important;max-height:min(72dvh,560px)!important;overflow:hidden!important}
+  .drawer.curveGraphDrawer>.drawerHead{height:38px;min-height:38px;padding:0 8px}
+  .drawer.curveGraphDrawer>.drawerHead b{font-size:12px}
+  .curveGraphBody{
+    padding:7px 9px 8px!important;
+    gap:6px!important;
+    grid-template-rows:34px minmax(128px,1fr);
+    flex:1 1 auto;
+    min-height:0;
+    height:auto;
+  }
+  .curveGraphTop{grid-template-columns:minmax(0,1fr) minmax(72px,92px) 126px 34px;gap:5px;align-items:stretch}
+  .curveGraphProp{height:34px;border-radius:8px;padding:0 8px;font-size:11px}
+  .curveGraphTabs{grid-column:auto;grid-row:auto;padding:2px;border-radius:8px;min-width:0}
+  .curveGraphTabs button{min-width:0;flex:1;height:28px;font-size:9px;padding:0 4px}
+  .curveAddKey{grid-column:auto;grid-row:auto;width:34px;height:34px;border-radius:8px;font-size:17px}
+  .curveGraphStage{min-height:0;border-radius:10px}
+  .curveGraphCanvas{height:100%;min-height:118px}
+  .curveGraphHint{display:none}
+  .curveKeyMetaBar{display:none}.curveKeyChip{height:28px;font-size:7.4px;padding:0 8px;max-width:100%;min-width:0}
+  .curveKeyPopover{left:6px;right:6px;bottom:6px;padding:6px;gap:5px;border-radius:9px}
+  .curveKeyPopoverHead{grid-template-columns:26px minmax(0,1fr) 26px 26px;gap:4px}
+  .curveKeyPopoverHead button{height:26px;border-radius:6px;font-size:13px}
+  .curveKeyPopover .curveSelection{grid-template-columns:1fr 1fr 1.1fr;gap:4px}
+  .curveKeyPopover .curveSelection label{font-size:7px}
+  .curveKeyPopover .curveSelection input,.curveKeyPopover .curveEaseReadout{height:27px;font-size:9px}
+  .curveKeyPopover .curvePresetGrid{gap:3px}
+  .curveKeyPopover .curvePresetGrid button{height:23px;font-size:7px;border-radius:6px}
+  .curveCompactArea{padding:6px;gap:6px;min-height:0;height:auto;box-sizing:border-box}
+  .curveSelection{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.15fr);gap:5px}
+  .curveSelection label{gap:2px;font-size:7.5px}
+  .curveSelection input,.curveEaseReadout{height:28px;border-radius:7px;font-size:9.5px}
+  .curveEaseBox>span{font-size:7.5px!important;margin-bottom:2px!important}.curveEaseReadout{padding:0 5px;gap:4px}.curveEaseReadout button{height:21px;font-size:7.4px;padding:0 4px}
+  .curvePresetGrid{gap:4px;grid-template-columns:repeat(4,minmax(0,1fr))}
+  .curvePresetGrid button{height:24px;padding:0 2px;font-size:7.2px;border-radius:7px}
+  .curveKeyNavigator{grid-template-columns:28px minmax(0,1fr) 28px;gap:5px}.curveKeyNavigator button{height:26px;border-radius:7px}.curveKeyNavigator b{font-size:8.4px}
+  .curveKeyList{gap:4px}
+  .curveKeyRow{grid-template-columns:18px 50px minmax(0,1fr) 27px;gap:4px;padding:3px 4px;border-radius:7px}
+  .curveKeyRow small{font-size:8.5px}
+  .curveKeyRow input,.curveKeyRow button{height:26px;border-radius:6px;font-size:9px}
+  .curveGraphNote{display:none}
+}
+@media(max-width:380px){
+  .drawer.curveGraphDrawer{height:min(74dvh,540px)!important;max-height:min(74dvh,540px)!important}
+  .curveGraphTop{grid-template-columns:minmax(0,1fr) minmax(66px,82px) 112px 32px}
+  .curveAddKey{width:32px;height:34px}
+  .curveGraphTabs button{font-size:8px}
+  .curveGraphBody{grid-template-rows:34px minmax(118px,1fr)}
+}
+
+
 </style>
 
 <style id="oms-v429-layer-actions">
@@ -3208,7 +3508,7 @@ input[type=range]{accent-color:var(--accent)}
 /* V5.39 — temporally smoothed dual-canvas ambient preview + minimal export scrubber. */
 .exportResultPreview{position:fixed;inset:0;z-index:150000;background:#0d1220;color:#f7f8fc;display:flex;flex-direction:column;overscroll-behavior:contain;touch-action:manipulation}
 .exportResultPreview.hidden{display:none!important}
-.exportResultTop{height:70px;min-height:70px;display:flex;align-items:center;justify-content:center;background:#151827;border-bottom:1px solid #2b3044;padding:0 max(18px,env(safe-area-inset-right)) 0 max(18px,env(safe-area-inset-left))}
+.exportResultTop{height:70px;min-height:70px;display:flex;align-items:center;justify-content:center;position:relative;background:#151827;border-bottom:1px solid #2b3044;padding:0 max(18px,env(safe-area-inset-right)) 0 max(18px,env(safe-area-inset-left))}.exportResultTopBack{position:absolute;left:max(14px,env(safe-area-inset-left));top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 13px;border-radius:11px;border:1px solid #2c3347;background:#121724;color:#edf2fb;font-size:12px;font-weight:800;letter-spacing:.01em;box-shadow:0 4px 14px rgba(0,0,0,.18)}.exportResultTopBack:before{content:"←";font-size:16px;line-height:1;color:#cdd5ea}.exportResultTopBack:active{transform:translateY(-50%) scale(.97);background:#1b2233;border-color:#39425c}
 .exportResultTopText{min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center}.exportResultTopText small{font-size:9px;letter-spacing:.17em;color:#7f879c;font-weight:850}.exportResultTopText b{font-size:17px;line-height:1.12;color:#f6f8fd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .exportResultStage{flex:1;min-height:0;display:flex;flex-direction:column;background:#0c111e}
 .exportResultMediaWrap{position:relative;isolation:isolate;flex:1;min-height:180px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#070b13}
@@ -3216,7 +3516,7 @@ input[type=range]{accent-color:var(--accent)}
 .exportResultAmbient.active{opacity:.72}
 .exportResultAmbientShade{position:absolute;z-index:1;inset:0;background:radial-gradient(circle at center,rgba(5,8,15,.06) 0%,rgba(5,8,15,.26) 56%,rgba(5,8,15,.68) 100%);pointer-events:none}
 .exportResultMediaWrap video{position:relative;z-index:2;display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;background:#000;outline:0;box-shadow:0 18px 54px rgba(0,0,0,.34)}
-.exportResultControls{height:72px;min-height:72px;display:grid;grid-template-columns:42px 1fr auto;gap:10px;align-items:center;padding:0 max(18px,env(safe-area-inset-left)) 0 max(18px,env(safe-area-inset-right));background:#0c111e;border-top:1px solid rgba(255,255,255,.035)}
+.exportResultControls{height:72px;min-height:72px;display:grid;grid-template-columns:42px 1fr auto 42px;gap:10px;align-items:center;padding:0 max(18px,env(safe-area-inset-left)) 0 max(18px,env(safe-area-inset-right));background:#0c111e;border-top:1px solid rgba(255,255,255,.035)}
 .exportResultPlay{width:36px;height:36px;border:1px solid #293043;background:#151a29;color:#f1f3f8;display:grid;place-items:center;border-radius:10px;padding:0;box-shadow:0 3px 10px rgba(0,0,0,.16)}
 .exportResultPlay:active{transform:scale(.96);background:#202638}.exportResultPlay svg{width:19px;height:19px;fill:currentColor}
 .exportResultSeekWrap{--seek-progress:0%;position:relative;height:34px;min-width:0;display:flex;align-items:center;touch-action:none}
@@ -3225,6 +3525,18 @@ input[type=range]{accent-color:var(--accent)}
 .exportResultSeekTrack:after{display:none}
 .exportResultSeek{position:absolute;inset:0;width:100%;height:34px;margin:0;opacity:0;cursor:pointer;touch-action:none}
 .exportResultTime{font-size:9px;color:#b8c0d3;background:#111622;border:1px solid #2b3246;border-radius:7px;padding:5px 8px;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:78px;text-align:center}
+.exportResultFullscreen{width:36px;height:36px;border:1px solid #293043;background:#151a29;color:#f1f3f8;display:grid;place-items:center;border-radius:10px;padding:0;box-shadow:0 3px 10px rgba(0,0,0,.16)}
+.exportResultFullscreen:active{transform:scale(.96);background:#202638}.exportResultFullscreen svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* V5.76 — true fullscreen: media uses 100% of the viewport and controls float above it. */
+#exportResultStage:fullscreen,#exportResultStage:-webkit-full-screen{position:relative!important;width:100vw!important;height:100vh!important;max-width:none!important;overflow:hidden!important;background:#05070c!important}
+#exportResultStage:fullscreen .exportResultMediaWrap,#exportResultStage:-webkit-full-screen .exportResultMediaWrap{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important}
+#exportResultStage:fullscreen .exportResultMediaWrap video,#exportResultStage:-webkit-full-screen .exportResultMediaWrap video{width:auto!important;height:auto!important;max-width:100vw!important;max-height:100vh!important;object-fit:contain!important}
+#exportResultStage:fullscreen .exportResultControls,#exportResultStage:-webkit-full-screen .exportResultControls{position:absolute!important;z-index:20!important;left:0!important;right:0!important;bottom:0!important;height:78px!important;min-height:78px!important;padding:14px max(18px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left))!important;background:linear-gradient(to top,rgba(4,7,13,.94) 0%,rgba(4,7,13,.74) 58%,rgba(4,7,13,0) 100%)!important;border-top:0!important;opacity:1;transform:translateY(0);visibility:visible;pointer-events:auto;transition:opacity .18s ease,transform .18s ease,visibility 0s linear 0s}
+#exportResultStage:fullscreen.fsControlsHidden .exportResultControls,#exportResultStage:-webkit-full-screen.fsControlsHidden .exportResultControls{opacity:0!important;transform:translateY(14px)!important;visibility:hidden!important;pointer-events:none!important;transition:opacity .18s ease,transform .18s ease,visibility 0s linear .18s!important}
+#exportResultStage:fullscreen.fsControlsHidden,#exportResultStage:-webkit-full-screen.fsControlsHidden{cursor:none!important}
+#exportResultStage:fullscreen.fsControlsVisible,#exportResultStage:-webkit-full-screen.fsControlsVisible{cursor:default!important}
+@media (hover:none),(pointer:coarse){#exportResultStage:fullscreen,#exportResultStage:-webkit-full-screen{cursor:default!important}}
+
 .exportResultBottom{background:#151827;padding:20px max(20px,env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));border-top:1px solid #2b3044}
 .exportResultActions{display:grid;grid-template-columns:1.15fr .85fr;gap:10px;max-width:760px;margin:0 auto}
 .exportResultAction{height:68px;border-radius:14px;font-size:15px;font-weight:850;display:flex;align-items:center;justify-content:center;gap:10px;padding:0 15px;transition:transform .12s ease,background .12s ease,border-color .12s ease}
@@ -3236,7 +3548,7 @@ input[type=range]{accent-color:var(--accent)}
 .exportResultClose:before{content:"×";font-size:17px;line-height:1;color:#7f879c}.exportResultClose:active{background:#202538;color:#fff;border-color:#30374c}
 .exportResultMeta{max-width:760px;margin:0 auto 10px;text-align:center;color:#8f98ad;font-size:10px;min-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .exportResultPreview[data-share-supported="false"] #exportResultShare{opacity:.58}
-@media (orientation:landscape) and (max-height:650px){.exportResultTop{height:56px;min-height:56px}.exportResultTopText b{font-size:14px}.exportResultTopText small{font-size:8px}.exportResultControls{height:56px;min-height:56px}.exportResultAmbient{filter:blur(26px) saturate(1.22) brightness(.6)}.exportResultBottom{padding-top:12px;padding-bottom:calc(10px + env(safe-area-inset-bottom))}.exportResultAction{height:54px;font-size:14px;border-radius:12px}.exportResultAction svg{width:21px;height:21px}.exportResultClose{margin-top:6px;padding:6px 12px}.exportResultMeta{margin-bottom:6px}}
+@media (orientation:landscape) and (max-height:650px){.exportResultTop{height:56px;min-height:56px}.exportResultTopBack{height:34px;padding:0 11px;border-radius:10px;font-size:11px}.exportResultTopText b{font-size:14px}.exportResultTopText small{font-size:8px}.exportResultControls{height:56px;min-height:56px}.exportResultAmbient{filter:blur(26px) saturate(1.22) brightness(.6)}.exportResultBottom{padding-top:12px;padding-bottom:calc(10px + env(safe-area-inset-bottom))}.exportResultAction{height:54px;font-size:14px;border-radius:12px}.exportResultAction svg{width:21px;height:21px}.exportResultClose{margin-top:6px;padding:6px 12px}.exportResultMeta{margin-bottom:6px}}
 @media (min-width:900px){.exportResultPreview{background:#101522}.exportResultStage{width:min(1100px,100%);align-self:center}.exportResultBottom{padding-left:max(24px,calc((100vw - 900px)/2));padding-right:max(24px,calc((100vw - 900px)/2))}.exportResultAction{height:64px}}
 @media (prefers-reduced-motion:reduce){.exportResultAmbient{filter:blur(28px) saturate(1.12) brightness(.58)}}
 </style>
@@ -3581,9 +3893,10 @@ input[type=range]{accent-color:var(--accent)}
 
 <section id="exportResultPreview" class="exportResultPreview hidden" role="dialog" aria-modal="true" aria-labelledby="exportResultTitle">
   <div class="exportResultTop" id="exportResultTitle">
+    <button id="exportResultBackTop" class="exportResultTopBack" type="button" aria-label="Kembali ke editor">Kembali</button>
     <div class="exportResultTopText"><small>HASIL EKSPOR</small><b>Pratinjau video</b></div>
   </div>
-  <div class="exportResultStage">
+  <div class="exportResultStage" id="exportResultStage">
     <div class="exportResultMediaWrap">
       <canvas id="exportResultAmbientA" class="exportResultAmbient active" width="64" height="36" aria-hidden="true"></canvas>
       <canvas id="exportResultAmbientB" class="exportResultAmbient" width="64" height="36" aria-hidden="true"></canvas>
@@ -3599,6 +3912,9 @@ input[type=range]{accent-color:var(--accent)}
         <input id="exportResultSeek" class="exportResultSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Posisi video">
       </div>
       <div id="exportResultTime" class="exportResultTime">0:00 / 0:00</div>
+      <button id="exportResultFullscreen" class="exportResultFullscreen" type="button" aria-label="Layar penuh" title="Layar penuh">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M20 16v4h-4M4 16v4h4"/></svg>
+      </button>
     </div>
   </div>
   <div class="exportResultBottom">
@@ -3663,6 +3979,9 @@ input[type=range]{accent-color:var(--accent)}
 <script>
 (() => {
 'use strict';
+
+// V5.44 — Advanced Curve Editor (Value + Speed) built on V5.43 fallback.
+
 
 // V3.90 — contextual trim toolbar: extend-to-playhead and move-edge-to-playhead.
 
@@ -4114,7 +4433,7 @@ class ProjectModel{
     const [rw,rh]=ratio==='custom'?[9,16]:ratio.split(':').map(Number);let width,height;
     if(rw>=rh){width=res;height=Math.round(res*rh/rw)}else{height=res;width=Math.round(res*rw/rh)}
     const fov=55,focal=height/(2*Math.tan(rad(fov/2)));
-    return {id:uid('project'),name,width,height,fps:+fps,duration:+duration,bg,ratio,created:Date.now(),updated:Date.now(),grid:true,ambient:.72,editorFocal:focal,playheadMode:'center',timelinePx:55,timelineGestureVersion:2,audioVisualizer:true,sceneVersion:4,colorSpace:'srgb',renderer:'webgl',transformSpaceDefaultsVersion:2};
+    return {id:uid('project'),name,width,height,fps:+fps,duration:+duration,bg,ratio,created:Date.now(),updated:Date.now(),grid:true,ambient:.72,editorFocal:focal,playheadMode:'center',timelinePx:55,timelineZoomScale:1,timelineZoomVersion:1,timelineViewportWidth:0,timelineGestureVersion:2,timelineSplitCompatVersion:2,audioVisualizer:true,sceneVersion:4,colorSpace:'srgb',renderer:'webgl',transformSpaceDefaultsVersion:2};
   }
   defaultLayer(type,opt={}){
     const p=this.project;const base={id:uid('layer'),type,name:'Layer',start:0,duration:p.duration,hidden:false,locked:false,parentId:null,transformSpace:'world',space3d:false,
@@ -4296,6 +4615,22 @@ class ProjectModel{
     this.project=d.project;
     if(this.project&&!this.project.playheadMode)this.project.playheadMode='center';
     if(this.project&&!Number.isFinite(this.project.timelinePx))this.project.timelinePx=55;
+    // V5.70 — project-isolated responsive timeline zoom migration.
+    // Older snapshots stored only an absolute px/second value. That number is
+    // tied to whichever timeline viewport happened to be visible when the
+    // project was saved, so opening a project with another splitter width could
+    // leak stale geometry into the next project. Normalize old snapshots once
+    // to the responsive baseline (scale 1.0). Layer/keyframe/project content is
+    // untouched; only editor-only timeline viewport state is migrated.
+    if(this.project&&(+this.project.timelineZoomVersion||0)<1){
+      this.project.timelineZoomScale=1;
+      this.project.timelineZoomVersion=1;
+      this.project.timelineViewportWidth=0;
+    }
+    if(this.project&&(+this.project.timelineSplitCompatVersion||0)<2){
+      this.project.timelineSplitCompatVersion=2;
+      this.project.timelineGestureVersion=Math.max(2,+this.project.timelineGestureVersion||0);
+    }
     if(this.project&&typeof this.project.audioVisualizer!=='boolean')this.project.audioVisualizer=true;
     const migrateTransformSpaceDefaults=!!this.project&&(+this.project.transformSpaceDefaultsVersion||0)<2;
     if(this.project){this.project.sceneVersion=4;this.project.renderer='webgl';this.project.colorSpace||='srgb';this.project.transformSpaceDefaultsVersion=2}
@@ -7667,7 +8002,7 @@ const Mat4={
 
 class WebGLRenderer{
   constructor(projectModel,canvas){
-    this.model=projectModel;this.canvas=canvas;this.fallback=null;this.domInteraction=null;this.interactionCache=null;this.exporting=false;this.fastExportRenderer=false;this.fastExportDirectUploads=0;this.fastExportFallbackUploads=0;this.fastExportNativeSampleUploads=0;this.fastExportCanvasUploads=0;this.previewNativeVideoUploads=0;this.previewNativeTextureReuses=0;this.previewNativeAdaptiveSkips=0;this.previewNativeUploadMsTotal=0;this.previewNativeUploadMsMax=0;this._fastExportPruned=false;this.textures=new Map();this.trackMatteTargets=new Map();this.frameTrackMattes=[];this.imageWatch=new WeakSet();this.overlay=$('#interactionAbove');this.interactionLayer=$('#interactionLayer');
+    this.model=projectModel;this.canvas=canvas;this.fallback=null;this.domInteraction=null;this.interactionCache=null;this.exporting=false;this._nativeExportTarget=null;this.fastExportRenderer=false;this.fastExportDirectUploads=0;this.fastExportFallbackUploads=0;this.fastExportNativeSampleUploads=0;this.fastExportCanvasUploads=0;this.previewNativeVideoUploads=0;this.previewNativeTextureReuses=0;this.previewNativeAdaptiveSkips=0;this.previewNativeUploadMsTotal=0;this.previewNativeUploadMsMax=0;this._fastExportPruned=false;this.textures=new Map();this.trackMatteTargets=new Map();this.frameTrackMattes=[];this.imageWatch=new WeakSet();this.overlay=$('#interactionAbove');this.interactionLayer=$('#interactionLayer');
     bus.on('layer:disposed',id=>this.disposeTexture(id));
     bus.on('layer:texture-release',id=>this.disposeTexture(id));
     bus.on('model:reset',()=>this.disposeAllTextures());
@@ -7809,12 +8144,65 @@ class WebGLRenderer{
     const data=[],point=(a,b)=>{const st=Math.sin(a);return[.5*st*Math.cos(b),.5*Math.cos(a),.5*st*Math.sin(b)]},push=p=>{const n=[p[0]*2,p[1]*2,p[2]*2];data.push(...p,...n)};
     for(let y=0;y<lat;y++){const a0=y/lat*Math.PI,a1=(y+1)/lat*Math.PI;for(let x=0;x<lon;x++){const b0=x/lon*Math.PI*2,b1=(x+1)/lon*Math.PI*2,q0=point(a0,b0),q1=point(a1,b0),q2=point(a1,b1),q3=point(a0,b1);push(q0);push(q1);push(q2);push(q0);push(q2);push(q3)}}return this.makeMeshBuffer(data)
   }
-  resize(){
-    if(this.fallback)return this.fallback.resize();if(!model.project)return;
-    this.canvas.width=Math.max(1,model.project.width);this.canvas.height=Math.max(1,model.project.height);this.gl.viewport(0,0,this.canvas.width,this.canvas.height);
+  nativeExportScale(){
+    const target=this._nativeExportTarget;
+    if(!target||!model.project)return{x:1,y:1};
+    return{
+      x:target.width/Math.max(1,+model.project.width||1),
+      y:target.height/Math.max(1,+model.project.height||1)
+    }
+  }
+  setNativeExportTarget(width,height){
+    if(this.fallback||!this.gl||!model.project)return{ok:false,reason:'webgl-unavailable'};
+    const gl=this.gl,w=Math.max(2,Math.round(+width||0)),h=Math.max(2,Math.round(+height||0));
+    let maxTexture=0,maxRenderbuffer=0,maxViewport=[0,0];
+    try{
+      maxTexture=+gl.getParameter(gl.MAX_TEXTURE_SIZE)||0;
+      maxRenderbuffer=+gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)||0;
+      maxViewport=gl.getParameter(gl.MAX_VIEWPORT_DIMS)||[0,0]
+    }catch(e){}
+    const maxW=Math.max(0,Math.min(maxTexture||Infinity,maxRenderbuffer||Infinity,+maxViewport?.[0]||Infinity));
+    const maxH=Math.max(0,Math.min(maxTexture||Infinity,maxRenderbuffer||Infinity,+maxViewport?.[1]||Infinity));
+    if((maxW&&w>maxW)||(maxH&&h>maxH)){
+      return{ok:false,reason:'target-exceeds-webgl-limit',width:w,height:h,maxWidth:maxW||null,maxHeight:maxH||null,maxTexture:maxTexture||null,maxRenderbuffer:maxRenderbuffer||null, maxViewport:[+maxViewport?.[0]||0,+maxViewport?.[1]||0]}
+    }
+    this._nativeExportTarget={width:w,height:h};
+    this.canvas.width=w;this.canvas.height=h;
+    gl.viewport(0,0,w,h);
+    const actualW=gl.drawingBufferWidth||this.canvas.width,actualH=gl.drawingBufferHeight||this.canvas.height;
+    if(actualW!==w||actualH!==h){
+      this._nativeExportTarget=null;
+      this.canvas.width=Math.max(1,+model.project.width||1);this.canvas.height=Math.max(1,+model.project.height||1);
+      gl.viewport(0,0,this.canvas.width,this.canvas.height);
+      return{ok:false,reason:'drawing-buffer-size-mismatch',width:w,height:h,actualWidth:actualW,actualHeight:actualH,maxWidth:maxW||null,maxHeight:maxH||null}
+    }
+    // Full-frame compositing auxiliaries (blend backdrops / track mattes) resize
+    // lazily against canvas.width/height on the first export render.
+    return{ok:true,width:w,height:h,actualWidth:actualW,actualHeight:actualH,maxWidth:maxW||null,maxHeight:maxH||null,scale:this.nativeExportScale()}
+  }
+  clearNativeExportTarget(){
+    const had=!!this._nativeExportTarget;
+    this._nativeExportTarget=null;
+    if(!model.project||this.fallback)return had;
+    this.canvas.width=Math.max(1,+model.project.width||1);this.canvas.height=Math.max(1,+model.project.height||1);
+    this.gl.viewport(0,0,this.canvas.width,this.canvas.height);
     if(this.interactionLayer){this.interactionLayer.width=this.canvas.width;this.interactionLayer.height=this.canvas.height;this.interactionLayer.style.display='none'}
     if(this.overlay){this.overlay.width=this.canvas.width;this.overlay.height=this.canvas.height;this.overlay.style.display='block';this.overlay.style.transform='none'}
-    $('#canvasWrap')?.classList.remove('compositing')
+    $('#canvasWrap')?.classList.remove('compositing');
+    return had
+  }
+  resize(){
+    if(this.fallback)return this.fallback.resize();if(!model.project)return;
+    const target=this._nativeExportTarget;
+    const w=target?.width||Math.max(1,+model.project.width||1),h=target?.height||Math.max(1,+model.project.height||1);
+    if(this.canvas.width!==w)this.canvas.width=w;if(this.canvas.height!==h)this.canvas.height=h;this.gl.viewport(0,0,w,h);
+    // During offline native-resolution export the interaction surfaces stay at
+    // project resolution; they are editor-only and never enter the encoded frame.
+    if(!target){
+      if(this.interactionLayer){this.interactionLayer.width=this.canvas.width;this.interactionLayer.height=this.canvas.height;this.interactionLayer.style.display='none'}
+      if(this.overlay){this.overlay.width=this.canvas.width;this.overlay.height=this.canvas.height;this.overlay.style.display='block';this.overlay.style.transform='none'}
+      $('#canvasWrap')?.classList.remove('compositing')
+    }
   }
   orbitTargetWorld(cam,t=model.time){
     const target=cam?.orbitTargetId&&model.layers.find(l=>l.id===cam.orbitTargetId);
@@ -7835,7 +8223,11 @@ class WebGLRenderer{
     return -v.z
   }
   depthOfFieldScreenBlur(layer,cam=this.camera()){
-    return cameraDepthOfFieldBlurPx(cam,this.cameraDepthForLayer(layer,cam),model.project.height)
+    const base=cameraDepthOfFieldBlurPx(cam,this.cameraDepthForLayer(layer,cam),model.project.height);
+    // Native export has more framebuffer pixels for the same project-space
+    // distance. Scale screen-space DOF so the exported look matches preview.
+    const s=this.nativeExportScale();
+    return base*Math.sqrt(Math.max(.0001,s.x*s.y))
   }
   depthOfFieldTextureRadius(layer,entry,screenBlur){
     if(!(screenBlur>.05)||!entry?.gpuWidth||!entry?.gpuHeight)return 0;
@@ -8843,13 +9235,22 @@ class TimelineController{
       }
     });
 
-    // As long as the initial 2-second fit has not been replaced by a manual
-    // zoom, keep it responsive to phone/tablet/desktop width and orientation.
+    // V5.70 — timeline zoom is viewport-relative per project. Resize of the
+    // browser OR the internal three-line splitter recalculates px/s from the
+    // project's own zoom scale, so one project's viewport can never leak its
+    // absolute timeline geometry into another project.
     if('ResizeObserver' in window){
       this.timelineResizeObserver=new ResizeObserver(()=>{
-        if(!this.initialFitActive||$('#editor')?.classList.contains('hidden'))return;
+        if($('#editor')?.classList.contains('hidden')||!model.project)return;
         cancelAnimationFrame(this.initialFitRAF);
-        this.initialFitRAF=requestAnimationFrame(()=>this.applyInitialSecondsFit({persist:true,rebuild:true}));
+        this.initialFitRAF=requestAnimationFrame(()=>{
+          if(!model.project)return;
+          if((+model.project.timelineZoomVersion||0)>=1){
+            this.applyViewportRelativeProjectZoom({persist:true,rebuild:true});
+          }else if(this.initialFitActive){
+            this.applyInitialSecondsFit({persist:true,rebuild:true});
+          }
+        });
       });
       this.timelineResizeObserver.observe(sc);
     }
@@ -8888,7 +9289,7 @@ class TimelineController{
         // An interrupted pinch is not a completed user command. Revert to the
         // zoom that existed when the two-finger gesture began.
         this.px=restorePx;
-        if(model.project)model.project.timelinePx=restorePx;
+        if(model.project)this.persistProjectTimelineZoom(restorePx);
         try{this.rebuild()}catch(e){}
       },
       onPinchClass:()=>$('.timelineArea')?.classList.remove('timeline-pinching'),
@@ -8902,6 +9303,52 @@ class TimelineController{
       onPinchClass:()=>$('.timelineArea')?.classList.remove('timeline-pinching'),
       onZoomBadge:()=>this.updateZoomBadge()
     })
+  }
+
+  projectTimelineZoomScale(project=model.project){
+    const raw=Number(project?.timelineZoomScale);
+    return Number.isFinite(raw)&&raw>0?clamp(raw,.02,50):1
+  }
+
+  persistProjectTimelineZoom(px=this.px,{scale=null}={}){
+    if(!model.project)return;
+    const value=this.rulerPolicy.clampZoom(Number.isFinite(+px)?+px:this.px);
+    const base=Math.max(.0001,this.initialSecondsFitPx(2));
+    const nextScale=Number.isFinite(+scale)?clamp(+scale,.02,50):clamp(value/base,.02,50);
+    model.project.timelinePx=value; // compatibility/cache only; never authoritative on restore.
+    model.project.timelineZoomScale=nextScale;
+    model.project.timelineZoomVersion=1;
+    model.project.timelineViewportWidth=this.viewportWidth();
+    model.project.timelineGestureVersion=2;
+    model.project.timelineSplitCompatVersion=Math.max(2,+model.project.timelineSplitCompatVersion||0);
+  }
+
+  applyViewportRelativeProjectZoom({persist=true,rebuild=true}={}){
+    if(!model.project)return false;
+    const scale=this.projectTimelineZoomScale(model.project);
+    const base=this.initialSecondsFitPx(2);
+    if(base>this.rulerPolicy.maxPx)this.rulerPolicy.maxPx=base*Math.max(1,scale);
+    const next=this.rulerPolicy.clampZoom(base*scale);
+    const changed=Math.abs(next-this.px)>.01;
+    this.px=next;
+    if(persist)this.persistProjectTimelineZoom(next,{scale});
+    if(changed&&rebuild)this.rebuild();
+    if(this.isCentered()){
+      const sc=$('#timelineScroll');
+      if(sc){
+        const keep=clamp(+model.time||0,0,Math.max(0,+model.project.duration||0));
+        const target=keep*this.px;
+        this.syncingScroll=true;
+        sc.scrollLeft=target;
+        this.lastScrollLeft=target;
+        cancelAnimationFrame(this.scrollRelease);
+        this.scrollRelease=requestAnimationFrame(()=>{this.syncingScroll=false;this.updatePlayhead()});
+      }
+    }else{
+      this.updatePlayhead();
+    }
+    this.updateZoomBadge();
+    return changed
   }
 
   initialSecondsFitPx(seconds=this.initialFitSeconds){
@@ -8932,10 +9379,7 @@ class TimelineController{
     const fitted=this.rulerPolicy.clampZoom(next);
     if(Math.abs(fitted-this.px)<.01){this.updateZoomBadge();return false}
     this.px=fitted;
-    if(persist){
-      model.project.timelinePx=fitted;
-      model.project.timelineGestureVersion=2;
-    }
+    if(persist)this.persistProjectTimelineZoom(fitted,{scale:1});
     if(rebuild)this.rebuild();
     if(this.isCentered()){
       const sc=$('#timelineScroll');
@@ -8969,8 +9413,7 @@ class TimelineController{
     const sc=$('#timelineScroll');
     const keepTime=clamp(model.time||0,0,model.project.duration||0);
     this.px=this.defaultPx;
-    model.project.timelinePx=this.defaultPx;
-    model.project.timelineGestureVersion=2;
+    this.persistProjectTimelineZoom(this.defaultPx);
     this.rebuild();
 
     if(this.isCentered()){
@@ -9352,24 +9795,18 @@ class TimelineController{
       this.disableInitialSecondsFit();
       this._projectId=model.project.id;
 
-      let savedPx=Number.isFinite(model.project.timelinePx)
-        ?model.project.timelinePx
-        :this.defaultPx;
-
-      // V4.25 one-time legacy recovery. The old stuck-pinch path could save the
-      // exact clamp floor (8 px/s), which then survived browser refresh via the
-      // project snapshot. Only that exact legacy extreme is migrated; normal
-      // user-selected zoom values remain untouched.
-      if(
-        (+model.project.timelineGestureVersion||0)<2 &&
-        savedPx<=this.minPx+.01
-      ){
-        savedPx=this.defaultPx;
-        model.project.timelinePx=savedPx;
+      // V5.70 — project timeline state is a dimensionless scale relative to the
+      // CURRENT timeline viewport, never an absolute px/s inherited from the
+      // previous project. Legacy snapshots are normalized in Model.restore().
+      if((+model.project.timelineZoomVersion||0)<1){
+        model.project.timelineZoomScale=1;
+        model.project.timelineZoomVersion=1;
       }
-
-      model.project.timelineGestureVersion=2;
-      this.px=this.rulerPolicy.clampZoom(savedPx);
+      const scale=this.projectTimelineZoomScale(model.project);
+      const base=this.initialSecondsFitPx(2);
+      if(base>this.rulerPolicy.maxPx)this.rulerPolicy.maxPx=base*Math.max(1,scale);
+      this.px=this.rulerPolicy.clampZoom(base*scale);
+      this.persistProjectTimelineZoom(this.px,{scale});
     }
     this.updateZoomBadge();
   }
@@ -10157,10 +10594,7 @@ class TimelineController{
     // user's zoom even if the viewport later resizes. Cancelled pinches do not.
     if(!cancelled)this.disableInitialSecondsFit();
 
-    if(model.project){
-      model.project.timelinePx=this.px;
-      model.project.timelineGestureVersion=2
-    }
+    if(model.project)this.persistProjectTimelineZoom(this.px);
     this.updateZoomBadge();
   }
 
@@ -10200,10 +10634,7 @@ class TimelineController{
       :(Number.isFinite(anchorTime)?anchorTime:model.time);
 
     this.px=nextPx;
-    if(persist){
-      model.project.timelinePx=this.px;
-      model.project.timelineGestureVersion=2
-    }
+    if(persist)this.persistProjectTimelineZoom(this.px);
     this.rebuild();
 
     if(this.isCentered()){
@@ -10639,8 +11070,20 @@ class TimelineController{
             ui?.clearLayerMultiSelection?.();
             model.selected=l.id;
             model.time=this.snapTime(k.t);
-            this.rebuild();
-            ui.openGraphEditor(prop);
+
+            // V5.59 — timeline keyframe taps only drive Curve Editor when the
+            // Curve Editor is already open. Inspector taps must never navigate
+            // into Curve Editor implicitly; they simply move/select the exact
+            // keyframe and keep the current Inspector context intact.
+            const curveOpen=!!document.querySelector('#drawer.curveGraphDrawer:not(.hidden)');
+            if(curveOpen&&ui){
+              ui.graphProp=prop;
+              ui.graphSelectedKeyId=k.id;
+              this.rebuild();
+              ui.openGraphEditor(prop,{preserveReturn:true});
+            }else{
+              this.rebuild();
+            }
             renderer.render()
           };
           d.onpointerdown=e=>{
@@ -10712,6 +11155,32 @@ class TimelineController{
     if(!sc||!model.project)return;
     const horizontalChanged=Math.abs(sc.scrollLeft-this.lastScrollLeft)>.01;
     this.lastScrollLeft=sc.scrollLeft;
+
+    // V5.67 — the desktop canvas/timeline splitter changes the timeline viewport
+    // width without being a timeline scrub gesture. Chromium may clamp/adjust
+    // scrollLeft while that CSS grid column is changing. During that transaction
+    // preserve the exact project time and keep the centered scroll position tied
+    // to the current px/s instead of interpreting layout scroll as user input.
+    if(this._desktopSplitResizeActive){
+      const keep=clamp(
+        Number.isFinite(this._desktopSplitResizeTime)?this._desktopSplitResizeTime:(+model.time||0),
+        0,Math.max(0,+model.project.duration||0)
+      );
+      if(Math.abs((+model.time||0)-keep)>.0000001)model.time=keep;
+      if(this.isCentered()){
+        const target=keep*this.px;
+        if(Math.abs(sc.scrollLeft-target)>.35){
+          this.syncingScroll=true;
+          sc.scrollLeft=target;
+          this.lastScrollLeft=target;
+          cancelAnimationFrame(this.scrollRelease);
+          this.scrollRelease=requestAnimationFrame(()=>{this.syncingScroll=false});
+        }
+      }
+      this.updatePlayhead();
+      return;
+    }
+
     if(this.syncingScroll)return;
 
     // V4.24 fallback: some trackpads/wheels/accessibility scroll paths can
@@ -10974,7 +11443,7 @@ class TimelineController{
       // the zoom that existed when the keyframe gesture began.
       if(Math.abs(this.px-keyframeStartPx)>.01){
         this.px=keyframeStartPx;
-        if(model.project)model.project.timelinePx=keyframeStartPx;
+        if(model.project)this.persistProjectTimelineZoom(keyframeStartPx);
         this.pinching=false;
         this.pinch=null;
         this.pendingPinchPx=null;
@@ -13716,7 +14185,7 @@ class LayerActionClipboardService{
 }
 
 class UIController{
-  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this.transformCameraPolicy=new TransformCameraPolicy();this.keyframeOriginRouter=new KeyframeOriginRouter(this);this._keyframeOriginResolvers=this.keyframeOriginRouter.resolvers;this.layerActionClipboard=new LayerActionClipboardService(model);this.layerMultiSelectedIds=new Set();this.layerMultiSelectMode=false;this.layerMultiFocusId=null}
+  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.graphView='value';this.graphSelectedKeyId=null;this.curveReturnToEasing=false;this._curveGraphHit=null;this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this.transformCameraPolicy=new TransformCameraPolicy();this.keyframeOriginRouter=new KeyframeOriginRouter(this);this._keyframeOriginResolvers=this.keyframeOriginRouter.resolvers;this.layerActionClipboard=new LayerActionClipboardService(model);this.layerMultiSelectedIds=new Set();this.layerMultiSelectMode=false;this.layerMultiFocusId=null}
 
   /* =========================================================
      V4.27 — KEYFRAME ORIGIN ROUTING CONTRACT
@@ -14655,11 +15124,12 @@ class UIController{
   }
   drawerShell(title,html){
     const d=$('#drawer');
+    if(this._curveGraphPlaybackRAF){cancelAnimationFrame(this._curveGraphPlaybackRAF);this._curveGraphPlaybackRAF=0}
 
     // Setiap inspector/properti harus keluar dari mode menu "+".
     // Jika addDrawer dibiarkan aktif, CSS .addDrawer .drawerHead akan
     // menyembunyikan header beserta tombol X.
-    d.classList.remove('hidden','transformDrawer','transformEaseDrawer','addDrawer','multiSelectDrawer','blendOpacityDrawer');
+    d.classList.remove('hidden','transformDrawer','transformEaseDrawer','addDrawer','multiSelectDrawer','blendOpacityDrawer','curveGraphDrawer');
 
     $('#plusBtn')?.classList.remove('open');
 
@@ -15955,7 +16425,7 @@ class UIController{
   }
   transformEaseEditorHTML(l){
     if(!this.transformModeHasEaseSegment(l)){
-      return `<div class="easeEditor"><div class="easeEditorHead"><b>Easing</b><small>Tidak ada segmen aktif</small></div><div class="easeNoKey"><div><b>Pilih Segmen</b>Arahkan playhead di antara dua keyframe. Easing akan mengatur interpolasi segmen tersebut, bukan membuat keyframe baru.</div></div><div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><span></span><span></span></div></div>`;
+      return `<div class="easeEditor"><div class="easeEditorHead"><b>Easing</b><small>Tidak ada segmen aktif</small></div><div class="easeNoKey"><div><b>Pilih Segmen</b>Arahkan playhead di antara dua keyframe. Easing akan mengatur interpolasi segmen tersebut, bukan membuat keyframe baru.</div></div><div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="openCurveEditor">Curve</button><span></span></div></div>`;
     }
 
     const spec=this.transformModeEasingSpec(l);
@@ -15972,7 +16442,7 @@ class UIController{
           <label class="easeSpringRow"><span>Damping</span><input id="easeSpringDamping" type="range" min="1" max="60" step=".5" value="${Number(spec.damping??13)}"><input id="easeSpringDampingN" type="number" min="1" max="60" step=".5" value="${Number(spec.damping??13)}"></label>
           <label class="easeSpringRow"><span>Mass</span><input id="easeSpringMass" type="range" min=".1" max="5" step=".1" value="${Number(spec.mass??1)}"><input id="easeSpringMassN" type="number" min=".1" max="5" step=".1" value="${Number(spec.mass??1)}"></label>
         </div>
-        <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="easeMakeBezier">Bezier</button><button id="easeResetPreset">Reset</button></div>
+        <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="openCurveEditor">Curve</button><button id="easeMakeBezier">Bezier</button><button id="easeResetPreset">Reset</button></div>
       </div>`;
     }
 
@@ -15981,7 +16451,7 @@ class UIController{
         <div class="easeEditorHead"><b>Hold Easing</b><small>Step / no interpolation</small></div>
         <div class="easeGraphWrap"><svg id="transformEaseGraph" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"><line class="easeAxis" x1="7" y1="93" x2="93" y2="93"></line><line class="easeAxis" x1="7" y1="93" x2="7" y2="7"></line><path id="easeCurve" class="easeCurve" d="M7 93 L88 93 L93 7"></path></svg></div>
         <div class="easeHoldPanel"><div><b>HOLD</b><br>Nilai ditahan sampai keyframe berikutnya lalu berpindah tanpa interpolasi.</div></div>
-        <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="easeMakeBezier">Bezier</button><button id="easeResetPreset">Linear</button></div>
+        <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="openCurveEditor">Curve</button><button id="easeMakeBezier">Bezier</button><button id="easeResetPreset">Linear</button></div>
       </div>`;
     }
 
@@ -16008,7 +16478,7 @@ class UIController{
         <label class="easeParam"><span>X2</span><input id="easeX2" type="number" min="0" max="1" step=".01" value="${bez.x2.toFixed(2)}"></label>
         <label class="easeParam"><span>Y2</span><input id="easeY2" type="number" min="-1.5" max="2.5" step=".01" value="${bez.y2.toFixed(2)}"></label>
       </div>
-      <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="easeReverseCurve">↔ Balik</button><button id="easeResetPreset">Linear</button></div>
+      <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="openCurveEditor">Curve</button><button id="easeReverseCurve">↔ Balik</button><button id="easeResetPreset">Linear</button></div>
     </div>`;
   }
   drawTransformEaseEditor(l){
@@ -16063,6 +16533,15 @@ class UIController{
     if(back)back.onclick=()=>{
       this.transformEaseEditorOpen=false;
       this.openInspector('move');
+    };
+
+    const openCurve=$('#openCurveEditor');
+    if(openCurve)openCurve.onclick=()=>{
+      const seg=this.transformModeSegmentsAt(l)[0];
+      const prop=seg?.prop||this.transformModeProps(l)[0]||this.graphProp;
+      if(seg?.from?.id)this.graphSelectedKeyId=seg.from.id;
+      this.transformEaseEditorOpen=false;
+      this.openGraphEditor(prop,{fromEasing:true});
     };
 
     if(!this.transformModeHasEaseSegment(l)){
@@ -17060,8 +17539,308 @@ class UIController{
   }
   getNested(obj,path){return path.split('.').reduce((o,k)=>o?.[k],obj)}
   setNested(obj,path,val){if(path==='orbitDistance')val=Math.max(.001,+val||.001);const parts=path.split('.');let o=obj;for(let i=0;i<parts.length-1;i++)o=o[parts[i]]||(o[parts[i]]={});o[parts.at(-1)]=val}
-  openGraphEditor(initialProp){const l=model.selectedLayer();if(!l)return;this.drawerMode='keys';timeline.refreshKeyframeInteractionState?.();const props=[...new Set(['x','y','z','scaleX','scaleY','rotation','rotX','rotY','rotZ','skewX','skewY','opacity',...(l.type==='camera'?['orbitAzimuth','orbitElevation','orbitDistance','yaw','pitch','roll','fov','focalLength','digitalZoom','orthoSize','near','focusDistance']:[]),...Object.keys(l.kf||{})])];this.graphProp=initialProp&&props.includes(initialProp)?initialProp:(this.graphProp&&props.includes(this.graphProp)?this.graphProp:props[0]);const arr=l.kf?.[this.graphProp]||[];const html=`<div class="drawerBody graphWrap"><div class="propRow"><label>Properti</label><select id="graphProp">${props.map(p=>`<option ${p===this.graphProp?'selected':''}>${p}</option>`).join('')}</select><button id="addGraphKey" class="diamond">◇</button></div><canvas id="graphCanvas" class="graphCanvas" width="640" height="300"></canvas><div class="presetRow">${Object.keys(EASING_PRESETS).map(p=>`<button data-ease="${p}">${p}</button>`).join('')}</div><div class="keyList">${arr.length?arr.map(k=>`<div class="keyRow"><span>${k.t.toFixed(2)}s</span><input data-keyval="${k.id}" type="number" value="${Number(k.v).toFixed(3)}"><button data-delkey="${k.id}" class="diamond">×</button></div>`).join(''):'<div class="miniNote">Belum ada keyframe pada properti ini. Tekan ◇ untuk menambahkan pada playhead.</div>'}</div><div class="miniNote">Preset easing diterapkan pada keyframe tepat di playhead; jika tidak ada, keyframe terdekat sebelumnya digunakan.</div></div>`;this.drawerShell('Graph / Keyframe Editor',html);$('#graphProp').onchange=e=>{this.graphProp=e.target.value;this.openGraphEditor(this.graphProp)};$('#addGraphKey').onclick=()=>{history.push();model.anim.setKey(l,this.graphProp,model.time,+model.prop(l,this.graphProp));timeline.rebuild();this.openGraphEditor(this.graphProp);renderer.render()};$$('[data-ease]').forEach(b=>b.onclick=()=>{const a=l.kf?.[this.graphProp]||[];let k=a.find(k=>Math.abs(k.t-model.time)<.02)||a.filter(k=>k.t<=model.time).at(-1)||a[0];if(!k){history.push();k=model.anim.setKey(l,this.graphProp,model.time,+model.prop(l,this.graphProp))}else history.push();k.easing=structuredClone(EASING_PRESETS[b.dataset.ease]);this.drawGraph();timeline.rebuild()});$$('[data-keyval]').forEach(i=>i.onchange=e=>{history.push();const k=arr.find(x=>x.id===e.target.dataset.keyval);if(k)k.v=+e.target.value;this.drawGraph();renderer.render()});$$('[data-delkey]').forEach(b=>b.onclick=()=>{history.push();l.kf[this.graphProp]=arr.filter(k=>k.id!==b.dataset.delkey);timeline.rebuild();this.openGraphEditor(this.graphProp);renderer.render()});this.drawGraph()}
-  drawGraph(){const cv=$('#graphCanvas');if(!cv)return;const c=cv.getContext('2d'),l=model.selectedLayer(),arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t);c.clearRect(0,0,cv.width,cv.height);c.strokeStyle='#263047';c.lineWidth=1;for(let x=0;x<=cv.width;x+=64){c.beginPath();c.moveTo(x,0);c.lineTo(x,cv.height);c.stroke()}for(let y=0;y<=cv.height;y+=50){c.beginPath();c.moveTo(0,y);c.lineTo(cv.width,y);c.stroke()}if(!arr.length)return;const minT=0,maxT=model.project.duration,vals=arr.map(k=>+k.v||0),minV=Math.min(...vals),maxV=Math.max(...vals),range=Math.max(1e-6,maxV-minV);const pt=k=>({x:k.t/maxT*cv.width,y:cv.height-30-(k.v-minV)/range*(cv.height-60)});c.strokeStyle='#00d7a7';c.lineWidth=3;c.beginPath();for(let i=0;i<arr.length-1;i++){const a=arr[i],b=arr[i+1];for(let n=0;n<=40;n++){const q=n/40,e=AnimationEngine.ease(a.easing,q),t=lerp(a.t,b.t,q),v=lerp(+a.v,+b.v,e),x=t/maxT*cv.width,y=cv.height-30-(v-minV)/range*(cv.height-60);if(i===0&&n===0)c.moveTo(x,y);else c.lineTo(x,y)}}c.stroke();for(const k of arr){const p=pt(k);c.save();c.translate(p.x,p.y);c.rotate(Math.PI/4);c.fillStyle=Math.abs(k.t-model.time)<.02?'#ff6da9':'#ffffff';c.fillRect(-5,-5,10,10);c.restore()}c.fillStyle='#8692aa';c.font='16px system-ui';c.fillText(`${this.graphProp}   min ${minV.toFixed(2)}  max ${maxV.toFixed(2)}`,12,22)}
+  curveGraphProps(l,preferredProp=null){
+    // V5.49 — Curve Editor is a view of existing animation data, not a list of
+    // every property that *could* be animated. Show only properties that
+    // currently contain keyframes. A property explicitly opened from
+    // Transform/Easing remains available so the hand-off is never broken.
+    const keyed=Object.keys(l.kf||{}).filter(prop=>Array.isArray(l.kf?.[prop])&&l.kf[prop].length>0);
+    const out=[...keyed];
+    if(preferredProp&&!out.includes(preferredProp))out.unshift(preferredProp);
+    // Defensive fallback for opening Curve Editor on a layer with no keys at
+    // all. This keeps the add-key workflow functional without repopulating the
+    // dropdown with every animatable property.
+    if(!out.length)out.push('x');
+    return [...new Set(out)];
+  }
+  curveGraphSelected(arr){
+    if(!arr.length)return null;
+    let key=arr.find(k=>k.id===this.graphSelectedKeyId);
+    if(!key){
+      key=arr.find(k=>Math.abs(k.t-model.time)<.02)||arr.filter(k=>k.t<=model.time).at(-1)||arr[0];
+      this.graphSelectedKeyId=key?.id||null;
+    }
+    return key||null;
+  }
+  curveGraphOutgoing(arr,key){
+    if(!key)return null;
+    const i=arr.findIndex(k=>k.id===key.id);
+    return i>=0&&i<arr.length-1?{from:arr[i],to:arr[i+1],index:i}:null;
+  }
+  curveGraphEaseLabel(key){
+    return key?this.easingPresetName(key.easing||EASING_PRESETS.linear):'—';
+  }
+  curveGraphApplyPreset(name){
+    const l=model.selectedLayer();if(!l)return;
+    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t);
+    const key=this.curveGraphSelected(arr);
+    if(!key)return toast('Tambahkan keyframe lebih dulu');
+    history.push();
+    key.easing=structuredClone(EASING_PRESETS[name]||EASING_PRESETS.linear);
+    timeline.rebuild();renderer.render();
+    this.updateCurveGraphSelectionUI();this.drawGraph();
+  }
+  curveGraphMakeBezier(){
+    const l=model.selectedLayer();if(!l)return;
+    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),key=this.curveGraphSelected(arr);
+    if(!key||!this.curveGraphOutgoing(arr,key))return toast('Pilih keyframe yang memiliki segmen setelahnya');
+    history.push();
+    key.easing={type:'cubic-bezier',x1:.42,y1:0,x2:.58,y2:1};
+    timeline.rebuild();this.updateCurveGraphSelectionUI();this.drawGraph();renderer.render();
+  }
+  curveGraphSpeed(a,b,q){
+    const dt=Math.max(1e-6,b.t-a.t),dv=(+b.v||0)-(+a.v||0),eps=.0015;
+    const q0=clamp(q-eps,0,1),q1=clamp(q+eps,0,1);
+    if(q1<=q0)return 0;
+    const e0=AnimationEngine.ease(a.easing||EASING_PRESETS.linear,q0),e1=AnimationEngine.ease(a.easing||EASING_PRESETS.linear,q1);
+    return dv/dt*((e1-e0)/(q1-q0));
+  }
+  curveGraphSample(arr,view=this.graphView){
+    const points=[];
+    if(!arr.length)return points;
+    if(arr.length===1)return [{t:arr[0].t,y:view==='speed'?0:(+arr[0].v||0)}];
+    for(let i=0;i<arr.length-1;i++){
+      const a=arr[i],b=arr[i+1],steps=Math.max(28,Math.min(100,Math.round((b.t-a.t)*(model.project?.fps||30))));
+      for(let n=0;n<=steps;n++){
+        if(i&&n===0)continue;
+        const q=n/steps,t=lerp(a.t,b.t,q);
+        const y=view==='speed'
+          ?this.curveGraphSpeed(a,b,q)
+          :lerp(+a.v||0,+b.v||0,AnimationEngine.ease(a.easing||EASING_PRESETS.linear,q));
+        if(Number.isFinite(y))points.push({t,y});
+      }
+    }
+    return points;
+  }
+  curveGraphPropLabel(prop){
+    const labels={
+      x:'X Position',y:'Y Position',z:'Z Position',
+      scaleX:'X Scale',scaleY:'Y Scale',scaleZ:'Z Scale',
+      rotation:'Rotation',rotX:'X Rotation',rotY:'Y Rotation',rotZ:'Z Rotation',
+      skewX:'X Skew',skewY:'Y Skew',opacity:'Opacity',
+      orbitAzimuth:'Orbit Azimuth',orbitElevation:'Orbit Elevation',orbitDistance:'Orbit Distance',
+      yaw:'Yaw Rotation',pitch:'Pitch Rotation',roll:'Roll Rotation',
+      fov:'Field of View',focalLength:'Focal Length',digitalZoom:'Digital Zoom',
+      focusDistance:'Focus Distance',orthoSize:'Ortho Size',near:'Near Clip',far:'Far Clip'
+    };
+    if(labels[prop])return labels[prop];
+    return String(prop||'Property')
+      .replace(/([a-z0-9])([A-Z])/g,'$1 $2')
+      .replace(/[_-]+/g,' ')
+      .replace(/\b\w/g,m=>m.toUpperCase());
+  }
+  updateCurveGraphSelectionUI(){
+    const l=model.selectedLayer();if(!l)return;
+    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),key=this.curveGraphSelected(arr);
+    const time=$('#curveKeyTime'),value=$('#curveKeyValue'),ease=$('#curveEaseName'),make=$('#curveMakeBezier');
+    if(time){time.disabled=!key;if(key&&document.activeElement!==time)time.value=(+key.t||0).toFixed(3)}
+    if(value){value.disabled=!key;if(key&&document.activeElement!==value)value.value=(+key.v||0).toFixed(3)}
+    if(ease)ease.textContent=key?this.curveGraphEaseLabel(key):'Pilih keyframe';
+    if(make)make.disabled=!this.curveGraphOutgoing(arr,key);
+    const idx=key?arr.findIndex(k=>k.id===key.id):-1,pos=$('#curveKeyPosition'),prev=$('#curvePrevKey'),next=$('#curveNextKey');
+    if(pos)pos.textContent=arr.length?`KEYFRAME ${idx>=0?idx+1:0}/${arr.length}`:'KEYFRAME 0/0';
+    const chip=$('#curveKeyChip');if(chip){chip.disabled=!key;chip.textContent=key?`KEY ${idx+1}/${arr.length} · ${this.curveGraphEaseLabel(key)}`:'Pilih keyframe'}
+    if(prev)prev.disabled=idx<=0;if(next)next.disabled=idx<0||idx>=arr.length-1;
+    $$('.curveKeyRow').forEach(row=>row.classList.toggle('selected',row.dataset.curveKey===key?.id));
+    $$('[data-curve-ease]').forEach(btn=>btn.classList.toggle('active',!!key&&this.easingPresetName(key.easing||EASING_PRESETS.linear)===btn.dataset.curveEase));
+  }
+  openGraphEditor(initialProp,{fromEasing=false,preserveReturn=false}={}){
+    const l=model.selectedLayer();if(!l)return;
+    this.drawerMode='keys';timeline.refreshKeyframeInteractionState?.();
+    if(!preserveReturn)this.curveReturnToEasing=!!fromEasing;
+    const preferredProp=initialProp||(preserveReturn?this.graphProp:null);
+    const props=this.curveGraphProps(l,preferredProp);
+    this.graphProp=preferredProp&&props.includes(preferredProp)?preferredProp:(this.graphProp&&props.includes(this.graphProp)?this.graphProp:props[0]);
+    if(this.graphView!=='speed')this.graphView='value';
+    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t);
+    const selected=this.curveGraphSelected(arr),selectedIndex=selected?arr.findIndex(k=>k.id===selected.id):-1;
+    const presetNames=[['linear','Linear'],['ease-in','Ease In'],['ease-out','Ease Out'],['ease-in-out','Ease I/O'],['overshoot','Overshoot'],['spring','Spring'],['hold','Hold']];
+    const selectionBlock=`<div class="curveSelection">
+        <label><span>WAKTU</span><input id="curveKeyTime" type="number" step=".001" ${selected?'':'disabled'} value="${selected?(+selected.t||0).toFixed(3):''}"></label>
+        <label><span>NILAI</span><input id="curveKeyValue" type="number" step=".001" ${selected?'':'disabled'} value="${selected?(+selected.v||0).toFixed(3):''}"></label>
+        <div class="curveEaseBox"><span style="display:block;color:#7f899d;font-size:9px;font-weight:750;margin-bottom:4px">EASING KELUAR</span><div class="curveEaseReadout"><b id="curveEaseName">${selected?esc(this.curveGraphEaseLabel(selected)):'Pilih keyframe'}</b><button id="curveMakeBezier" type="button" ${this.curveGraphOutgoing(arr,selected)?'':'disabled'}>BEZIER</button></div></div>
+      </div>`;
+    const presetBlock=`<div class="curvePresetGrid">${presetNames.map(([id,label])=>`<button type="button" data-curve-ease="${id}" class="${selected&&this.easingPresetName(selected.easing||EASING_PRESETS.linear)===id?'active':''}">${label}</button>`).join('')}</div>`;
+    const navigatorBlock=`<div class="curveKeyNavigator"><button id="curvePrevKey" type="button" ${selectedIndex<=0?'disabled':''} aria-label="Keyframe sebelumnya">‹</button><b id="curveKeyPosition">${arr.length?`KEYFRAME ${selectedIndex>=0?selectedIndex+1:0}/${arr.length}`:'KEYFRAME 0/0'}</b><button id="curveNextKey" type="button" ${selectedIndex<0||selectedIndex>=arr.length-1?'disabled':''} aria-label="Keyframe berikutnya">›</button></div>`;
+    const controls=`<div id="curveKeyPopover" class="curveKeyPopover hidden"><div class="curveKeyPopoverHead"><button id="curvePrevKey" type="button" ${selectedIndex<=0?'disabled':''} aria-label="Keyframe sebelumnya">‹</button><b id="curveKeyPosition">${arr.length?`KEYFRAME ${selectedIndex>=0?selectedIndex+1:0}/${arr.length}`:'KEYFRAME 0/0'}</b><button id="curveNextKey" type="button" ${selectedIndex<0||selectedIndex>=arr.length-1?'disabled':''} aria-label="Keyframe berikutnya">›</button><button id="curveKeyPopoverClose" type="button" aria-label="Tutup kontrol keyframe">×</button></div>${selectionBlock}${presetBlock}</div>`;
+    const keyedNow=model.anim.hasKeyAt(l,this.graphProp,model.time,.015);
+    const html=`<div class="drawerBody curveGraphBody">
+      <div class="curveGraphTop">
+        <select id="graphProp" class="curveGraphProp" aria-label="Properti Curve Editor">${props.map(p=>`<option value="${esc(p)}" ${p===this.graphProp?'selected':''}>${esc(this.curveGraphPropLabel(p))}</option>`).join('')}</select>
+        <button id="curveKeyChip" class="curveKeyChip" type="button" ${selected?'':'disabled'}>${selected?`KEY ${selectedIndex+1}/${arr.length} · ${esc(this.curveGraphEaseLabel(selected))}`:'Pilih keyframe'}</button>
+        <div class="curveGraphTabs" role="tablist"><button type="button" data-curve-view="value" class="${this.graphView==='value'?'active':''}">VALUE</button><button type="button" data-curve-view="speed" class="${this.graphView==='speed'?'active':''}">SPEED</button></div>
+        <button id="addGraphKey" class="curveAddKey ${keyedNow?'transformKeyOn':''}" type="button" aria-pressed="${keyedNow?'true':'false'}" title="${keyedNow?'Hapus keyframe pada waktu ini':'Tambah keyframe pada playhead'}">${keyedNow?'◇−':'◇+'}</button>
+      </div>
+      <div class="curveGraphStage"><canvas id="graphCanvas" class="graphCanvas curveGraphCanvas" width="900" height="420"></canvas><div id="curveGraphPlayhead" class="curveGraphPlayhead" aria-hidden="true"></div><div class="curveGraphHint">${this.graphView==='value'?'Drag ◆: waktu + nilai • drag handle: easing':'Speed Graph • drag ◆ horizontal untuk timing'}</div>${controls}</div>
+    </div>`;
+    this.drawerShell('Curve Editor',html);
+    $('#drawer')?.classList.add('curveGraphDrawer');
+    const back=$('#drawerBack');if(back)back.onclick=()=>{
+      if(this.curveReturnToEasing){this.curveReturnToEasing=false;this.transformEaseEditorOpen=true;this.drawerMode='move';this.openInspector('move')}
+      else this.openInspectorRoot();
+    };
+    $('#graphProp').onchange=e=>{this.graphSelectedKeyId=null;this.openGraphEditor(e.target.value,{preserveReturn:true})};
+    $$('[data-curve-view]').forEach(b=>b.onclick=()=>{this.graphView=b.dataset.curveView;this.openGraphEditor(this.graphProp,{preserveReturn:true})});
+    const pop=$('#curveKeyPopover'),chip=$('#curveKeyChip'),popClose=$('#curveKeyPopoverClose');
+    if(chip)chip.onclick=()=>{if(chip.disabled)return;pop?.classList.toggle('hidden')};
+    if(popClose)popClose.onclick=()=>pop?.classList.add('hidden');
+    const goKey=delta=>{
+      const current=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),key=this.curveGraphSelected(current),i=key?current.findIndex(k=>k.id===key.id):-1,target=current[i+delta];
+      if(!target)return;
+      this.graphSelectedKeyId=target.id;model.time=target.t;this.updatePlayhead();renderer.render();this.updateCurveGraphSelectionUI();this.drawGraph();
+    };
+    $('#curvePrevKey')?.addEventListener('click',()=>goKey(-1));
+    $('#curveNextKey')?.addEventListener('click',()=>goKey(1));
+    $('#addGraphKey').onclick=()=>{
+      const prop=this.graphProp,t=model.time,existing=model.anim.nearestKey(l,prop,t,.015);
+      history.push();
+      if(existing){
+        const a=l.kf?.[prop]||[];l.kf[prop]=a.filter(k=>k.id!==existing.id);if(this.graphSelectedKeyId===existing.id)this.graphSelectedKeyId=null;toast('Keyframe dihapus');
+      }else{
+        const k=model.anim.setKey(l,prop,t,+model.prop(l,prop,t),'ease-in-out',.015);this.graphSelectedKeyId=k.id;toast('Keyframe ditambahkan');
+      }
+      timeline.rebuild();renderer.render();this.openGraphEditor(prop,{preserveReturn:true});
+    };
+    $$('[data-curve-ease]').forEach(b=>b.onclick=()=>this.curveGraphApplyPreset(b.dataset.curveEase));
+    $('#curveMakeBezier')?.addEventListener('click',()=>this.curveGraphMakeBezier());
+    const commitSelection=(kind,value)=>{
+      const a=l.kf?.[this.graphProp]||[],k=a.find(x=>x.id===this.graphSelectedKeyId);if(!k)return;
+      history.push();
+      if(kind==='value')k.v=+value||0;
+      else{
+        const sorted=a.slice().sort((x,y)=>x.t-y.t),i=sorted.findIndex(x=>x.id===k.id),frame=1/Math.max(1,model.project?.fps||30),lo=i>0?sorted[i-1].t+frame:0,hi=i<sorted.length-1?sorted[i+1].t-frame:model.project.duration;
+        k.t=clamp(Math.round((+value||0)/frame)*frame,lo,hi);a.sort((x,y)=>x.t-y.t);model.time=k.t;this.updatePlayhead();
+      }
+      timeline.rebuild();renderer.render();this.updateCurveGraphSelectionUI();this.drawGraph();
+    };
+    const kt=$('#curveKeyTime'),kv=$('#curveKeyValue');if(kt)kt.onchange=e=>commitSelection('time',e.target.value);if(kv)kv.onchange=e=>commitSelection('value',e.target.value);
+    this.bindCurveGraphCanvas();this.drawGraph();this.startCurveGraphPlaybackLoop();
+  }
+  updateCurveGraphKeyToggle(){
+    const btn=$('#addGraphKey'),l=model.selectedLayer?.();
+    if(!btn||!l||!this.graphProp)return;
+    const keyed=model.anim.hasKeyAt(l,this.graphProp,model.time,.015);
+    btn.classList.toggle('transformKeyOn',keyed);
+    btn.textContent=keyed?'◇−':'◇+';
+    btn.title=keyed?'Hapus keyframe pada waktu ini':'Tambah keyframe pada playhead';
+    btn.setAttribute('aria-pressed',keyed?'true':'false');
+  }
+  updateCurveGraphPlayhead(){
+    const el=$('#curveGraphPlayhead'),cv=$('#graphCanvas');
+    if(!el||!cv||!model.project)return;
+    const maxT=Math.max(1/30,+model.project.duration||1),W=cv.width||900,mL=68,mR=20,gw=W-mL-mR;
+    const x=mL+clamp((+model.time||0)/maxT,0,1)*gw;
+    el.style.left=`${(x/W)*100}%`;
+    this.updateCurveGraphKeyToggle();
+  }
+  startCurveGraphPlaybackLoop(){
+    if(this._curveGraphPlaybackRAF){cancelAnimationFrame(this._curveGraphPlaybackRAF);this._curveGraphPlaybackRAF=0}
+    let lastTime=NaN;
+    const tick=()=>{
+      const drawer=$('#drawer'),cv=$('#graphCanvas');
+      if(!drawer?.classList.contains('curveGraphDrawer')||!cv){this._curveGraphPlaybackRAF=0;return}
+      const t=+model.time||0;
+      if(model.playing||!Number.isFinite(lastTime)||Math.abs(t-lastTime)>.000001){this.updateCurveGraphPlayhead();lastTime=t}
+      this._curveGraphPlaybackRAF=requestAnimationFrame(tick);
+    };
+    this.updateCurveGraphPlayhead();
+    this._curveGraphPlaybackRAF=requestAnimationFrame(tick);
+  }
+  drawGraph(){
+    const cv=$('#graphCanvas');if(!cv)return;
+    const c=cv.getContext('2d'),l=model.selectedLayer();if(!l)return;
+    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),view=this.graphView==='speed'?'speed':'value';
+    const W=cv.width,H=cv.height,m={l:68,r:20,t:28,b:42},gw=W-m.l-m.r,gh=H-m.t-m.b,maxT=Math.max(1/30,+model.project?.duration||1);
+    c.clearRect(0,0,W,H);c.fillStyle='#0f141f';c.fillRect(0,0,W,H);
+    const samples=this.curveGraphSample(arr,view);
+    const graphVisual=timeline?.keyframeVisualPolicy?.visualFor?.(this.graphProp)||null;
+    const graphColor=graphVisual?.color||'#58ddc0';
+    let ys=samples.map(p=>p.y).filter(Number.isFinite);
+    if(view==='speed')ys.push(0);
+    if(!ys.length)ys=[-1,1];
+    let minY=Math.min(...ys),maxY=Math.max(...ys);
+    if(Math.abs(maxY-minY)<1e-6){const p=Math.max(1,Math.abs(maxY)*.15);minY-=p;maxY+=p}
+    else{const p=(maxY-minY)*.13;minY-=p;maxY+=p}
+    const xFor=t=>m.l+clamp(t/maxT,0,1)*gw,yFor=v=>m.t+(maxY-v)/(maxY-minY)*gh;
+    const timeFor=x=>clamp((x-m.l)/gw,0,1)*maxT,valueFor=y=>maxY-clamp((y-m.t)/gh,0,1)*(maxY-minY);
+    // Grid + labels.
+    c.lineWidth=1;c.font='12px ui-monospace,monospace';c.textBaseline='middle';
+    for(let i=0;i<=5;i++){
+      const q=i/5,x=m.l+q*gw,t=q*maxT;c.strokeStyle=i===0||i===5?'#30394d':'#222a3b';c.beginPath();c.moveTo(x,m.t);c.lineTo(x,H-m.b);c.stroke();c.fillStyle='#657188';c.textAlign=i===0?'left':i===5?'right':'center';c.fillText(`${t.toFixed(t<10?2:1)}s`,x,H-18)
+    }
+    for(let i=0;i<=4;i++){
+      const q=i/4,y=m.t+q*gh,v=maxY-q*(maxY-minY);c.strokeStyle='#222a3b';c.beginPath();c.moveTo(m.l,y);c.lineTo(W-m.r,y);c.stroke();c.fillStyle='#657188';c.textAlign='right';c.fillText(Math.abs(v)>=1000?v.toFixed(0):Math.abs(v)>=10?v.toFixed(1):v.toFixed(2),m.l-8,y)
+    }
+    if(view==='speed'&&minY<0&&maxY>0){const zy=yFor(0);c.strokeStyle='rgba(255,255,255,.2)';c.beginPath();c.moveTo(m.l,zy);c.lineTo(W-m.r,zy);c.stroke()}
+    // Curve.
+    if(samples.length){c.strokeStyle=graphColor;c.lineWidth=3;c.lineJoin='round';c.lineCap='round';c.beginPath();samples.forEach((p,i)=>{const x=xFor(p.t),y=yFor(p.y);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke()}
+    // Playback cursor is a lightweight DOM overlay so it can move every animation frame
+    // without redrawing the entire graph canvas.
+    this.updateCurveGraphPlayhead();
+    const selected=this.curveGraphSelected(arr),outgoing=this.curveGraphOutgoing(arr,selected);
+    const hit={keys:[],handles:[],m,W,H,gw,gh,maxT,minY,maxY,xFor,yFor,timeFor,valueFor,view,selectedId:selected?.id||null};
+    // Value-graph Bezier handles for selected outgoing segment.
+    if(view==='value'&&outgoing){
+      const a=outgoing.from,b=outgoing.to,dv=(+b.v||0)-(+a.v||0),dt=b.t-a.t;
+      if(Math.abs(dv)>1e-7&&dt>1e-7&&(a.easing?.type==='cubic-bezier'||a.easing?.type==='linear'||!a.easing)){
+        const bez=this.normalizeBezierSpec(a.easing||EASING_PRESETS.linear);
+        const h1={x:xFor(a.t+bez.x1*dt),y:yFor((+a.v||0)+bez.y1*dv),which:1,a,b};
+        const h2={x:xFor(a.t+bez.x2*dt),y:yFor((+a.v||0)+bez.y2*dv),which:2,a,b};
+        const p0={x:xFor(a.t),y:yFor(+a.v||0)},p3={x:xFor(b.t),y:yFor(+b.v||0)};
+        c.save();c.globalAlpha=.45;c.strokeStyle=graphColor;c.lineWidth=1.4;c.beginPath();c.moveTo(p0.x,p0.y);c.lineTo(h1.x,h1.y);c.moveTo(p3.x,p3.y);c.lineTo(h2.x,h2.y);c.stroke();c.restore();
+        for(const h of [h1,h2]){c.fillStyle='#101722';c.strokeStyle=graphColor;c.lineWidth=2.2;c.beginPath();c.arc(h.x,h.y,9,0,Math.PI*2);c.fill();c.stroke();hit.handles.push(h)}
+      }
+    }
+    // Keyframe markers.
+    arr.forEach((k,i)=>{
+      let yy;
+      if(view==='value')yy=yFor(+k.v||0);
+      else if(i<arr.length-1)yy=yFor(this.curveGraphSpeed(k,arr[i+1],.001));
+      else if(i>0)yy=yFor(this.curveGraphSpeed(arr[i-1],k,.999));
+      else yy=yFor(0);
+      const xx=xFor(k.t),sel=k.id===selected?.id;c.save();c.translate(xx,yy);c.rotate(Math.PI/4);c.globalAlpha=sel?1:.9;c.fillStyle=graphColor;c.strokeStyle=sel?'#f4fbff':'rgba(255,255,255,.76)';c.lineWidth=sel?2:1.7;c.fillRect(-7.5,-7.5,15,15);c.strokeRect(-7.5,-7.5,15,15);c.restore();hit.keys.push({id:k.id,x:xx,y:yy,key:k})
+    });
+    c.fillStyle='#909bb0';c.textAlign='left';c.font='bold 12px system-ui';c.fillText(`${this.curveGraphPropLabel(this.graphProp)} • ${view==='value'?'VALUE':'SPEED'}`,m.l,14);
+    this._curveGraphHit=hit;
+    this.updateCurveGraphSelectionUI();
+  }
+  bindCurveGraphCanvas(){
+    const cv=$('#graphCanvas');if(!cv)return;
+    const l=model.selectedLayer();if(!l)return;
+    const state={mode:null,id:null,which:0,pointer:null,pushed:false,lo:0,hi:0};
+    const pos=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*cv.width/Math.max(1,r.width),y:(e.clientY-r.top)*cv.height/Math.max(1,r.height)}};
+    const nearest=(items,p,limit)=>{let best=null,d=limit;for(const item of items||[]){const q=Math.hypot(item.x-p.x,item.y-p.y);if(q<d){d=q;best=item}}return best};
+    const beginHistory=()=>{if(!state.pushed){history.push();state.pushed=true}};
+    cv.onpointerdown=e=>{
+      e.preventDefault();const h=this._curveGraphHit;if(!h)return;const p=pos(e),rect=cv.getBoundingClientRect(),touchScale=Math.max(cv.width/Math.max(1,rect.width),cv.height/Math.max(1,rect.height)),handle=nearest(h.handles,p,26*touchScale),keyHit=handle?null:nearest(h.keys,p,24*touchScale);
+      state.pointer=e.pointerId;try{cv.setPointerCapture(e.pointerId)}catch(_){}
+      if(handle){beginHistory();state.mode='handle';state.which=handle.which;state.id=handle.a.id;this.graphSelectedKeyId=handle.a.id;this.updateCurveGraphSelectionUI();return}
+      if(keyHit){
+        this.graphSelectedKeyId=keyHit.id;this.updateCurveGraphSelectionUI();this.drawGraph();
+        const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),i=arr.findIndex(k=>k.id===keyHit.id),frame=1/Math.max(1,model.project?.fps||30);
+        state.lo=i>0?arr[i-1].t+frame:0;state.hi=i<arr.length-1?arr[i+1].t-frame:model.project.duration;state.mode='key';state.id=keyHit.id;beginHistory();return
+      }
+      // Empty graph tap moves the project playhead, not a keyframe.
+      model.time=timeline.snapTime?timeline.snapTime(h.timeFor(p.x),'round'):h.timeFor(p.x);this.updatePlayhead();renderer.render();this.drawGraph();state.mode='playhead';
+    };
+    cv.onpointermove=e=>{
+      if(state.pointer!==e.pointerId||!state.mode||state.mode==='playhead')return;e.preventDefault();const h=this._curveGraphHit;if(!h)return;const p=pos(e),a=l.kf?.[this.graphProp]||[];
+      if(state.mode==='key'){
+        const k=a.find(x=>x.id===state.id);if(!k)return;const frame=1/Math.max(1,model.project?.fps||30),rawT=h.timeFor(p.x);k.t=clamp(Math.round(rawT/frame)*frame,state.lo,state.hi);if(h.view==='value')k.v=h.valueFor(p.y);a.sort((x,y)=>x.t-y.t);model.time=k.t;this.updatePlayhead();renderer.render();this.drawGraph();return
+      }
+      if(state.mode==='handle'){
+        const sorted=a.slice().sort((x,y)=>x.t-y.t),i=sorted.findIndex(k=>k.id===state.id);if(i<0||i>=sorted.length-1)return;const from=sorted[i],to=sorted[i+1],dt=to.t-from.t,dv=(+to.v||0)-(+from.v||0);if(Math.abs(dt)<1e-7||Math.abs(dv)<1e-7)return;
+        const b=this.normalizeBezierSpec(from.easing||EASING_PRESETS.linear),tt=h.timeFor(p.x),vv=h.valueFor(p.y),xn=clamp((tt-from.t)/dt,0,1),yn=clamp((vv-(+from.v||0))/dv,-1.5,2.5);
+        if(state.which===1){b.x1=xn;b.y1=yn}else{b.x2=xn;b.y2=yn}from.easing=b;renderer.render();this.drawGraph();
+      }
+    };
+    const finish=e=>{
+      if(state.pointer!==null&&e?.pointerId!==undefined&&state.pointer!==e.pointerId)return;
+      if(state.mode==='key'||state.mode==='handle'){timeline.rebuild();renderer.render();this.updateCurveGraphSelectionUI();this.drawGraph()}
+      state.mode=null;state.id=null;state.which=0;state.pointer=null;state.pushed=false;
+    };
+    cv.onpointerup=finish;cv.onpointercancel=finish;cv.onlostpointercapture=finish;
+  }
   updatePlayhead(){
     timeline.updatePlayhead();
     if(this.drawerMode==='move' && typeof this.updateTransformKeyUI==='function'){
@@ -19288,7 +20067,7 @@ const XMLBridge={
   parse(text,fileName='Imported XML'){
     const doc=new DOMParser().parseFromString(text,'application/xml');if(doc.querySelector('parsererror'))throw Error('XML tidak valid');const root=doc.documentElement,scene=root.matches('scene,project,composition')?root:(root.querySelector('scene,project,composition')||root);
     const isAM=scene.hasAttribute('amver')||scene.hasAttribute('amplatform')||(!scene.hasAttribute('duration')&&scene.hasAttribute('totalTime')),width=Math.max(16,Math.round(this.num(scene,['width','w','exportWidth'],1080))),height=Math.max(16,Math.round(this.num(scene,['height','h','exportHeight'],1920))),fps=clamp(this.num(scene,['fps','frameRate','framerate'],30),1,240),rawDuration=this.attr(scene,['duration','totalTime','length'],10),duration=Math.max(.05,isAM?(parseFloat(rawDuration)||10000)/1000:this.seconds(rawDuration,10)),name=this.attr(scene,['name','title'],fileName.replace(/\.[^.]+$/,''));
-    const project={id:uid('project'),name,width,height,fps,duration,bg:this.color(this.attr(scene,['background','bgColor','backgroundColor'],'#ffffff'),'#ffffff'),ratio:`${width}:${height}`,created:Date.now(),updated:Date.now(),grid:true,ambient:.72,editorFocal:height/(2*Math.tan(rad(55/2))),playheadMode:'center',timelinePx:55,timelineGestureVersion:2,audioVisualizer:true,sceneVersion:4,colorSpace:'srgb',renderer:'webgl',importSource:'xml'};
+    const project={id:uid('project'),name,width,height,fps,duration,bg:this.color(this.attr(scene,['background','bgColor','backgroundColor'],'#ffffff'),'#ffffff'),ratio:`${width}:${height}`,created:Date.now(),updated:Date.now(),grid:true,ambient:.72,editorFocal:height/(2*Math.tan(rad(55/2))),playheadMode:'center',timelinePx:55,timelineZoomScale:1,timelineZoomVersion:1,timelineViewportWidth:0,timelineGestureVersion:2,timelineSplitCompatVersion:2,audioVisualizer:true,sceneVersion:4,colorSpace:'srgb',renderer:'webgl',importSource:'xml'};
     const resourceMedia=[...scene.querySelectorAll('media')].filter(el=>!el.hasAttribute('startTime')&&!el.hasAttribute('endTime')&&!el.querySelector(':scope > transform')),mediaByUri=new Map(resourceMedia.flatMap(el=>[this.attr(el,['uri','src'],''),this.attr(el,['filename'],null)].filter(Boolean).map(key=>[key,el]))),selector='layer,shape,text,image,video,audio,camera,object,embedScene,media',candidates=[...scene.querySelectorAll(selector)].filter(el=>!resourceMedia.includes(el));
     const oldProject=model.project;model.project=project;const layers=[];
     try{
@@ -19412,16 +20191,41 @@ class ExportSessionGuard{
 class OMSExportResultPreview{
   constructor(){
     this.blob=null;this.filename='';this.url='';this.shareFile=null;this.scrubbing=false;this.bound=false;this.timelineRaf=0;this.ambientTimer=0;this.ambientActiveIndex=0;this.ambientRunning=false;this.ambientSampleMs=2000;this.ambientSeekFadeMs=650;
+    // V5.76 — fullscreen controls are transient overlays, not layout rows.
+    this.fullscreenUiTimer=0;this.fullscreenUiHideMs=1900;this.fullscreenPointerCoarse=false;this.suppressNextFullscreenVideoClick=false;
   }
   el(id){return document.getElementById(id)}
   ensureBound(){
     if(this.bound)return;this.bound=true;
-    const video=this.el('exportResultVideo'),play=this.el('exportResultPlay'),seek=this.el('exportResultSeek');
+    const video=this.el('exportResultVideo'),play=this.el('exportResultPlay'),seek=this.el('exportResultSeek'),fullscreen=this.el('exportResultFullscreen');
     this.el('exportResultSave')?.addEventListener('click',()=>this.save());
     this.el('exportResultShare')?.addEventListener('click',()=>this.share());
     this.el('exportResultClose')?.addEventListener('click',()=>this.close());
+    this.el('exportResultBackTop')?.addEventListener('click',()=>this.close());
     play?.addEventListener('click',()=>this.togglePlayback());
-    video?.addEventListener('click',()=>this.togglePlayback());
+    fullscreen?.addEventListener('click',()=>this.toggleFullscreen());
+    document.addEventListener('fullscreenchange',()=>this.onFullscreenChange());
+    document.addEventListener('webkitfullscreenchange',()=>this.onFullscreenChange());
+    const stage=this.el('exportResultStage'),controls=stage?.querySelector('.exportResultControls');
+    // Desktop: controls appear only after pointer movement. Mobile/coarse pointer: a touch reveals them.
+    stage?.addEventListener('pointermove',e=>{
+      if(!this.isFullscreen()||e.pointerType==='touch'||controls?.contains(e.target))return;
+      this.fullscreenPointerCoarse=false;this.revealFullscreenUi({autoHide:true});
+    },{passive:true});
+    stage?.addEventListener('pointerdown',e=>{
+      if(!this.isFullscreen())return;
+      if(e.pointerType==='touch'||e.pointerType==='pen'){
+        this.fullscreenPointerCoarse=true;
+        if(!controls?.contains(e.target)){this.suppressNextFullscreenVideoClick=true;this.revealFullscreenUi({autoHide:true})}
+      }else if(!controls?.contains(e.target)){
+        this.revealFullscreenUi({autoHide:true});
+      }
+    },{passive:true});
+    controls?.addEventListener('pointerenter',()=>{if(this.isFullscreen())this.revealFullscreenUi({autoHide:false})},{passive:true});
+    controls?.addEventListener('pointerleave',e=>{if(this.isFullscreen()&&e.pointerType!=='touch')this.scheduleFullscreenUiHide()},{passive:true});
+    controls?.addEventListener('pointerdown',()=>{if(this.isFullscreen())this.revealFullscreenUi({autoHide:false})},{passive:true});
+    controls?.addEventListener('pointerup',()=>{if(this.isFullscreen())this.scheduleFullscreenUiHide()},{passive:true});
+    video?.addEventListener('click',()=>{if(this.isFullscreen()&&this.suppressNextFullscreenVideoClick){this.suppressNextFullscreenVideoClick=false;return}this.togglePlayback()});
     video?.addEventListener('play',()=>{this.refreshPlayButton();this.startTimelineLoop();this.startAmbientLoop()});
     video?.addEventListener('pause',()=>{this.refreshPlayButton();this.stopTimelineLoop();this.stopAmbientLoop();this.refreshTimeline();this.captureAmbient({quick:false})});
     video?.addEventListener('ended',()=>{this.refreshPlayButton();this.stopTimelineLoop();this.stopAmbientLoop();this.refreshTimeline();this.captureAmbient({quick:false})});
@@ -19434,11 +20238,11 @@ class OMSExportResultPreview{
       const meta=this.el('exportResultMeta');
       if(meta&&this.blob)meta.textContent='Preview tidak dapat diputar di browser ini • file tetap dapat disimpan';
     });
-    seek?.addEventListener('pointerdown',()=>{this.scrubbing=true});
-    seek?.addEventListener('pointerup',()=>{this.scrubbing=false;this.seekFromControl()});
-    seek?.addEventListener('change',()=>{this.scrubbing=false;this.seekFromControl()});
+    seek?.addEventListener('pointerdown',()=>{this.scrubbing=true;if(this.isFullscreen())this.revealFullscreenUi({autoHide:false})});
+    seek?.addEventListener('pointerup',()=>{this.scrubbing=false;this.seekFromControl();if(this.isFullscreen())this.scheduleFullscreenUiHide()});
+    seek?.addEventListener('change',()=>{this.scrubbing=false;this.seekFromControl();if(this.isFullscreen())this.scheduleFullscreenUiHide()});
     seek?.addEventListener('input',()=>this.seekFromControl(true));
-    window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!this.el('exportResultPreview')?.classList.contains('hidden'))this.close()});
+    window.addEventListener('keydown',e=>{if(e.key!=='Escape'||this.el('exportResultPreview')?.classList.contains('hidden'))return;if(this.isFullscreen())return;this.close()});
   }
   formatTime(sec){
     sec=Math.max(0,Number.isFinite(+sec)?+sec:0);const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=Math.floor(sec%60);
@@ -19541,22 +20345,95 @@ class OMSExportResultPreview{
     panel.dataset.shareSupported=String(shareSupported);
     panel.classList.remove('hidden');
     document.getElementById('exportSheet')?.classList.add('hidden');
-    this.refreshPlayButton();this.refreshTimeline();
+    this.refreshPlayButton();this.refreshFullscreenButton();this.refreshTimeline();
     omsDiagnostics.log('export','EXPORT_PREVIEW_OPEN','',{filename:this.filename,size:blob.size,type:blob.type,engine});
     try{panel.focus?.({preventScroll:true})}catch(e){}
   }
   releaseCurrent(){
     const video=this.el('exportResultVideo');
+    if(this.isFullscreen()){try{const p=document.exitFullscreen?.();p?.catch?.(()=>{})}catch(e){}}
     try{video?.pause()}catch(e){}
     if(video){try{video.removeAttribute('src');video.load()}catch(e){}}
     this.stopTimelineLoop();this.stopAmbientLoop();this.clearAmbient();
     if(this.url){try{URL.revokeObjectURL(this.url)}catch(e){}}
+    this.clearFullscreenUiTimer();this.suppressNextFullscreenVideoClick=false;
+    this.el('exportResultStage')?.classList.remove('fsControlsHidden','fsControlsVisible');
     this.url='';this.blob=null;this.filename='';this.shareFile=null;this.scrubbing=false
   }
   close(){
     const panel=this.el('exportResultPreview');if(panel?.classList.contains('hidden'))return;
     omsDiagnostics.log('export','EXPORT_PREVIEW_CLOSE','');
     panel.classList.add('hidden');this.releaseCurrent();
+  }
+  clearFullscreenUiTimer(){
+    if(this.fullscreenUiTimer){clearTimeout(this.fullscreenUiTimer);this.fullscreenUiTimer=0}
+  }
+  setFullscreenUiVisible(visible){
+    const stage=this.el('exportResultStage');if(!stage)return;
+    stage.classList.toggle('fsControlsVisible',!!visible);
+    stage.classList.toggle('fsControlsHidden',!visible);
+  }
+  scheduleFullscreenUiHide(delay=this.fullscreenUiHideMs){
+    this.clearFullscreenUiTimer();
+    if(!this.isFullscreen())return;
+    this.fullscreenUiTimer=setTimeout(()=>{
+      this.fullscreenUiTimer=0;
+      if(!this.isFullscreen()||this.scrubbing)return;
+      this.setFullscreenUiVisible(false);
+    },Math.max(500,delay|0));
+  }
+  revealFullscreenUi({autoHide=true}={}){
+    if(!this.isFullscreen())return;
+    this.setFullscreenUiVisible(true);
+    if(autoHide)this.scheduleFullscreenUiHide();else this.clearFullscreenUiTimer();
+  }
+  onFullscreenChange(){
+    this.refreshFullscreenButton();
+    const stage=this.el('exportResultStage');
+    this.clearFullscreenUiTimer();this.suppressNextFullscreenVideoClick=false;
+    if(!stage)return;
+    if(this.isFullscreen()){
+      // The requested behavior is a clean image immediately on entry.
+      // UI returns on mouse movement (desktop) or touch (mobile).
+      this.setFullscreenUiVisible(false);
+      omsDiagnostics.log('export','EXPORT_PREVIEW_FULLSCREEN_ENTER','true fullscreen controls hidden',{autoHideMs:this.fullscreenUiHideMs});
+    }else{
+      stage.classList.remove('fsControlsHidden','fsControlsVisible');
+      omsDiagnostics.log('export','EXPORT_PREVIEW_FULLSCREEN_EXIT','');
+    }
+  }
+  fullscreenElement(){return document.fullscreenElement||document.webkitFullscreenElement||null}
+  isFullscreen(){
+    const fs=this.fullscreenElement(),stage=this.el('exportResultStage');
+    return !!(fs&&stage&&(fs===stage||stage.contains?.(fs)))
+  }
+  refreshFullscreenButton(){
+    const btn=this.el('exportResultFullscreen');if(!btn)return;const active=this.isFullscreen();
+    btn.setAttribute('aria-label',active?'Keluar layar penuh':'Layar penuh');
+    btn.setAttribute('title',active?'Keluar layar penuh':'Layar penuh');
+    btn.innerHTML=active
+      ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5"/></svg>'
+      :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M20 16v4h-4M4 16v4h4"/></svg>'
+  }
+  async toggleFullscreen(){
+    const stage=this.el('exportResultStage'),video=this.el('exportResultVideo');if(!stage||!video)return;
+    try{
+      if(this.isFullscreen()){
+        this.clearFullscreenUiTimer();
+        if(document.exitFullscreen)await document.exitFullscreen();
+        else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
+        this.refreshFullscreenButton();return
+      }
+      if(stage.requestFullscreen){
+        await stage.requestFullscreen({navigationUI:'hide'}).catch(()=>stage.requestFullscreen());
+        this.refreshFullscreenButton();
+        if(this.isFullscreen())this.setFullscreenUiVisible(false);
+        return
+      }
+      if(stage.webkitRequestFullscreen){stage.webkitRequestFullscreen();this.refreshFullscreenButton();setTimeout(()=>{if(this.isFullscreen())this.setFullscreenUiVisible(false)},0);return}
+      if(typeof video.webkitEnterFullscreen==='function'){video.webkitEnterFullscreen();return}
+      toast('Layar penuh tidak didukung browser ini')
+    }catch(err){console.warn('Fullscreen preview gagal:',err);toast('Layar penuh tidak dapat dibuka')}
   }
   togglePlayback(){
     const video=this.el('exportResultVideo');if(!video||!this.blob)return;
@@ -20038,6 +20915,29 @@ class Exporter{
     if(targetDelta>1e-7&&frameDelta<-.000001)throw Error(`${label} source mundur ${state.lastTimestamp.toFixed(6)} → ${presented.toFixed(6)} pada ${target.toFixed(6)}`);
     if(targetDelta<-1e-7&&frameDelta>.000001)throw Error(`${label} source maju saat target mundur pada ${target.toFixed(6)}`)
   }
+  gpuFastSourceDecodeEnd(source){
+    const first=Number.isFinite(+source?.trackFirst)?+source.trackFirst:0;
+    // V5.78 — track.computeDuration() is the END timestamp of the last packet.
+    // Decoder sinks retrieve by sample START timestamp, so asking repeatedly at
+    // trackEnd-epsilon can walk into the no-new-frame tail. Prefer the exact
+    // presentation timestamp of the final encoded packet when available.
+    const packetStart=Number(source?.lastPacketStart);
+    if(Number.isFinite(packetStart))return Math.max(first,packetStart);
+    const end=Number(source?.trackEnd);
+    return Number.isFinite(end)?Math.max(first,end-1e-7):Number.POSITIVE_INFINITY
+  }
+  gpuFastReuseDecodedTarget(source,states,layers,target){
+    if(!source||!Number.isFinite(target))return null;
+    const same=(states||[]).length>0&&(states||[]).every(st=>Number.isFinite(+st?.lastTarget)&&Math.abs(+st.lastTarget-target)<1e-8);
+    if(!same)return null;
+    let presented=Number.NaN;
+    for(const st of states||[])if(Number.isFinite(+st?.lastTimestamp))presented=Math.max(Number.isFinite(presented)?presented:-Infinity,+st.lastTimestamp);
+    const sample=source.gpuCurrentSample;
+    if(sample)return{source,states,layers,sample,frame:null,target,presented:Number.isFinite(presented)?presented:Number(sample.timestamp),decodeReuse:true};
+    const frame=source.gpuCurrentFrame;
+    if(frame?.canvas)return{source,states,layers,sample:null,frame,target,presented:Number.isFinite(presented)?presented:target,decodeReuse:true};
+    return null
+  }
   groupSharedSourceRequests(states,t){
     const groups=new Map();
     for(const state of states?.values?.()||[]){
@@ -20045,7 +20945,7 @@ class Exporter{
       const map=mediaClipMap(l,t);if(!map.active)continue;
       const source=state.source,rawTarget=Math.max(0,+map.mediaTime||0);
       const first=Number.isFinite(+source?.trackFirst)?+source.trackFirst:0;
-      const end=Number.isFinite(+source?.trackEnd)?Math.max(first,+source.trackEnd-1e-7):Number.POSITIVE_INFINITY;
+      const end=this.gpuFastSourceDecodeEnd(source);
       const target=Math.max(first,Math.min(rawTarget,end)),key=`${state.sourceKey}|${target.toFixed(6)}`;
       let g=groups.get(key);if(!g){g={source,target,rawTarget,states:[],layers:[]};groups.set(key,g)}
       g.states.push(state);g.layers.push(l)
@@ -20176,7 +21076,15 @@ class Exporter{
             try{v.currentTime=target}catch(e){}
             await retrySeek;
             const retry=await this.waitForOfflinePresentedFrame(l,target,3000);
-            if(!retry.matched)throw Error(`decoder tidak mempresentasikan frame target ${target.toFixed(4)}s`);
+            if(!retry.matched){
+              const tailWindow=.12;
+              if(target>=maxTime-tailWindow&&l.frameCacheReady){
+                l._offlineCachedTarget=target;
+                if(this._gpuDiagActive)this.gpuDiag('OFFLINE_TAIL_FRAME_HOLD',`${l.name||l.id} @ ${target.toFixed(4)}s | cached tail frame retained`);
+                return
+              }
+              throw Error(`decoder tidak mempresentasikan frame target ${target.toFixed(4)}s`)
+            }
             l._offlinePresentedMediaTime=retry.mediaTime;
           }else{
             l._offlinePresentedMediaTime=presented.mediaTime;
@@ -20245,10 +21153,29 @@ class Exporter{
           // Container/media duration may be governed by a slightly longer audio
           // track, which can otherwise make the final project frames request a
           // video timestamp that has no corresponding decoded presentation.
-          let trackFirst=0,trackEnd=Number.POSITIVE_INFINITY;
+          let trackFirst=0,trackEnd=Number.POSITIVE_INFINITY,lastPacketStart=Number.NaN,lastPacketDuration=Number.NaN,lastPacketEnd=Number.NaN;
           try{const v=await track.getFirstTimestamp?.();if(Number.isFinite(+v))trackFirst=+v}catch(e){}
           try{const v=await track.computeDuration?.({skipLiveWait:true});if(Number.isFinite(+v)&&+v>=trackFirst)trackEnd=+v}catch(e){
             try{const v=await track.getDurationFromMetadata?.({skipLiveWait:true});if(Number.isFinite(+v)&&+v>=trackFirst)trackEnd=+v}catch(_){}
+          }
+          // V5.78 root EOS boundary: computeDuration() is packet END time.
+          // The last valid decoder query should be the final packet's START PTS.
+          // Metadata-only packet access does not allocate a video decoder.
+          if(mb.EncodedPacketSink){
+            try{
+              const packetSink=new mb.EncodedPacketSink(track);
+              const packet=await packetSink.getPacket(Infinity,{skipLiveWait:true,metadataOnly:true});
+              if(packet){
+                if(Number.isFinite(+packet.timestamp))lastPacketStart=+packet.timestamp;
+                if(Number.isFinite(+packet.duration)&&+packet.duration>=0)lastPacketDuration=+packet.duration;
+                if(Number.isFinite(lastPacketStart)){
+                  lastPacketEnd=lastPacketStart+(Number.isFinite(lastPacketDuration)?lastPacketDuration:0);
+                  if(Number.isFinite(lastPacketEnd)&&lastPacketEnd>=trackFirst)trackEnd=Math.max(trackFirst,lastPacketEnd)
+                }
+              }
+            }catch(e){
+              if(this._gpuDiagActive)this.gpuDiag('SOURCE_EOS_PACKET_PROBE_FAILED',`${l.name||sourceKey}: ${String(e?.message||e)}`)
+            }
           }
           let sink=null,sinkKind='canvas';
           if(preferNativeSamples&&mb.VideoSampleSink){
@@ -20256,16 +21183,19 @@ class Exporter{
             catch(err){console.warn('GPU Fast native sample tidak tersedia; memakai CanvasSink:',l.name,err)}
           }
           if(!sink)sink=new mb.CanvasSink(track,{width:displayW,poolSize:(Number.isFinite(+poolSize)&&+poolSize>0)?Math.max(2,Math.round(+poolSize)):(cursorKeys.size>1?3:(preferHardware?4:3)),decoderOptions:{hardwareAcceleration:sourceAcceleration}});
-          source={key:sourceKey,input,track,sink,sinkKind,sourceRotation,displayW,displayH,trackFirst,trackEnd,requestTail:Promise.resolve(),gpuCurrentSample:null,gpuCurrentSamples:new Set(),nativeIterator:null,disposed:false,gpuLayerNames:new Set([String(l.name||'video')])};
+          source={key:sourceKey,input,track,sink,sinkKind,sourceRotation,displayW,displayH,trackFirst,trackEnd,lastPacketStart,lastPacketDuration,lastPacketEnd,requestTail:Promise.resolve(),gpuCurrentSample:null,gpuCurrentSamples:new Set(),gpuCurrentFrame:null,nativeIterator:null,disposed:false,gpuLayerNames:new Set([String(l.name||'video')]),eosDecoded:false,eosReuseLogged:false};
           sources.set(sourceKey,source);
-          if(this._gpuDiagActive)this.gpuDiagSource({key:sourceKey,name:l.name||'video',status:'decoder-ready',sinkKind,acceleration:sourceAcceleration,size:`${displayW}x${displayH}`})
+          if(this._gpuDiagActive){
+            this.gpuDiag('SOURCE_EOS_BOUNDARY',`${l.name||sourceKey}`,{trackFirst,trackEnd,lastPacketStart,lastPacketDuration,lastPacketEnd,decodeEnd:this.gpuFastSourceDecodeEnd(source)});
+            this.gpuDiagSource({key:sourceKey,name:l.name||'video',status:'decoder-ready',sinkKind,acceleration:sourceAcceleration,size:`${displayW}x${displayH}`})
+          }
         }catch(err){
           try{input?.dispose?.()}catch(e){}
           failedSources.add(sourceKey);fallbackIds.add(l.id);if(this._gpuDiagActive)this.gpuDiagSource({key:sourceKey,name:l.name||'video',status:'decoder-init-failed',sinkKind:'-',acceleration:sourceAcceleration,size:'-',error:String(err?.message||err)});console.warn('Shared source decoder fallback ke HTMLVideo:',l.name,err);continue
         }
       }
       source.gpuLayerNames?.add?.(String(l.name||'video'));
-      states.set(l.id,{layer:l,sourceKey,source,lastTarget:Number.NaN,lastTimestamp:Number.NaN,disposed:false,hwBuffers:null,hwWriteIndex:0,hwCurrentIndex:-1})
+      states.set(l.id,{layer:l,sourceKey,source,lastTarget:Number.NaN,lastTimestamp:Number.NaN,lastDuration:Number.NaN,disposed:false,hwBuffers:null,hwWriteIndex:0,hwCurrentIndex:-1})
     }
     // If one decode cursor failed, exact duplicate consumers of that mapping use
     // the same fallback; other mappings of the same asset may still decode.
@@ -20290,7 +21220,7 @@ class Exporter{
       source.disposed=true;
       for(const sample of source.gpuCurrentSamples||[]){try{sample?.close?.()}catch(e){}}
       for(const sample of source.gpuFastChunkPendingSamples||[]){try{sample?.close?.()}catch(e){}}
-      source.gpuCurrentSamples?.clear?.();source.gpuFastChunkPendingSamples?.clear?.();source.gpuCurrentSample=null;try{source.input?.dispose?.()}catch(e){}
+      source.gpuCurrentSamples?.clear?.();source.gpuFastChunkPendingSamples?.clear?.();source.gpuCurrentSample=null;source.gpuCurrentFrame=null;try{source.input?.dispose?.()}catch(e){}
     }
     bundle.states?.clear?.();bundle.sources?.clear?.();bundle.fallbackIds?.clear?.()
   }
@@ -20356,7 +21286,7 @@ class Exporter{
       const sig=omsVideoMappingSignature(consumers[0].layer);
       if(consumers.some(st=>omsVideoMappingSignature(st.layer)!==sig))continue; // divergent retime: exact random access instead
       const l=consumers[0].layer;
-      function* targets(){let previous=-Infinity;for(let i=0;i<count;i++){const relative=Math.min(i/rate,duration),projectT=exporter.projectTime(relative),map=mediaClipMap(l,projectT);if(!map.active)continue;const raw=Math.max(0,+map.mediaTime||0),first=Number.isFinite(+source.trackFirst)?+source.trackFirst:0,end=Number.isFinite(+source.trackEnd)?Math.max(first,+source.trackEnd-1e-7):Number.POSITIVE_INFINITY,target=Math.max(first,Math.min(raw,end));if(target+1e-9<previous)return;previous=target;yield target}}
+      function* targets(){let previous=-Infinity,hasPrevious=false;for(let i=0;i<count;i++){const relative=Math.min(i/rate,duration),projectT=exporter.projectTime(relative),map=mediaClipMap(l,projectT);if(!map.active)continue;const raw=Math.max(0,+map.mediaTime||0),first=Number.isFinite(+source.trackFirst)?+source.trackFirst:0,end=exporter.gpuFastSourceDecodeEnd(source),target=Math.max(first,Math.min(raw,end));if(hasPrevious&&target+1e-9<previous)return;if(hasPrevious&&Math.abs(target-previous)<1e-9)continue;previous=target;hasPrevious=true;yield target}}
       try{source.nativeIterator=source.sink.samplesAtTimestamps(targets())[Symbol.asyncIterator]()}catch(e){source.nativeIterator=null}
     }
   }
@@ -20404,7 +21334,7 @@ class Exporter{
         for(let fi=0;fi<count;fi++){
           const relative=Math.min(fi/rate,duration),projectT=this.projectTime(relative),map=mediaClipMap(layer,projectT);
           if(!map.active)continue;
-          const raw=Math.max(0,+map.mediaTime||0),first=Number.isFinite(+source.trackFirst)?+source.trackFirst:0,end=Number.isFinite(+source.trackEnd)?Math.max(first,+source.trackEnd-1e-7):Number.POSITIVE_INFINITY,target=Math.max(first,Math.min(raw,end));
+          const raw=Math.max(0,+map.mediaTime||0),first=Number.isFinite(+source.trackFirst)?+source.trackFirst:0,end=this.gpuFastSourceDecodeEnd(source),target=Math.max(first,Math.min(raw,end));
           if(target+1e-8<previous){compatible=false;break}
           schedule[fi]=target;previous=target;active++
         }
@@ -20531,7 +21461,7 @@ class Exporter{
           const l=st.layer;if(l.hidden||!omsLayerIncludedInExport(l))continue;
           const map=mediaClipMap(l,projectT);if(!map.active)continue;
           const raw=Math.max(0,+map.mediaTime||0),first=Number.isFinite(+source.trackFirst)?+source.trackFirst:0;
-          const end=Number.isFinite(+source.trackEnd)?Math.max(first,+source.trackEnd-1e-7):Number.POSITIVE_INFINITY;
+          const end=this.gpuFastSourceDecodeEnd(source);
           const target=Math.max(first,Math.min(raw,end)),k=target.toFixed(7);
           let g=perFrame.get(k);if(!g){g={frameIndex:fi,source,target,states:[],layers:[]};perFrame.set(k,g)}
           g.states.push(st);g.layers.push(l)
@@ -20635,6 +21565,7 @@ class Exporter{
       source.sink=new mb.CanvasSink(source.track,{width:Math.max(2,+source.displayW||2),poolSize:4,decoderOptions:{hardwareAcceleration:'no-preference'}});
       source.sinkKind='canvas';
       source.runtimeAcceleration='no-preference';
+      source.gpuFastTailRecoveryActive=true;
       if(this._gpuDiagActive){
         this.gpuDiag('SOURCE_DECODER_DOWNGRADE',`${source.key}: VideoSampleSink → CanvasSink | ${String(reason?.message||reason||'')}`);
         this.gpuDiagSource({key:source.key,name:[...((source?.gpuLayerNames)||[])][0]||source.key,status:'decoder-downgraded',sinkKind:'canvas',acceleration:'no-preference',size:`${source.displayW}x${source.displayH}`,error:String(reason?.message||reason||'')})
@@ -20644,6 +21575,38 @@ class Exporter{
       if(this._gpuDiagActive)this.gpuDiag('SOURCE_DECODER_DOWNGRADE_FAILED',`${source.key}: ${String(err?.message||err)}`);
       return false
     }
+  }
+
+  gpuFastTailHoldItem(source,states,layers,target,projectTime=null){
+    if(!Number.isFinite(target))return null;
+    const fps=Math.max(1,+model?.project?.fps||30),tailWindow=Math.max(.12,4/fps);
+    const ends=[];
+    const trackEnd=Number(source?.trackEnd);if(Number.isFinite(trackEnd))ends.push({end:trackEnd,reason:'track'});
+    if(Number.isFinite(+projectTime)){
+      for(const l of layers||[]){
+        try{
+          const map=mediaClipMap(l,+projectTime);if(!map?.active)continue;
+          if(Number.isFinite(+map.sourceOut))ends.push({end:+map.sourceOut,reason:'clip'});
+          if(Number.isFinite(+map.sourceDuration))ends.push({end:+map.sourceDuration,reason:'media'});
+        }catch(e){}
+      }
+    }
+    let nearest=null;
+    for(const candidate of ends){
+      const delta=candidate.end-target;
+      if(delta>=-.02&&delta<=tailWindow+1e-6&&(!nearest||Math.abs(delta)<Math.abs(nearest.delta)))nearest={...candidate,delta}
+    }
+    if(!nearest)return null;
+    let presented=Number.NaN;
+    for(const st of states||[])if(Number.isFinite(+st?.lastTimestamp))presented=Math.max(Number.isFinite(presented)?presented:-Infinity,+st.lastTimestamp);
+    const currentSample=source?.gpuCurrentSample;
+    if(!Number.isFinite(presented)&&currentSample&&Number.isFinite(+currentSample.timestamp))presented=+currentSample.timestamp;
+    const maxHoldGap=Math.max(.16,5/fps);
+    if(Number.isFinite(presented)&&target-presented>maxHoldGap)return null;
+    const currentFrame=source?.gpuCurrentFrame;
+    if(currentFrame?.canvas)return{source,states,layers,sample:null,frame:currentFrame,target,presented:Number.isFinite(presented)?presented:target,tailHold:true,tailReason:nearest.reason,tailEnd:nearest.end};
+    if(currentSample)return{source,states,layers,sample:currentSample,frame:null,target,presented:Number.isFinite(presented)?presented:target,tailHold:true,tailReason:nearest.reason,tailEnd:nearest.end};
+    return null
   }
 
   async prepareGpuFastVideoFrame(t,bundle,{preparedItems=null,skipSourceKeys=null}={}){
@@ -20656,6 +21619,19 @@ class Exporter{
     const runGroup=async group=>{
       const {source,target,states,layers}=group;let sample=null,frame=null,presented=Number.NaN;
       if(source?.disabled){for(const st of states){st.fallback=true;bundle.fallbackIds.add(st.layer.id);runtimeFallbackIds.add(st.layer.id)}return}
+      // V5.78 — EOS is handled by an exact final-packet presentation target.
+      // If multiple project frames map to that same terminal PTS, reuse the
+      // already-decoded source frame instead of touching the decoder again.
+      const decodedReuse=this.gpuFastReuseDecodedTarget(source,states,layers,target);
+      if(decodedReuse){
+        items.push(decodedReuse);
+        const eosTarget=this.gpuFastSourceDecodeEnd(source);
+        if(this._gpuDiagActive&&Number.isFinite(eosTarget)&&Math.abs(target-eosTarget)<1e-8&&!source.eosReuseLogged){
+          source.eosReuseLogged=true;
+          this.gpuDiag('SOURCE_EOS_FRAME_REUSE',`${layers[0]?.name||source?.key} @ ${target.toFixed(4)}s ← ${Number(decodedReuse.presented).toFixed(4)}s`);
+        }
+        return
+      }
       try{
         if(source.sinkKind==='sample'){
           sample=await this.serializedSourceRequest(source,async()=>{
@@ -20686,13 +21662,28 @@ class Exporter{
           if(!sample)throw Error(`GPU Fast tidak memperoleh shared VideoSample: ${layers[0]?.name||source.key}`);presented=Number(sample.timestamp)
         }else{
           const result=await this.serializedSourceRequest(source,()=>source.sink.getCanvas(target));if(source.disposed)return;
-          if(!result?.canvas)throw Error(`GPU Fast tidak memperoleh shared frame: ${layers[0]?.name||source.key}`);presented=Number(result.timestamp);frame=this.copyDecodedCanvas(result.canvas,{desynchronized:true})
+          if(!result?.canvas)throw Error(`GPU Fast tidak memperoleh shared frame: ${layers[0]?.name||source.key}`);presented=Number(result.timestamp);frame=this.copyDecodedCanvas(result.canvas,{desynchronized:true});frame.duration=Number(result.duration)
         }
         for(const st of states)this.validatePresentedOrder(st,target,presented,'GPU Fast');
-        items.push({source,states,layers,sample,frame,target,presented})
+        const presentedDuration=sample&&Number.isFinite(+sample.duration)?+sample.duration:(frame&&Number.isFinite(+frame.duration)?+frame.duration:Number.NaN);
+        const eosTarget=this.gpuFastSourceDecodeEnd(source);
+        if(Number.isFinite(eosTarget)&&Math.abs(target-eosTarget)<1e-8){
+          source.eosDecoded=true;
+          if(this._gpuDiagActive)this.gpuDiag('SOURCE_EOS_FRAME_DECODED',`${layers[0]?.name||source?.key}`,{target,presented,duration:presentedDuration,trackEnd:source.trackEnd,lastPacketStart:source.lastPacketStart,lastPacketDuration:source.lastPacketDuration});
+        }
+        items.push({source,states,layers,sample,frame,target,presented,presentedDuration})
       }catch(err){
         try{sample?.close?.()}catch(e){}
         let finalErr=err;
+        // V5.74 — a container/video duration can extend a fraction past the
+        // final decodable presentation. Reuse the most recent valid source frame
+        // only inside a bounded 120 ms tail instead of poisoning the whole export.
+        const directTailHold=this.gpuFastTailHoldItem(source,states,layers,target,t);
+        if(directTailHold){
+          items.push(directTailHold);
+          if(this._gpuDiagActive)this.gpuDiag('SOURCE_TAIL_FRAME_HOLD',`${layers[0]?.name||source?.key} @ ${target.toFixed(4)}s ← ${Number(directTailHold.presented).toFixed(4)}s | ${source?.sinkKind||'unknown'}`);
+          return
+        }
         // V5.30 — desktop-only recovery. A VideoSampleSink configuration failure
         // (notably HEVC on some Chromium/Windows combinations) may rebuild that
         // source as CanvasSink. Touch/mobile deliberately skips this branch and
@@ -20701,12 +21692,22 @@ class Exporter{
           try{
             const retry=await this.serializedSourceRequest(source,()=>source.sink.getCanvas(target));
             if(!retry?.canvas)throw Error(`GPU Fast CanvasSink retry tidak memperoleh frame: ${layers[0]?.name||source.key}`);
-            const retryPresented=Number(retry.timestamp),retryFrame=this.copyDecodedCanvas(retry.canvas,{desynchronized:true});
+            const retryPresented=Number(retry.timestamp),retryFrame=this.copyDecodedCanvas(retry.canvas,{desynchronized:true});retryFrame.duration=Number(retry.duration);
             for(const st of states)this.validatePresentedOrder(st,target,retryPresented,'GPU Fast Canvas retry');
-            items.push({source,states,layers,sample:null,frame:retryFrame,target,presented:retryPresented,downgraded:true});
+            const eosTarget=this.gpuFastSourceDecodeEnd(source);
+            if(Number.isFinite(eosTarget)&&Math.abs(target-eosTarget)<1e-8){source.eosDecoded=true;if(this._gpuDiagActive)this.gpuDiag('SOURCE_EOS_FRAME_DECODED',`${layers[0]?.name||source?.key}`,{target,presented:retryPresented,duration:Number(retry.duration),via:'CanvasSink',trackEnd:source.trackEnd,lastPacketStart:source.lastPacketStart})}
+            items.push({source,states,layers,sample:null,frame:retryFrame,target,presented:retryPresented,presentedDuration:Number(retry.duration),downgraded:true});
             if(this._gpuDiagActive)this.gpuDiag('SOURCE_FRAME_DECODE_RECOVERED',`${layers[0]?.name||source.key} @ ${target.toFixed(4)}s → CanvasSink ${Number.isFinite(retryPresented)?retryPresented.toFixed(4)+'s':'timestamp unknown'}`);
             return
-          }catch(retryErr){finalErr=retryErr}
+          }catch(retryErr){
+            finalErr=retryErr;
+            const retryTailHold=this.gpuFastTailHoldItem(source,states,layers,target,t);
+            if(retryTailHold){
+              items.push(retryTailHold);
+              if(this._gpuDiagActive)this.gpuDiag('SOURCE_TAIL_FRAME_HOLD',`${layers[0]?.name||source?.key} @ ${target.toFixed(4)}s ← ${Number(retryTailHold.presented).toFixed(4)}s | CanvasSink retry`);
+              return
+            }
+          }
         }
         if(this._gpuDiagActive)this.gpuDiag('SOURCE_FRAME_DECODE_FALLBACK',`${layers[0]?.name||source?.key}: ${String(finalErr?.message||finalErr)}`);
         console.warn('GPU Fast source decoder turun ke compatibility path:',layers[0]?.name||source?.key,finalErr);
@@ -20714,7 +21715,7 @@ class Exporter{
         // the whole media source (all timeline consumers of it), release its
         // WebCodecs input, and restore only those HTMLVideo owners.
         for(const st of bundle.states.values())if(st.source===source){st.fallback=true;bundle.fallbackIds.add(st.layer.id);runtimeFallbackIds.add(st.layer.id)}
-        source.disabled=true;try{source.input?.dispose?.()}catch(e){}
+        source.disabled=true;try{const p=source.input?.dispose?.();p?.catch?.(()=>{})}catch(e){}
       }
     };
     if(sequential){
@@ -20732,7 +21733,7 @@ class Exporter{
     const incomingBySource=new Map();for(const item of prepared.items){if(item.sample){let set=incomingBySource.get(item.source);if(!set){set=new Set();incomingBySource.set(item.source,set)}set.add(item.sample)}}
     for(const [source,incoming] of incomingBySource){for(const old of source.gpuCurrentSamples||[]){if(!incoming.has(old)){try{old?.close?.()}catch(e){}}}source.gpuCurrentSamples=new Set()}
     for(const item of prepared.items){
-      const {source,states,layers,sample,frame,target,presented}=item;
+      const {source,states,layers,sample,frame,target,presented,presentedDuration}=item;
       if(source.disposed){try{sample?.close?.()}catch(e){};continue}
       if(sample){
         source.gpuFastChunkPendingSamples?.delete?.(sample);
@@ -20740,12 +21741,16 @@ class Exporter{
         // their decode happens before the project frame is committed.
         if(item.deferredValidation)for(const st of states)this.validatePresentedOrder(st,target,presented,'GPU Fast chunk');
         // Keep all samples needed by this composition frame alive together.
-        source.gpuCurrentSamples ||= new Set();source.gpuCurrentSamples.add(sample);source.gpuCurrentSample=sample;
+        source.gpuCurrentSamples ||= new Set();source.gpuCurrentSamples.add(sample);source.gpuCurrentSample=sample;source.gpuCurrentFrame=null;
         for(const l of layers){l._gpuFastVideoSample=sample;l._gpuFastVideoRotation=Number.isFinite(+sample.rotation)?+sample.rotation:(+source.sourceRotation||0)}
       }else if(frame){
+        // CanvasSink downgrade/tail recovery owns a stable copied canvas. Keep
+        // that exact frame available so the final VFR tail can be held safely.
+        for(const old of source.gpuCurrentSamples||[]){try{old?.close?.()}catch(e){}}
+        source.gpuCurrentSamples?.clear?.();source.gpuCurrentSample=null;source.gpuCurrentFrame=frame;
         for(const l of layers){l._gpuFastVideoSample=null;l._gpuFastVideoRotation=0;l.frameCanvas=frame.canvas;l.frameCtx=frame.ctx}
       }else continue;
-      for(const st of states){const l=st.layer;l.frameCacheReady=true;l.frameCacheTime=Number.isFinite(presented)?presented:target;l._offlineCachedTarget=target;st.lastTarget=target;if(Number.isFinite(presented))st.lastTimestamp=presented}
+      for(const st of states){const l=st.layer;l.frameCacheReady=true;l.frameCacheTime=Number.isFinite(presented)?presented:target;l._offlineCachedTarget=target;st.lastTarget=target;if(Number.isFinite(presented))st.lastTimestamp=presented;if(Number.isFinite(+presentedDuration))st.lastDuration=+presentedDuration}
     }
   }
 
@@ -21042,7 +22047,14 @@ class Exporter{
         renderer.fastExportFallbackUploads=0;
         renderer.fastExportNativeSampleUploads=0;
         renderer.fastExportCanvasUploads=0;
-        renderer._fastExportPruned=false
+        renderer._fastExportPruned=false;
+        const nativeTarget=renderer.setNativeExportTarget(exportSize.width,exportSize.height);
+        if(!nativeTarget?.ok){
+          omsDiagnostics.log('gpu','NATIVE_EXPORT_TARGET_FAIL','',nativeTarget||{});
+          throw Error(`GPU Fast tidak dapat membuat framebuffer ${exportSize.width}×${exportSize.height}: ${nativeTarget?.reason||'unknown'}`)
+        }
+        this.gpuDiag('NATIVE_EXPORT_TARGET',JSON.stringify(nativeTarget));
+        omsDiagnostics.log('export','NATIVE_EXPORT_TARGET','GPU Fast',{project:{width:model.project.width,height:model.project.height},export:{width:exportSize.width,height:exportSize.height},renderer:{width:renderer.canvas.width,height:renderer.canvas.height},scale:nativeTarget.scale})
       }
 
       const webm=selected.id==='vp9-webm'||selected.id==='vp8-webm';
@@ -21224,9 +22236,10 @@ class Exporter{
         const durationUs=Math.max(1,Math.round(duration*1_000_000));
         const keyFrame=i===0||(i%Math.max(1,Math.round(fps*2))===0);
 
-        // Direct renderer.canvas → VideoFrame → VideoEncoder. VideoEncoderConfig
-        // owns output width/height and scales differing input dimensions itself,
-        // eliminating V4.86's full-resolution drawImage output-canvas copy.
+        // V5.73 — GPU Fast renderer.canvas already matches exportSize exactly.
+        // VideoFrame therefore receives a native-resolution composite; the encoder
+        // no longer upscales a project-resolution framebuffer. Legacy Video HW
+        // keeps its existing direct-canvas behavior for compatibility.
         const encodeStarted=performance.now();
         const frame=new VideoFrame(renderer.canvas,{timestamp:timestampUs,duration:durationUs});
         if(gpuFast&&i===0)this.gpuDiag('FIRST_ENCODE_SUBMIT','submit frame ke VideoEncoder');
@@ -21288,7 +22301,7 @@ class Exporter{
         const elapsed=Math.max(1,performance.now()-profile.started),actualFps=profile.frames/(elapsed/1000),n=Math.max(1,profile.frames);
         const chunk=stableDecoders?.gpuFastChunkStats||{chunks:0,requests:0,decodeMs:0,nullRecoveries:0};
         const metrics={
-          engine:'GPU Fast V5.19',frames:profile.frames,elapsedMs:+elapsed.toFixed(1),actualFps:+actualFps.toFixed(2),
+          engine:'GPU Fast V5.78 Native Resolution + EOS Scheduler',frames:profile.frames,elapsedMs:+elapsed.toFixed(1),actualFps:+actualFps.toFixed(2),rendererWidth:renderer.canvas.width,rendererHeight:renderer.canvas.height,exportWidth:exportSize.width,exportHeight:exportSize.height,
           primeDecodeMs:+profile.primeDecodeMs.toFixed(1),renderMsPerFrame:+(profile.renderMs/n).toFixed(2),
           audioBuildMs:+audioPerf.buildMs.toFixed(1),audioTailWaitMs:+audioPerf.tailWaitMs.toFixed(1),audioSourceDecodeMs:+audioPerf.sourceDecodeMs.toFixed(1),audioCacheHits:+audioPerf.cacheHits||0,audioCacheMisses:+audioPerf.cacheMisses||0,
           sourceOverlap:!!canOverlapSource,sourceOverlapReason,sourceAcceleration,encoderQueueDepth:queueDepth,
@@ -21309,7 +22322,9 @@ class Exporter{
         toast(`GPU Fast ${actualFps.toFixed(1)} FPS • decode wait ${(profile.decodeWaitMs/n).toFixed(1)}ms • lanes ${stableDecoders?.gpuFastLaneState?.laneCount||0} • chunks ${chunk.chunks||0}`)
       }else toast(`Video HW selesai • double-buffer + direct encoder • ${fps} FPS`)
     }finally{
+      const hadNativeTarget=!!renderer._nativeExportTarget;
       renderer.fastExportRenderer=false;renderer._fastExportPruned=false;
+      try{if(hadNativeTarget)renderer.clearNativeExportTarget()}catch(e){console.warn('Gagal memulihkan resolusi preview setelah export:',e)}
       try{if(encoder&&encoder.state!=='closed')encoder.close()}catch(e){}
       this.disposeStableVideoDecoders(stableDecoders);
       // V5.19 — avoid immediately recreating the Stage 5 preview worker while
@@ -21457,7 +22472,7 @@ class Exporter{
   disposeExperimentalVideoDecoders(bundle){
     if(!bundle)return;
     for(const state of bundle.states?.values?.()||[])state.disposed=true;
-    for(const source of bundle.sources?.values?.()||[]){source.disposed=true;try{source.input?.dispose?.()}catch(e){}}
+    for(const source of bundle.sources?.values?.()||[]){source.disposed=true;try{const p=source.input?.dispose?.();p?.catch?.(()=>{})}catch(e){}}
     bundle.states?.clear?.();bundle.sources?.clear?.()
   }
 
@@ -24066,6 +25081,9 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
   let btn=null;
   let raf=0;
   let fitRAF=0;
+  let timelineFitRAF=0;
+  let timelineFitReleaseRAF=0;
+  let splitKeepTime=0;
   let mainResizeObserver=null;
   let desktopCanvasSplitRatio=null;
   let originalPositionLayerActions=null;
@@ -24092,6 +25110,77 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
   function rememberRatio(value){
     desktopCanvasSplitRatio=Math.max(.1,Math.min(.9,value));
     try{sessionStorage.setItem(STORAGE_KEY,String(desktopCanvasSplitRatio))}catch(e){}
+  }
+
+  function beginTimelineSplitFit(){
+    if(typeof timeline==='undefined'||!timeline||!model?.project)return;
+    // V5.68 — synchronize the restored project BEFORE arming the responsive
+    // split fit. syncProjectZoom() intentionally disables initialFitActive when
+    // it sees a different project id. In legacy projects that ordering could
+    // cancel the splitter's first live-fit pass and resurrect the saved old
+    // timeline geometry. Consuming the project switch first makes old and new
+    // projects enter the exact same splitter path.
+    try{timeline.syncProjectZoom?.()}catch(e){}
+    splitKeepTime=clamp(+model.time||0,0,Math.max(0,+model.project.duration||0));
+    timeline._desktopSplitResizeActive=true;
+    timeline._desktopSplitResizeTime=splitKeepTime;
+    // Internal splitter resizing is a viewport-layout operation. It deliberately
+    // restores the responsive 2-second view, including the existing one-frame
+    // safety interval after 2s, just like the initial responsive timeline fit.
+    timeline.initialFitSeconds=2;
+    timeline.initialFitActive=true;
+    cancelAnimationFrame(timelineFitReleaseRAF);
+    timelineFitReleaseRAF=0;
+  }
+
+  function scheduleTimelineSplitFit(){
+    if(typeof timeline==='undefined'||!timeline?._desktopSplitResizeActive||!model?.project)return;
+    cancelAnimationFrame(timelineFitRAF);
+    timelineFitRAF=requestAnimationFrame(()=>{
+      timelineFitRAF=0;
+      if(!timeline._desktopSplitResizeActive||!model?.project)return;
+      const keep=clamp(splitKeepTime,0,Math.max(0,+model.project.duration||0));
+      model.time=keep;
+      timeline._desktopSplitResizeTime=keep;
+      timeline.initialFitSeconds=2;
+      timeline.initialFitActive=true;
+      // applyInitialSecondsFit rebuilds ruler/tracks with the NEW centerPad and
+      // NEW px/s. This is the piece browser-resize had but the internal splitter
+      // lacked, which caused the fixed 50% playhead to appear over another tick.
+      timeline.applyInitialSecondsFit?.({persist:true,rebuild:true});
+      model.time=keep;
+      const sc=document.getElementById('timelineScroll');
+      if(sc&&timeline.isCentered?.()){
+        timeline.syncingScroll=true;
+        const target=keep*timeline.px;
+        sc.scrollLeft=target;
+        timeline.lastScrollLeft=target;
+        requestAnimationFrame(()=>{
+          timeline.syncingScroll=false;
+          timeline.updatePlayhead?.();
+        });
+      }else{
+        timeline.updatePlayhead?.();
+      }
+    });
+  }
+
+  function endTimelineSplitFit(){
+    if(typeof timeline==='undefined'||!timeline?._desktopSplitResizeActive)return;
+    // Final pass after layout settles, then keep the guard alive for one more
+    // animation frame so Chromium's delayed resize-scroll cannot scrub time.
+    scheduleTimelineSplitFit();
+    cancelAnimationFrame(timelineFitReleaseRAF);
+    timelineFitReleaseRAF=requestAnimationFrame(()=>{
+      timelineFitReleaseRAF=requestAnimationFrame(()=>{
+        if(typeof timeline==='undefined'||!timeline)return;
+        model.time=clamp(splitKeepTime,0,Math.max(0,+model.project?.duration||0));
+        timeline._desktopSplitResizeTime=model.time;
+        timeline.updatePlayhead?.();
+        timeline._desktopSplitResizeActive=false;
+        timelineFitReleaseRAF=0;
+      });
+    });
   }
 
   function fitPopup(){
@@ -24129,6 +25218,7 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
       const ratio=next/Math.max(1,rect.width);
       applySplit(ratio,{ensureFit:false});
       refitCanvasAfterLayout();
+      scheduleTimelineSplitFit();
     };
     const up=(ev)=>{
       if(!active||ev.pointerId!==activePointerId)return;
@@ -24144,6 +25234,7 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
       // geometry from before the drag.
       try{timeline?.rebuild?.()}catch(e){}
       refitAfterLayout();
+      endTimelineSplitFit();
     };
     btn.addEventListener('pointerdown',ev=>{
       if(!horizontalSplitEnabled())return;
@@ -24157,6 +25248,7 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
       activePointerId=ev.pointerId;
       startX=ev.clientX;
       startPreview=currentPreviewPx(rect.width);
+      beginTimelineSplitFit();
       btn.classList.add('dragging');
       try{btn.setPointerCapture(ev.pointerId)}catch(e){}
       window.addEventListener('pointermove',move,true);
@@ -24311,6 +25403,8 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
   setTimeout(()=>{patchLayerActionsPosition();schedule()},0);
 })();
 </script>
+<!-- V5.67 — V5.59 fallback: internal three-line canvas/timeline splitter keeps its original pointer drag, but now performs a rAF-throttled live 2s+1-frame timeline fit and suppresses layout-induced scroll scrubbing until the split transaction settles. -->
+<!-- V5.70 — project-isolated responsive timeline zoom: store a dimensionless per-project zoom scale relative to the live timeline viewport; legacy absolute timelinePx snapshots normalize once, preventing A→old→A project switching from leaking stale ruler geometry. -->
 <!-- V4.41 — the existing toolbar split handle now owns horizontal split on desktop PC and mobile-landscape desktop mode; session ratio only, no project serialization. -->
 <style id="oms-v433-transport-center-split-fix">
 /* V4.33 — center playback-nav around Play, keep split handle independent, and simplify its visual */
