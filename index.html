@@ -10,6 +10,19 @@
 <!-- V5.74 — GPU Fast tail-frame hold: final source timestamps that fall after the last decodable presentation reuse the most recent valid frame instead of downgrading/aborting; offline compatibility decode gets the same bounded tail hold. -->
 <!-- V5.30 — Mobile GPU Fast regression hotfix: desktop-only CanvasSink recovery is now strictly isolated from coarse/touch devices. Mobile restores the V5.28 compatibility fallback after an unsupported VideoSampleSink, avoiding persistent CanvasSink decode/copy overhead while preserving all V5.29 desktop native/hardware fixes. -->
 <!-- V5.78 — GPU Fast root EOS fix: derive the final presentation target from the last encoded video packet start (not the packet end/container duration), deduplicate repeated terminal timestamps, and reuse the already-decoded terminal frame. V5.76 true fullscreen auto-hide controls are preserved. V5.74/V5.75 tail holds remain emergency-only fallbacks. -->
+<!-- V5.80 — Layer-local Curve Editor time domain: graph X axis now spans only the selected layer duration (0..layer duration) while keyframes remain stored in project-global time. Playhead, key dragging, key-time editing, add/remove, Bezier handles, and VALUE/SPEED views map through the selected layer start/end. V5.79 export-preview Back button and V5.76 true fullscreen are preserved. -->
+<!-- V5.81 — Transform header context cleanup: LOCAL / 360° / lens shortcuts are hidden while the regular easing editor is open. A compact EASING ↔ CURVE header switch allows direct hand-off between the classic easing editor and Curve Editor while keeping XYZ Position/Rotation header controls exclusive to those transform pages. -->
+<!-- V5.82 — Curve Editor navigation: the top-left Back arrow now always returns directly to the Transform XYZ Position/Rotation page. The dedicated EASING header button remains the explicit route back to the classic easing editor. -->
+<!-- V5.83 — Easing navigation cleanup: Back from CUBIC BEZIER / regular easing now returns directly to Transform XYZ Position/Rotation, while the redundant bottom Curve button is removed. The header CURVE switch remains the only route from Easing to Curve Editor. -->
+<!-- V5.84 — Sticky Easing Editor: CUBIC BEZIER / Spring / Hold easing stays open while the timeline scrubs across keyframes or temporarily leaves a segment. The active segment follows the playhead at keyframe boundaries, falls back to the last valid segment outside keyed ranges, and a thin white segment playhead now moves across the easing graph. -->
+<!-- V5.85 — Easing active-segment truth: Easing mode remains open while scrubbing, but the graph is shown only when the playhead is on a real segment bounded by two keyframes. Before the first keyframe or after the last keyframe, the editor switches to the neutral “Pilih Segmen” state instead of reusing a stale previous easing. -->
+<!-- V5.86 — Vector Pen Tool: the Gambar Vektor hub now creates real editable/renderable Bézier path layers. Tap adds anchors, drag creates symmetric Bézier handles, tapping the first anchor closes the path, and Finish creates a normal Open Motion shape layer that participates in timeline, transform, color/effects, WebGL preview, and export. -->
+<!-- V5.87 — Vector Pen touchpad placement: Pen Tool keeps direct canvas input and adds a relative trackpad inspired by the supplied reference. Swipe moves the pending anchor cursor without committing; a clean single tap commits one anchor at the current cursor position. -->
+<!-- V5.89 — Vector Edit Points input split: the right pad is selection-only and moves only the virtual pointer; touching an anchor/handle selects it without moving geometry. The center touchpad moves the currently selected anchor/Bezier handle, while an unselected tap still adds a new point. V5.88 left controls and vector behavior are preserved. -->
+<!-- V5.90 — Vector path-order navigator: the right rail now represents anchor order rather than canvas geometry. A small green navigator travels continuously along the abstract path, selects an anchor when it reaches that anchor, and exposes an insertion position between anchors. The left + splits the active cubic Bézier segment at that exact position using De Casteljau subdivision so the visible path does not jump. The center pad remains the geometry editor for a selected anchor/handle. -->
+<!-- V5.93 — Reference-style page scrolling for the right point navigator: vertical drag now scrolls the path rail itself one-to-one like a page, while the small green selector stays locked to one horizontal guide/height. The rail moves underneath that fixed selector; whichever anchor/segment crosses it becomes active. -->
+<!-- V5.94 — Open-path endpoint add targets: virtual + targets now live before the first anchor and after the last anchor in the right navigator. Scrolling a + under the fixed green selector enters prepend/append mode; the center touchpad positions the pending point and a clean tap confirms it. Existing anchor editing and between-anchor insertion remain intact. -->
+<!-- V5.88 — Vector Edit Points touchpad: add left-side point/path/Bézier controls and a right-side relative edit pointer. The right pointer auto-selects anchors/handles on contact, then drags the selected anchor or linked Bézier handle. The left + toggles add/delete like the keyframe button, path closure toggles open/closed, and Bézier toggles corner/smooth for the selected point. -->
 <!-- V5.07 — Stage 5: worker-assisted off-main-thread multi-source preview decode. Different-source overlaps prefer a Blob module Worker running Mediabunny CanvasSink + OffscreenCanvas/createImageBitmap, transferable ImageBitmap frames feed the existing WebGL compositor, same-asset divergent cursors retain V5.06 HTMLVideo playback, and the entire V5.05 main-thread ring-buffer decoder remains an automatic fallback. Exporter remains unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -25,6 +38,10 @@
 <link rel="icon" type="image/png" sizes="64x64" href="./icons/favicon-64.png">
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
 
+<!-- V5.96 — Vector Edit authoritative overlay/cache fix: while Edit Points is active, the live Vector Path remains in the timeline but its renderer plane is suppressed so geometry is drawn only once by the edit overlay. The layer texture signature is explicitly invalidated on every geometry sync, and timeline pre-render cache is cleared at edit entry/exit so stale pre-edit segments cannot remain underneath the edited path. -->
+<!-- V5.101 — Edit Vector now opens the same Edit Points / Pen Tool workspace used when creating vectors. Existing vectorNodes are loaded into the live editor, keep the same layer/timeline clip and style, and edits sync back to that layer instead of opening the old Vector Path property form. -->
+<!-- V5.97 — Edit Points canvas now only selects/drags existing anchors and Bézier handles; it no longer creates points on direct canvas taps. The left Bézier button now cycles Corner → Smooth Linked → Split/Independent, so a second press makes one handle editable without mirroring the other. -->
+<!-- V5.98 — First-point live layer fix: touchpad point confirmation now immediately syncs/creates the Vector Path layer and rebuilds the timeline on the very first anchor, instead of waiting until Edit Points is closed. Path-close from the touchpad is synced live as well. -->
 <style>
 :root{
   --bg:#10121d;--bg2:#151827;--panel:#1a1d2d;--panel2:#202437;--line:#30364c;
@@ -46,7 +63,8 @@ button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}in
 .timelineArea{min-height:0;background:#161927;display:grid;grid-template-rows:38px minmax(0,1fr) 54px;position:relative}.transport{display:flex;align-items:center;gap:2px;padding:0 7px;border-bottom:1px solid #292e40}.transport button{width:34px;height:32px;border:0;background:transparent;color:#a5aec4;border-radius:7px;font-size:16px}.transport button.active{color:white;background:#252b3e}.transport .grow{flex:1}.timeRead{font-size:9px;color:#aeb6c9;background:#0c0f18;border:1px solid #2b3145;border-radius:6px;padding:4px 7px;font-variant-numeric:tabular-nums}.timelineScroll{min-height:0;overflow:auto;position:relative;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none}.timelineScroll::-webkit-scrollbar{width:0;height:0}.timelineInner{position:relative;min-width:0;padding-top:22px}.ruler{position:absolute;left:98px;right:0;top:0;height:22px;background:#121521;border-bottom:1px solid #2a3042;z-index:3}.rTick{position:absolute;top:0;height:22px;border-left:1px solid #31384e;font-size:8px;color:#78839b;padding:3px 0 0 3px}.playhead{position:absolute;top:38px;bottom:54px;left:50%;transform:translateX(-50%);width:1px;background:#f1f3f8;z-index:14;pointer-events:none}.playhead:before{content:"";position:absolute;top:0;left:-4px;width:8px;height:8px;background:#f1f3f8;transform:rotate(45deg)}.timelineArea.playhead-moving .playhead{transition:left .02s linear}.timelineArea.playhead-centered .playhead{left:50%}.track{height:29px;display:grid;grid-template-columns:98px 1fr;position:relative}.trackHead{position:sticky;left:0;z-index:8;background:#1a1d2b;border-right:1px solid #2e3449;border-bottom:1px solid #252a3b;display:grid;grid-template-columns:25px 1fr 21px;align-items:center;padding:0 4px;gap:4px}.eye,.lock{border:0;background:transparent;color:#8390a8;padding:0;font-size:11px}.trackName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}.trackHead.sel{background:#22283a}.trackLane{position:relative;border-bottom:1px solid #252a3b}.clip{position:absolute;top:3px;height:23px;border-radius:3px;padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:22px;color:#0c1520;font-size:9px;font-weight:700;user-select:none}.clip.shape{background:#50ced0}.clip.text{background:#ffc356}.clip.image{background:#73d9d1}.clip.video{background:#4cc8c4}.clip.audio{background:#ca8cff}.clip.camera{background:#94a2ff}.clip.mesh{background:#ff907c}.clip.sel{outline:2px solid white;outline-offset:1px}.trim{position:absolute;top:0;width:7px;height:100%;background:rgba(255,255,255,.4);opacity:0}.clip.sel .trim{opacity:1}.trim.l{left:0;cursor:ew-resize}.trim.r{right:0;cursor:ew-resize}.kf{position:absolute;width:7px;height:7px;background:#ff6b9d;transform:rotate(45deg);top:8px;border:1px solid #ffd7e6;z-index:4}
 .bottomTools{display:grid;grid-template-columns:repeat(7,1fr);align-items:center;border-top:1px solid #2a3043;background:#181c2a;padding:2px 0}.bottomTools button{border:0;background:transparent;color:#9ca6bc;font-size:9px;height:49px}.bottomTools button span{display:block;font-size:18px;margin-bottom:3px}.bottomTools button.active{color:var(--accent)}.plusBtn{position:absolute;right:10px;bottom:62px;width:42px;height:42px;border:2px solid var(--accent);border-radius:50%;background:#1b2130;color:var(--accent);font-size:26px;z-index:20}
 /* drawers */
-.drawer{position:absolute;left:0;right:0;bottom:0;background:#1b1f2f;border-top:1px solid #353c52;z-index:50;box-shadow:0 -14px 35px rgba(0,0,0,.3);max-height:66%;display:flex;flex-direction:column}.drawerHead{height:42px;display:flex;align-items:center;padding:0 9px;border-bottom:1px solid #30364b;gap:8px}.drawerHead b{flex:1}.drawerHead button{border:0;background:transparent;font-size:18px}.drawerBody{overflow:auto;padding:10px}.assetTabs{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;border-bottom:1px solid #30364b;padding:0 4px}.assetTabs button{border:0;background:transparent;color:#8d97ae;padding:9px 2px;font-size:9px;border-bottom:2px solid transparent}.assetTabs button.active{color:var(--accent);border-bottom-color:var(--accent)}.assetTabs span{display:block;font-size:17px}.shapeGrid{display:grid;grid-template-columns:repeat(8,1fr);gap:9px;padding:12px 4px}.shapeItem{aspect-ratio:1;border:1px solid #30384d;background:#22283a;border-radius:9px;display:grid;place-items:center;font-size:24px;color:#cbd3e4}.shapeItem:hover{border-color:var(--accent);color:var(--accent)}.mediaDrop{border:1px dashed #46516c;border-radius:12px;padding:20px;text-align:center;color:#a7b0c5;margin:6px}.mediaDrop button{margin-top:10px;border:1px solid #3d465e;background:#252b3d;border-radius:8px;padding:8px 13px}.inspectorGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.insBtn{border:0;background:#252a3e;border-radius:9px;padding:10px 5px;color:#aeb7ca;font-size:9px}.insBtn span{font-size:19px;display:block;margin-bottom:5px}.insBtn.relinkMissing{color:var(--accent);border:1px solid rgba(0,215,167,.55);background:#20313a;box-shadow:inset 0 0 0 1px rgba(0,215,167,.08)}
+.drawer{position:absolute;left:0;right:0;bottom:0;background:#1b1f2f;border-top:1px solid #353c52;z-index:50;box-shadow:0 -14px 35px rgba(0,0,0,.3);max-height:66%;display:flex;flex-direction:column}.drawerHead{height:42px;display:flex;align-items:center;padding:0 9px;border-bottom:1px solid #30364b;gap:8px}.drawerHead b{flex:1}.drawerHead button{border:0;background:transparent;font-size:18px}.drawerBody{overflow:auto;padding:10px}.assetTabs{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;border-bottom:1px solid #30364b;padding:0 4px}.assetTabs button{border:0;background:transparent;color:#8d97ae;padding:9px 2px;font-size:9px;border-bottom:2px solid transparent}.assetTabs button.active{color:var(--accent);border-bottom-color:var(--accent)}.assetTabs span{display:block;font-size:17px}.shapeGrid{display:grid;grid-template-columns:repeat(8,1fr);gap:9px;padding:12px 4px}.shapeItem{aspect-ratio:1;border:1px solid #30384d;background:#22283a;border-radius:9px;display:grid;place-items:center;font-size:24px;color:#cbd3e4}.shapeItem:hover{border-color:var(--accent);color:var(--accent)}.mediaDrop{border:1px dashed #46516c;border-radius:12px;padding:20px;text-align:center;color:#a7b0c5;margin:6px}.mediaDrop button{margin-top:10px;border:1px solid #3d465e;background:#252b3d;border-radius:8px;padding:8px 13px}
+.vectorPenLaunch{display:grid;grid-template-columns:54px 1fr auto;align-items:center;gap:12px;width:min(520px,100%);min-height:76px;margin:4px auto;padding:12px 14px;border:1px solid #3b465f;border-radius:14px;background:#22293a;color:#dce4f5;text-align:left}.vectorPenLaunch:hover,.vectorPenLaunch:active{border-color:var(--accent);background:#24313c}.vectorPenLaunchIcon{width:46px;height:46px;border:1px solid rgba(0,215,167,.4);border-radius:13px;display:grid;place-items:center;color:var(--accent);font-size:25px;background:rgba(0,215,167,.07)}.vectorPenLaunchCopy{display:flex;flex-direction:column;gap:3px;min-width:0}.vectorPenLaunchCopy b{font-size:13px;color:#f1f5fc}.vectorPenLaunchCopy small{font-size:9px;line-height:1.35;color:#8f9ab0}.vectorPenLaunchArrow{font-size:24px;color:#758097}.vectorPenOverlay{position:absolute;inset:0;width:100%;height:100%;z-index:90;touch-action:none;cursor:crosshair}.vectorPenHud{position:absolute;z-index:95;left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:6px;border:1px solid rgba(102,116,148,.68);border-radius:13px;background:rgba(15,19,30,.92);box-shadow:0 8px 28px rgba(0,0,0,.32);backdrop-filter:blur(12px);max-width:calc(100% - 18px)}.vectorPenHud button{height:34px;min-width:34px;border:1px solid #343d55;border-radius:9px;background:#202638;color:#dce5f4;padding:0 10px;font-size:10px;font-weight:800;white-space:nowrap}.vectorPenHud button.primary{border-color:rgba(0,215,167,.62);background:rgba(0,215,167,.12);color:#77ead2}.vectorPenHud button.danger{color:#ff9daf}.vectorPenHint{position:absolute;z-index:94;left:50%;bottom:12px;transform:translateX(-50%);max-width:calc(100% - 24px);padding:6px 10px;border-radius:9px;background:rgba(12,16,26,.84);color:#c7d0e3;font-size:9px;line-height:1.35;text-align:center;pointer-events:none}.vectorPenTouchpadDock{position:fixed;z-index:101;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));height:clamp(150px,24dvh,220px);display:grid;grid-template-rows:32px minmax(0,1fr);overflow:hidden;border:1px solid #39445d;border-radius:15px;background:rgba(19,24,37,.96);box-shadow:0 -10px 34px rgba(0,0,0,.36);backdrop-filter:blur(14px)}.vectorPenTouchpadHead{display:flex;align-items:center;justify-content:space-between;padding:0 11px;border-bottom:1px solid #30384d;color:#aeb8cb;font-size:9px;font-weight:800;letter-spacing:.04em}.vectorPenTouchpadHead b{color:#dce5f3;font-size:10px}.vectorPenTouchpadHead span{color:#73e4cc}.vectorPenTouchpad{position:relative;margin:8px;border:1px solid #313b52;border-radius:11px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;background:radial-gradient(circle at 50% 50%,rgba(0,215,167,.075),transparent 34%),linear-gradient(rgba(83,95,124,.10) 1px,transparent 1px),linear-gradient(90deg,rgba(83,95,124,.10) 1px,transparent 1px),#171c2a;background-size:auto,24px 24px,24px 24px,auto}.vectorPenTouchpad:before,.vectorPenTouchpad:after{content:"";position:absolute;pointer-events:none;background:rgba(0,215,167,.18)}.vectorPenTouchpad:before{top:0;bottom:0;left:50%;width:1px}.vectorPenTouchpad:after{left:0;right:0;top:50%;height:1px}.vectorPenTouchpadHint{position:absolute;inset:0;display:grid;place-items:center;padding:18px;text-align:center;color:#7f899f;font-size:10px;line-height:1.45;pointer-events:none}.vectorPenTouchpadHint b{display:block;color:#aab5c9;font-size:10px;margin-bottom:2px}.vectorPenTouchpadFinger{position:absolute;left:50%;top:50%;width:20px;height:20px;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid rgba(240,244,252,.88);background:rgba(219,226,239,.22);box-shadow:0 0 0 4px rgba(0,215,167,.07);pointer-events:none;transition:opacity .12s ease}.vectorPenTouchpad:not(.tracking) .vectorPenTouchpadFinger{opacity:.58}.vectorPenTouchpad.tracking .vectorPenTouchpadFinger{opacity:1;border-color:var(--accent);background:rgba(0,215,167,.15)}.canvasWrap.vectorPenActive .gpuInteractionLayer,.canvasWrap.vectorPenActive .gpuInteractionAbove{pointer-events:none!important}.inspectorGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.insBtn{border:0;background:#252a3e;border-radius:9px;padding:10px 5px;color:#aeb7ca;font-size:9px}.insBtn span{font-size:19px;display:block;margin-bottom:5px}.insBtn.relinkMissing{color:var(--accent);border:1px solid rgba(0,215,167,.55);background:#20313a;box-shadow:inset 0 0 0 1px rgba(0,215,167,.08)}
 /* V3.59 — dedicated media relink menu */
 .relinkMenu{display:grid;gap:10px}
 .relinkSummary{border:1px solid #343c52;background:#171b29;border-radius:11px;padding:10px 11px;min-width:0}
@@ -194,7 +212,7 @@ input[type=range]{accent-color:var(--accent)}
 .drawer.transformDrawer .drawerHead{height:34px;min-height:34px;padding:0 7px}
 .drawer.transformDrawer .drawerHead b{font-size:11px}
 .drawer.transformDrawer .drawerHead button{font-size:15px}
-.drawerTitleGroup{display:flex;align-items:center;gap:7px;flex:1;min-width:0}.drawerTitleGroup b{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.transformSpaceToggle{height:22px;min-width:48px;padding:0 7px!important;border:1px solid #3a4358!important;border-radius:999px!important;background:#1c2230!important;color:#8f9bb0!important;font-size:7px!important;font-weight:800;letter-spacing:.08em;line-height:1;touch-action:manipulation}.transformSpaceToggle.local{border-color:var(--accent)!important;background:#17302d!important;color:#78ebd1!important;box-shadow:inset 0 0 0 1px rgba(115,226,189,.12)}
+.drawerTitleGroup{display:flex;align-items:center;gap:7px;flex:1;min-width:0}.drawerTitleGroup b{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.transformSpaceToggle{height:22px;min-width:48px;padding:0 7px!important;border:1px solid #3a4358!important;border-radius:999px!important;background:#1c2230!important;color:#8f9bb0!important;font-size:7px!important;font-weight:800;letter-spacing:.08em;line-height:1;touch-action:manipulation}.transformSpaceToggle.local{border-color:var(--accent)!important;background:#17302d!important;color:#78ebd1!important;box-shadow:inset 0 0 0 1px rgba(115,226,189,.12)}.transformEditorModeToggle{height:22px;min-width:52px;padding:0 8px!important;border:1px solid rgba(0,215,167,.48)!important;border-radius:999px!important;background:rgba(0,215,167,.08)!important;color:#78ebd1!important;font-size:7px!important;font-weight:850;letter-spacing:.07em;line-height:1;touch-action:manipulation;white-space:nowrap}.transformEditorModeToggle:active{transform:scale(.96);background:rgba(0,215,167,.15)!important}.drawer.transformDrawer .transformEditorModeToggle,.drawer.curveGraphDrawer .transformEditorModeToggle{height:20px;min-width:52px;padding:0 6px!important;font-size:6.8px!important}
 .drawer.transformDrawer .drawerBody{flex:1;min-height:0;overflow:hidden;padding:4px}
 .drawer.transformDrawer .transformStudio{height:100%;min-height:0;border-radius:8px;grid-template-columns:42px minmax(0,1fr) 42px}
 .drawer.transformDrawer .transformActions{min-height:0;grid-template-rows:42px 48px 1fr}
@@ -1283,6 +1301,13 @@ input[type=range]{accent-color:var(--accent)}
   stroke-width:.5;
   stroke-dasharray:2 2;
   opacity:.72;
+}
+.easePlayhead{
+  stroke:#f7f9ff;
+  stroke-width:.62;
+  opacity:.94;
+  pointer-events:none;
+  vector-effect:non-scaling-stroke;
 }
 .easeParamGrid{
   flex:0 0 auto;
@@ -3662,6 +3687,43 @@ input[type=range]{accent-color:var(--accent)}
    original colors. Ambient only changes dark workspace surfaces. */
 </style>
 
+
+<style id="oms-v586-vector-mobile-override">
+.addHubBody .mediaDrop .vectorPenLaunch{height:auto!important;min-height:70px!important;width:min(520px,100%)!important;margin:4px auto!important;padding:9px 10px!important;border-radius:12px!important;display:grid!important;grid-template-columns:46px minmax(0,1fr) auto!important;gap:9px!important;font-size:inherit!important;overflow:visible!important}
+.addHubBody .mediaDrop .vectorPenLaunchIcon{width:40px!important;height:40px!important;font-size:22px!important}
+.addHubBody .mediaDrop .vectorPenLaunchCopy{display:flex!important;align-items:flex-start!important;justify-content:center!important;gap:2px!important;overflow:hidden!important}
+.addHubBody .mediaDrop .vectorPenLaunchCopy b{font-size:10px!important;line-height:1.15!important}
+.addHubBody .mediaDrop .vectorPenLaunchCopy small{font-size:7.5px!important;line-height:1.25!important;white-space:normal!important}
+.addHubBody .mediaDrop .vectorPenLaunchArrow{font-size:20px!important}
+@media(max-width:700px){.vectorPenTouchpadDock{left:8px;right:8px;bottom:max(7px,env(safe-area-inset-bottom));height:clamp(155px,23dvh,205px)}.vectorPenTouchpad{margin:6px}.vectorPenTouchpadHint{font-size:9px;padding:14px}}
+.vectorPenHud,.vectorPenHint{display:none!important}
+/* V5.88 — Edit Points rails inspired by the supplied reference. */
+.vectorPenTouchpadDock.vectorEditPoints{grid-template-columns:58px minmax(0,1fr) 78px;grid-template-rows:32px minmax(0,1fr)}
+.vectorPenTouchpadDock.vectorEditPoints .vectorPenTouchpadHead{grid-column:1/-1;grid-row:1}
+.vectorPenLeftRail{grid-column:1;grid-row:2;display:grid;grid-template-rows:repeat(5,1fr);gap:4px;padding:7px 4px 7px 6px;border-right:1px solid #30384d;background:rgba(12,16,26,.42)}
+.vectorPenRailBtn{position:relative;min-height:0;border:1px solid transparent;border-radius:10px;background:transparent;color:#b7c1d4;font-size:20px;display:grid;place-items:center;padding:0;touch-action:manipulation}
+.vectorPenRailBtn small{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);font-size:6.5px;letter-spacing:.02em;color:#6f7a91;white-space:nowrap}
+.vectorPenRailBtn:active,.vectorPenRailBtn.active{background:rgba(0,215,167,.10);border-color:rgba(0,215,167,.45);color:#72ead1}
+.vectorPenRailBtn:disabled{opacity:.27;filter:saturate(.3)}
+.vectorPenRailBtn.pointAction{font-size:28px}.vectorPenRailBtn.pointAction.delete{color:#ff91a6;border-color:rgba(255,85,116,.42);background:rgba(255,85,116,.08)}
+.vectorPenTouchpadDock.vectorEditPoints .vectorPenTouchpad{grid-column:2;grid-row:2;margin:7px}
+.vectorPenEditPad{position:relative;grid-column:3;grid-row:2;margin:7px 6px 7px 2px;border:1px solid #313b52;border-radius:11px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;background:#151a27}.vectorPenEditPad:before{content:"";position:absolute;z-index:2;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(21,26,39,.82) 0,rgba(21,26,39,0) 13%,rgba(21,26,39,0) 87%,rgba(21,26,39,.82) 100%)}
+.vectorPenEditPad canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.vectorPenEditPad:after{content:"POINTS";position:absolute;top:5px;left:50%;transform:translateX(-50%);font-size:6.5px;font-weight:900;letter-spacing:.13em;color:#69748a;pointer-events:none}
+/* V5.90: the gray circle in the reference was the user's finger, not UI. The rail itself shows only the path-order line, anchors, and the small green navigator. */
+.vectorPenEditPointer{display:none!important}
+.vectorPenEditPad.targeting{border-color:rgba(45,226,189,.42)}
+.vectorPenEditPad.handleTarget{border-color:rgba(255,143,165,.42)}
+.vectorPenEditPadHint{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);font-size:6px;color:#69748a;white-space:nowrap;pointer-events:none}
+.vectorPenSelectionBadge{position:absolute;z-index:96;right:8px;top:8px;padding:5px 7px;border-radius:8px;border:1px solid rgba(45,226,189,.34);background:rgba(12,16,26,.84);font-size:8px;color:#9da9be;pointer-events:none}.vectorPenSelectionBadge b{color:#72ead1}
+@media(max-width:700px){.vectorPenTouchpadDock.vectorEditPoints{grid-template-columns:52px minmax(0,1fr) 68px;height:clamp(165px,25dvh,220px)}.vectorPenLeftRail{padding-left:4px}.vectorPenRailBtn{font-size:18px}.vectorPenRailBtn.pointAction{font-size:25px}.vectorPenEditPad{margin-right:4px}.vectorPenSelectionBadge{font-size:7px}}
+
+</style>
+<!-- V5.99 — First-point navigator auto-center: after the very first anchor is confirmed, the right path navigator automatically scrolls that anchor onto the fixed middle selector line. Endpoint + prepend/append behavior is intentionally unchanged. -->
+<!-- V5.100R — Rebuilt from V5.99 baseline. Every newly confirmed free point auto-centers its navigator position on the fixed middle selector line, but remains semantically unselected so the center touchpad stays in Add mode. Endpoint + prepend/append behavior is untouched. -->
+<!-- V5.102 — Edit Points layout polish: on mobile the Vector Edit/Pen Tool dock now uses the same height envelope as Inspector (clamp(210px,36dvh,300px)), with Inspector-style bottom docking, header height, cleaner spacing, wider point navigator, and less cramped controls. -->
+<!-- V5.103 — Vector Edit Points: smaller canvas anchor markers (hit targets unchanged) plus full global Undo/Redo support for create/edit actions. Point add/insert/delete, path close/open, Bezier mode changes, and anchor/handle drags checkpoint once per action; active Edit Points reloads from the restored model after Undo/Redo. -->
+<!-- V5.107 — Vector Edit Points: add a dedicated linked-handle symmetry toggle below BÉZIER. In regular Bézier mode, enabling SIMETRI makes the opposite handle mirror both angle and length while dragging; Split Bézier remains independent. -->
 </head>
 <body>
 <div class="app">
@@ -7468,6 +7530,15 @@ function latestPointerSample(e){
   return {clientX:e.clientX,clientY:e.clientY,shiftKey:!!e.shiftKey};
 }
 
+function traceVectorShapePath(ctx,layer,offsetX=0,offsetY=0){
+  const nodes=Array.isArray(layer?.vectorNodes)?layer.vectorNodes:[];if(!nodes.length)return false;
+  const point=(node,key,fallback)=>Number.isFinite(+node?.[key])?+node[key]:+node?.[fallback]||0;
+  const segment=(a,b)=>ctx.bezierCurveTo(offsetX+point(a,'outX','x'),offsetY+point(a,'outY','y'),offsetX+point(b,'inX','x'),offsetY+point(b,'inY','y'),offsetX+(+b.x||0),offsetY+(+b.y||0));
+  ctx.beginPath();ctx.moveTo(offsetX+(+nodes[0].x||0),offsetY+(+nodes[0].y||0));for(let i=1;i<nodes.length;i++)segment(nodes[i-1],nodes[i]);
+  if(layer.vectorClosed&&nodes.length>2){segment(nodes[nodes.length-1],nodes[0]);ctx.closePath()}
+  return true
+}
+
 class Renderer{
   constructor(model,canvas){
     this.model=model;
@@ -7924,7 +7995,8 @@ class Renderer{
     if(!this.suppressSelection&&l.id===model.selected)this.selectionBox(l,{x:sx,y:sy,scaleX:scx,scaleY:scy,rotation:rot,w:drawW,h:drawH});
   }
   roundRect(x,y,w,h,r){const c=this.ctx;r=Math.max(0,Math.min(r||0,w/2,h/2));c.beginPath();if(c.roundRect)c.roundRect(x,y,w,h,r);else c.rect(x,y,w,h)}
-  drawShape(l){const c=this.ctx,w=l.w,h=l.h;c.fillStyle=l.color;c.strokeStyle=l.stroke;c.lineWidth=l.strokeWidth||0;
+  drawShape(l){const c=this.ctx,w=l.w,h=l.h;c.fillStyle=l.color;c.strokeStyle=l.stroke||l.color||'#ffffff';c.lineWidth=l.strokeWidth||0;
+    if(l.shape==='vector'){if(!traceVectorShapePath(c,l,0,0))return;if(l.vectorClosed)c.fill();if((+l.strokeWidth||0)>0||!l.vectorClosed){c.lineWidth=+l.strokeWidth||4;c.stroke()}return}
     c.beginPath();if(l.shape==='ellipse'||l.shape==='circle')c.ellipse(0,0,w/2,h/2,0,0,Math.PI*2);else if(l.shape==='triangle'){c.moveTo(0,-h/2);c.lineTo(w/2,h/2);c.lineTo(-w/2,h/2);c.closePath()}else if(l.shape==='star'){for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?w*.22:w*.48;const x=Math.cos(a)*r,y=Math.sin(a)*r*(h/w);i?c.lineTo(x,y):c.moveTo(x,y)}c.closePath()}else if(l.shape==='line'){c.moveTo(-w/2,0);c.lineTo(w/2,0)}else{if(c.roundRect)c.roundRect(-w/2,-h/2,w,h,l.radius||0);else c.rect(-w/2,-h/2,w,h)}
     if(l.shape!=='line')c.fill();if((l.strokeWidth||0)>0||l.shape==='line'){c.lineWidth=l.strokeWidth||8;c.stroke()}
   }
@@ -8333,7 +8405,7 @@ class WebGLRenderer{
     if(info){gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,info.texture);gl.uniform1i(uniforms.trackMatte,2);gl.activeTexture(gl.TEXTURE0)}
   }
   hex(value,alpha=1){let h=String(value||'#ffffff').replace('#','');if(h.length===3)h=h.split('').map(x=>x+x).join('');const n=parseInt(h,16);return[Number.isFinite(n)?((n>>16)&255)/255:1,Number.isFinite(n)?((n>>8)&255)/255:1,Number.isFinite(n)?(n&255)/255:1,alpha]}
-  textureSignature(l){const e=l.effects||{},m=l.mask||{},nativeDirect=l?.type==='video'&&!!window.omsNativeMultiSourceDirectPlayback,cacheTime=Number.isFinite(+l?.frameCacheTime)&&+l.frameCacheTime>=0?+l.frameCacheTime:Number.NaN,frame=l.type==='video'?(nativeDirect?(+l.video?.currentTime||0):(Number.isFinite(cacheTime)?cacheTime:(+l.video?.currentTime||0))):0,previewQ=this.exporting?1:omsPreviewQualityScale();return JSON.stringify([l.type,l.w,l.h,l.shape,l.color,l.stroke,l.strokeWidth,l.radius,l.text,l.fontSize,l.fontWeight,l.fontFamily,l.align,l.sourceRef||'',e.blur,e.brightness,e.contrast,e.saturate,e.hue,m.enabled,m.type,m.feather,m.invert,l.img?.naturalWidth||0,Math.round(frame*1000),previewQ])}
+  textureSignature(l){const e=l.effects||{},m=l.mask||{},nativeDirect=l?.type==='video'&&!!window.omsNativeMultiSourceDirectPlayback,cacheTime=Number.isFinite(+l?.frameCacheTime)&&+l.frameCacheTime>=0?+l.frameCacheTime:Number.NaN,frame=l.type==='video'?(nativeDirect?(+l.video?.currentTime||0):(Number.isFinite(cacheTime)?cacheTime:(+l.video?.currentTime||0))):0,previewQ=this.exporting?1:omsPreviewQualityScale();return JSON.stringify([l.type,l.w,l.h,l.shape,l.color,l.stroke,l.strokeWidth,l.radius,l.vectorClosed||false,l.vectorNodes||null,l.text,l.fontSize,l.fontWeight,l.fontFamily,l.align,l.sourceRef||'',e.blur,e.brightness,e.contrast,e.saturate,e.hue,m.enabled,m.type,m.feather,m.invert,l.img?.naturalWidth||0,Math.round(frame*1000),previewQ])}
   textureEntry(l){
     const gl=this.gl;let e=this.textures.get(l.id);if(!e){const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');const texture=gl.createTexture();e={canvas,ctx,texture,signature:null,gpuWidth:0,gpuHeight:0,sourceRotation:0};this.textures.set(l.id,e);gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE)}return e
   }
@@ -8447,6 +8519,7 @@ class WebGLRenderer{
     }
   }
   texturePath(c,l,w,h){
+    if(l.shape==='vector'){traceVectorShapePath(c,l,w/2,h/2);return}
     c.beginPath();if(l.shape==='ellipse'||l.shape==='circle')c.ellipse(w/2,h/2,w/2,h/2,0,0,Math.PI*2);else if(l.shape==='triangle'){c.moveTo(w/2,0);c.lineTo(w,h);c.lineTo(0,h);c.closePath()}else if(l.shape==='star'){for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?w*.22:w*.48,x=w/2+Math.cos(a)*r,y=h/2+Math.sin(a)*r*(h/w);i?c.lineTo(x,y):c.moveTo(x,y)}c.closePath()}else if(l.shape==='line'){c.moveTo(0,h/2);c.lineTo(w,h/2)}else if(c.roundRect)c.roundRect(0,0,w,h,Math.max(0,Math.min(+l.radius||0,w/2,h/2)));else c.rect(0,0,w,h)
   }
   paintMissingMedia(c,l,w,h){c.save();c.fillStyle='#202735';c.fillRect(0,0,w,h);const step=Math.max(18,Math.min(w,h)/9);c.strokeStyle='rgba(115,226,189,.16)';c.lineWidth=Math.max(1,step*.08);for(let x=-h;x<w;x+=step){c.beginPath();c.moveTo(x,0);c.lineTo(x+h,h);c.stroke()}c.fillStyle='#73e2bd';c.textAlign='center';c.textBaseline='middle';c.font=`700 ${Math.max(12,Math.min(w,h)*.09)}px system-ui`;c.fillText(l.type==='video'?'VIDEO':'MEDIA',w/2,h/2);c.fillStyle='rgba(255,255,255,.58)';c.font=`500 ${Math.max(8,Math.min(w,h)*.035)}px system-ui`;c.fillText(l.sourceRef?'Tautkan ulang sumber impor':'Sumber belum tersedia',w/2,h/2+Math.max(18,Math.min(w,h)*.09));c.restore()}
@@ -8455,7 +8528,7 @@ class WebGLRenderer{
     if(e.canvas.width!==cw||e.canvas.height!==ch){e.canvas.width=cw;e.canvas.height=ch}c.setTransform(q,0,0,q,0,0);c.globalAlpha=1;c.globalCompositeOperation='source-over';c.filter='none';c.clearRect(0,0,w,h);c.save();
     if(l.mask?.enabled){c.beginPath();if(l.mask.type==='ellipse')c.ellipse(w/2,h/2,w/2,h/2,0,0,Math.PI*2);else if(c.roundRect)c.roundRect(0,0,w,h,+l.radius||0);else c.rect(0,0,w,h);c.clip()}
     const fx=l.effects||{};c.filter=`blur(${+fx.blur||0}px) brightness(${fx.brightness??100}%) contrast(${fx.contrast??100}%) saturate(${fx.saturate??100}%) hue-rotate(${+fx.hue||0}deg)`;
-    if(l.type==='shape'){c.fillStyle=l.color||'#ffffff';c.strokeStyle=l.stroke||'#ffffff';this.texturePath(c,l,w,h);if(l.shape!=='line')c.fill();if((+l.strokeWidth||0)>0||l.shape==='line'){c.lineWidth=+l.strokeWidth||8;c.stroke()}}
+    if(l.type==='shape'){c.fillStyle=l.color||'#ffffff';c.strokeStyle=l.stroke||l.color||'#ffffff';this.texturePath(c,l,w,h);if(l.shape==='vector'){if(l.vectorClosed)c.fill();if((+l.strokeWidth||0)>0||!l.vectorClosed){c.lineWidth=+l.strokeWidth||4;c.stroke()}}else{if(l.shape!=='line')c.fill();if((+l.strokeWidth||0)>0||l.shape==='line'){c.lineWidth=+l.strokeWidth||8;c.stroke()}}}
     else if(l.type==='text'){c.fillStyle=l.color||'#ffffff';c.textBaseline='middle';c.textAlign='center';c.font=`${l.fontWeight||700} ${l.fontSize||80}px ${l.fontFamily||'system-ui'}`;const words=String(l.text||'').split(/\s+/),lines=[];let line='';for(const word of words){const test=line?line+' '+word:word;if(c.measureText(test).width>w*.94&&line){lines.push(line);line=word}else line=test}if(line)lines.push(line);const lh=(+l.fontSize||80)*1.15,offset=(lines.length-1)*lh/2;lines.forEach((text,i)=>c.fillText(text,w/2,h/2+i*lh-offset))}
     else if(l.type==='image'){if(l.img?.complete&&l.img.naturalWidth)c.drawImage(l.img,0,0,w,h);else this.paintMissingMedia(c,l,w,h)}
     else if(l.type==='video'){const sample=l._gpuFastVideoSample;if(sample?.draw){try{sample.draw(c,0,0,w,h)}catch(err){this.paintMissingMedia(c,l,w,h)}}else{const source=l._previewWorkerBitmap||(l.frameCacheReady&&l.frameCanvas?.width?l.frameCanvas:(l.video?.readyState>=2?l.video:null));if(source)try{c.drawImage(source,0,0,w,h)}catch(err){this.paintMissingMedia(c,l,w,h)}else this.paintMissingMedia(c,l,w,h)}}
@@ -8499,6 +8572,9 @@ class WebGLRenderer{
   applyBlend(l){const gl=this.gl,mode=normalizeBlendMode(l.blend);gl.blendEquation(gl.FUNC_ADD);if(mode==='lighter')gl.blendFunc(gl.SRC_ALPHA,gl.ONE);else if(mode==='screen'||mode==='color-dodge'||mode==='lighten')gl.blendFunc(gl.SRC_ALPHA,gl.ONE);else if(mode==='multiply'||mode==='color-burn'||mode==='darken')gl.blendFunc(gl.DST_COLOR,gl.ONE_MINUS_SRC_ALPHA);else gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA)}
   drawPlane(l,stackNormalOffset=0){
     if(!omsLayerIncludedInExport(l))return;
+    // V5.96 — Edit Points overlay is the single visual authority for the live vector being edited.
+    // Keep the layer in the timeline/model, but do not draw its cached plane underneath the overlay.
+    if(!this.exporting&&this.vectorEditOverlayLayerId&&l?.id===this.vectorEditOverlayLayerId)return;
     const gl=this.gl,use3d=this.layerUses3D(l),blend=normalizeBlendMode(l.blend),blended=blend!=='source-over',matte=this.trackMatteInfoForLayer(l),texture=this.ensureTexture(l),world=this.worldMatrix(l,model.time,new Set(),use3d);
     let renderWorld=world;
 
@@ -14185,7 +14261,7 @@ class LayerActionClipboardService{
 }
 
 class UIController{
-  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.graphView='value';this.graphSelectedKeyId=null;this.curveReturnToEasing=false;this._curveGraphHit=null;this.mediaQuickMode=null;this.transformMode='position';this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this.transformCameraPolicy=new TransformCameraPolicy();this.keyframeOriginRouter=new KeyframeOriginRouter(this);this._keyframeOriginResolvers=this.keyframeOriginRouter.resolvers;this.layerActionClipboard=new LayerActionClipboardService(model);this.layerMultiSelectedIds=new Set();this.layerMultiSelectMode=false;this.layerMultiFocusId=null}
+  constructor(){this.drawerMode=null;this.newRatio='9:16';this.graphProp='x';this.graphView='value';this.graphSelectedKeyId=null;this.curveReturnToEasing=false;this._curveGraphHit=null;this.mediaQuickMode=null;this.vectorPenState=null;this.transformMode='position';this._transformEasePinContext='';this._transformEasePinnedSegments=[];this.transformPadTarget='position';this.transformPositionAxes=['x','y'];this.transformInlineRotationAxes=['x','y'];this.transformRotationAxis='z';this.cameraOpticsProp='zoom';this.transformScaleLock=true;this._transformGesture=null;this._numericEditor=null;this._cameraViewSignature='';this._cameraNoticeUntil=0;this._cameraNoticeTimer=0;this._editorNavigationAuthorized=false;this._bootHomepageLock=true;this.transformCameraPolicy=new TransformCameraPolicy();this.keyframeOriginRouter=new KeyframeOriginRouter(this);this._keyframeOriginResolvers=this.keyframeOriginRouter.resolvers;this.layerActionClipboard=new LayerActionClipboardService(model);this.layerMultiSelectedIds=new Set();this.layerMultiSelectMode=false;this.layerMultiFocusId=null}
 
   /* =========================================================
      V4.27 — KEYFRAME ORIGIN ROUTING CONTRACT
@@ -15135,12 +15211,14 @@ class UIController{
 
     const selected=model.selectedLayer();
     const transformMode=this.transformMode||'position';
+    const easingHeader=title==='Transform'&&this.transformEaseEditorOpen===true;
+    const curveHeader=title==='Curve Editor'&&this.curveReturnToEasing===true;
     const cameraTransform=title==='Transform'&&selected?.type==='camera';
-    const cameraXYZHeader=cameraTransform&&transformMode==='position';
-    const cameraOpticsHeader=cameraTransform&&transformMode==='rotation';
-    // CAMERA: LOCAL + 360° only live in the XYZ page. Other layer types keep
-    // their existing transform-space control behavior.
-    const showTransformSpace=title==='Transform'&&!!selected&&(!cameraTransform||cameraXYZHeader);
+    // V5.81 — transform-space/orbit/lens shortcuts belong to the actual XYZ/
+    // optics page, never to the easing editor layered on top of Transform.
+    const cameraXYZHeader=cameraTransform&&transformMode==='position'&&!easingHeader;
+    const cameraOpticsHeader=cameraTransform&&transformMode==='rotation'&&!easingHeader;
+    const showTransformSpace=title==='Transform'&&!!selected&&!easingHeader&&(!cameraTransform||cameraXYZHeader);
     const orbitSpace=cameraXYZHeader&&this.cameraOrbitActive(selected);
     const transformSpace=showTransformSpace&&selected.transformSpace!=='world'?'local':'world';
     const transformSpaceButton=showTransformSpace
@@ -15154,10 +15232,15 @@ class UIController{
     const cameraLensShortcutButton=cameraOpticsHeader
       ?`<button id="cameraLensShortcut" class="cameraLensShortcut active" type="button" aria-label="Pilih jenis lensa kamera" title="Jenis Lensa Kamera: ${this.cameraLensModeLabel(lensMode)}"><span class="lensGlyph">◉</span><span>${lensShort}</span></button>`
       :'';
+    const editorModeButton=easingHeader
+      ?`<button id="transformEditorModeToggle" class="transformEditorModeToggle" type="button" aria-label="Buka Curve Editor" title="Ganti ke Curve Editor">CURVE</button>`
+      :curveHeader
+        ?`<button id="transformEditorModeToggle" class="transformEditorModeToggle" type="button" aria-label="Kembali ke Easing biasa" title="Ganti ke Easing biasa">EASING</button>`
+        :'';
 
     d.innerHTML=`<div class="drawerHead">
       <button id="drawerBack" aria-label="Kembali">←</button>
-      <div class="drawerTitleGroup"><b>${title}</b>${transformSpaceButton}${cameraOrbitShortcutButton}${cameraLensShortcutButton}</div>
+      <div class="drawerTitleGroup"><b>${title}</b>${transformSpaceButton}${cameraOrbitShortcutButton}${cameraLensShortcutButton}${editorModeButton}</div>
       <button id="drawerClose" aria-label="Tutup" title="Tutup">×</button>
     </div>${html}`;
 
@@ -15174,6 +15257,7 @@ class UIController{
     const spaceToggle=$('#transformSpaceToggle');
     const orbitShortcut=$('#cameraOrbitShortcut');
     const lensShortcut=$('#cameraLensShortcut');
+    const editorModeToggle=$('#transformEditorModeToggle');
 
     if(close)close.onclick=()=>this.closeDrawer();
     if(back)back.onclick=()=>this.drawerMode==='root'
@@ -15199,6 +15283,21 @@ class UIController{
     if(lensShortcut)lensShortcut.onclick=()=>{
       const camera=model.selectedLayer();
       if(camera?.type==='camera')this.openCameraLensShortcut(camera);
+    };
+    if(editorModeToggle)editorModeToggle.onclick=()=>{
+      const layer=model.selectedLayer();if(!layer)return;
+      if(easingHeader){
+        const seg=this.transformModeSegmentsAt(layer)[0];
+        const prop=seg?.prop||this.transformModeProps(layer)[0]||this.graphProp;
+        if(seg?.from?.id)this.graphSelectedKeyId=seg.from.id;
+        this.transformEaseEditorOpen=false;
+        this.openGraphEditor(prop,{fromEasing:true});
+      }else if(curveHeader){
+        this.curveReturnToEasing=false;
+        this.transformEaseEditorOpen=true;
+        this.drawerMode='move';
+        this.openInspector('move');
+      }
     };
 
     timeline.updateDrawerOverlap();
@@ -15339,7 +15438,7 @@ class UIController{
     }else if(this.addTool==='templates'){
       body=`<div class="addHubTitle"><span>Template</span><button class="addHubClose" id="addHubClose">×</button></div><div class="shapeGrid"><button class="shapeItem" data-template="title">Aa</button><button class="shapeItem" data-template="parallax">▧</button><button class="shapeItem" data-template="camera">▣</button></div><div class="miniNote">Title Motion • Parallax 3D • Camera Push</div>`;
     }else if(this.addTool==='vector'){
-      body=`<div class="addHubTitle"><span>Gambar Vektor</span><button class="addHubClose" id="addHubClose">×</button></div><div class="mediaDrop"><div style="font-size:30px">✎</div><b>Vektor</b><div class="miniNote">Fondasi vector layer tersedia untuk pengembangan berikutnya.</div></div>`;
+      body=`<div class="addHubTitle"><span>Gambar Vektor</span><button class="addHubClose" id="addHubClose">×</button></div><div class="mediaDrop"><button id="startVectorPen" class="vectorPenLaunch" type="button"><span class="vectorPenLaunchIcon">✎</span><span class="vectorPenLaunchCopy"><b>Pen Tool · Bézier</b><small>Tap untuk titik sudut. Tap lalu drag untuk membuat handle kurva. Tap titik pertama untuk menutup path.</small></span><span class="vectorPenLaunchArrow">›</span></button><div class="miniNote">Path dibuat sebagai layer vektor Open Motion dan tetap mendukung Transform, Fill, Stroke, Effects, 3D plane, keyframe, preview GPU, dan export.</div></div>`;
     }else if(this.addTool==='text'){
       body=`<div class="addHubTitle"><span>Teks</span><button class="addHubClose" id="addHubClose">×</button></div><div class="drawerBody"><button id="addText" class="createBtn">＋ TAMBAH TEKS</button></div>`;
     }
@@ -15352,14 +15451,473 @@ class UIController{
     $$('[data-obj]').forEach(b=>b.onclick=()=>{history.push();const o=b.dataset.obj;if(o==='camera'){model.addLayer('camera');model.mode3d=true}else if(o==='null')model.addLayer('null');else{model.addLayer('mesh',{mesh:o});model.mode3d=true}this.rebuildAll();this.openInspectorRoot()});
     $('#pickMedia')?.addEventListener('click',()=>$('#mediaInput').click());
     $('#pickAudio')?.addEventListener('click',()=>$('#mediaInput').click());
+    $('#startVectorPen')?.addEventListener('click',()=>this.startVectorPenTool());
     $('#addText')?.addEventListener('click',()=>{history.push();model.addLayer('text');this.rebuildAll();this.openInspectorRoot()});
     $$('[data-template]').forEach(b=>b.onclick=()=>this.applyTemplate(b.dataset.template));
+  }
+  vectorPenProjectPoint(event,overlay){
+    const rect=overlay.getBoundingClientRect(),W=Math.max(1,+model.project?.width||1),H=Math.max(1,+model.project?.height||1);
+    return{x:clamp((event.clientX-rect.left)*W/Math.max(1,rect.width),0,W),y:clamp((event.clientY-rect.top)*H/Math.max(1,rect.height),0,H),unit:W/Math.max(1,rect.width)}
+  }
+  drawVectorPenOverlay(){
+    const state=this.vectorPenState;if(!state)return;
+    const canvas=state.overlay,ctx=canvas?.getContext('2d');if(!canvas||!ctx)return;
+    const W=Math.max(1,+model.project?.width||1),H=Math.max(1,+model.project?.height||1),rect=canvas.getBoundingClientRect(),unit=W/Math.max(1,rect.width),nodes=state.nodes;
+    if(canvas.width!==Math.round(W)||canvas.height!==Math.round(H)){canvas.width=Math.round(W);canvas.height=Math.round(H)}
+    ctx.clearRect(0,0,canvas.width,canvas.height);ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+    const segment=(a,b)=>{const aox=Number.isFinite(a.outX)?a.outX:a.x,aoy=Number.isFinite(a.outY)?a.outY:a.y,bix=Number.isFinite(b.inX)?b.inX:b.x,biy=Number.isFinite(b.inY)?b.inY:b.y;ctx.bezierCurveTo(aox,aoy,bix,biy,b.x,b.y)};
+    if(nodes.length){
+      ctx.beginPath();ctx.moveTo(nodes[0].x,nodes[0].y);for(let i=1;i<nodes.length;i++)segment(nodes[i-1],nodes[i]);if(state.closed&&nodes.length>2){segment(nodes[nodes.length-1],nodes[0]);ctx.closePath()}
+      ctx.strokeStyle='#2de2bd';ctx.lineWidth=Math.max(2,2.25*unit);ctx.stroke();if(state.closed){ctx.fillStyle='rgba(45,226,189,.10)';ctx.fill()}
+      if(!state.closed&&state.cursor&&state.dragIndex<0&&state.selectedIndex<0){const last=nodes[nodes.length-1];ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(state.cursor.x,state.cursor.y);ctx.setLineDash([5*unit,5*unit]);ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=Math.max(1,1.15*unit);ctx.stroke();ctx.setLineDash([])}
+      for(let i=0;i<nodes.length;i++){
+        const n=nodes[i],selected=i===state.selectedIndex,hasIn=Math.hypot((n.inX??n.x)-n.x,(n.inY??n.y)-n.y)>.25,hasOut=Math.hypot((n.outX??n.x)-n.x,(n.outY??n.y)-n.y)>.25;
+        if(selected&&(hasIn||hasOut)){
+          ctx.strokeStyle='rgba(220,229,246,.76)';ctx.lineWidth=Math.max(1,unit);
+          if(hasIn){ctx.beginPath();ctx.moveTo(n.x,n.y);ctx.lineTo(n.inX,n.inY);ctx.stroke();ctx.beginPath();ctx.arc(n.inX,n.inY,4.2*unit,0,Math.PI*2);ctx.fillStyle=state.editTarget==='in'?'#ff91a6':'#d7deed';ctx.fill()}
+          if(hasOut){ctx.beginPath();ctx.moveTo(n.x,n.y);ctx.lineTo(n.outX,n.outY);ctx.stroke();ctx.beginPath();ctx.arc(n.outX,n.outY,4.2*unit,0,Math.PI*2);ctx.fillStyle=state.editTarget==='out'?'#ff91a6':'#d7deed';ctx.fill()}
+        }
+        const first=i===0;ctx.beginPath();ctx.arc(n.x,n.y,(selected?5.4:(first?4.8:3.9))*unit,0,Math.PI*2);ctx.fillStyle=selected?'#f5f7fc':(first?'#101722':'#2de2bd');ctx.fill();ctx.lineWidth=Math.max(1.5,1.6*unit);ctx.strokeStyle=selected?'#2de2bd':(first?'#ffffff':'#10241f');ctx.stroke();
+        if(first&&nodes.length>=3&&!state.closed){ctx.beginPath();ctx.arc(n.x,n.y,8.5*unit,0,Math.PI*2);ctx.strokeStyle='rgba(255,255,255,.36)';ctx.lineWidth=Math.max(1,unit);ctx.stroke()}
+      }
+    }
+    // V5.90 — right navigator drives a small green point along the actual cubic segment.
+    if(state.navActive&&state.navPoint){const c=state.navPoint;ctx.beginPath();ctx.arc(c.x,c.y,2.9*unit,0,Math.PI*2);ctx.fillStyle='#ffd24d';ctx.fill();ctx.lineWidth=Math.max(1,1.05*unit);ctx.strokeStyle='#4b3a00';ctx.stroke()}
+    // V5.94 — when a virtual endpoint + is selected, preview the pending new point
+    // from the first/last anchor. The center touchpad moves this cursor; tap confirms it.
+    if(state.endpointMode&&state.endpointCursor&&!state.closed&&nodes.length){
+      const c=state.endpointCursor,base=state.endpointMode==='prepend'?nodes[0]:nodes[nodes.length-1],arm=11*unit,r=5.5*unit;
+      ctx.save();ctx.setLineDash([5*unit,4*unit]);ctx.strokeStyle='rgba(45,226,189,.68)';ctx.lineWidth=Math.max(1,1.15*unit);ctx.beginPath();ctx.moveTo(base.x,base.y);ctx.lineTo(c.x,c.y);ctx.stroke();ctx.setLineDash([]);
+      ctx.strokeStyle='#00e5a8';ctx.lineWidth=Math.max(1,1.25*unit);ctx.beginPath();ctx.moveTo(c.x-arm,c.y);ctx.lineTo(c.x+arm,c.y);ctx.moveTo(c.x,c.y-arm);ctx.lineTo(c.x,c.y+arm);ctx.stroke();
+      ctx.beginPath();ctx.arc(c.x,c.y,r,0,Math.PI*2);ctx.fillStyle='rgba(0,229,168,.14)';ctx.fill();ctx.strokeStyle='#00e5a8';ctx.stroke();ctx.restore()
+    }
+    // Free-placement cursor remains available only when the path-order navigator is not active.
+    const pointer=!state.navActive?(state.editCursor||state.cursor):null;
+    if(pointer&&!state.closed&&state.dragIndex<0&&state.selectedIndex<0){
+      const c=pointer,r=6.5*unit,arm=12*unit;
+      ctx.save();ctx.strokeStyle='rgba(255,255,255,.92)';ctx.lineWidth=Math.max(1,1.2*unit);ctx.setLineDash([2.4*unit,2.4*unit]);
+      ctx.beginPath();ctx.moveTo(c.x-arm,c.y);ctx.lineTo(c.x+arm,c.y);ctx.moveTo(c.x,c.y-arm);ctx.lineTo(c.x,c.y+arm);ctx.stroke();ctx.setLineDash([]);
+      ctx.translate(c.x,c.y);ctx.rotate(Math.PI/4);ctx.strokeStyle='#2de2bd';ctx.fillStyle='rgba(45,226,189,.13)';ctx.lineWidth=Math.max(1.2,1.4*unit);ctx.beginPath();ctx.rect(-r/2,-r/2,r,r);ctx.fill();ctx.stroke();ctx.restore()
+    }
+    ctx.restore();this.drawVectorPenEditOverview();this.refreshVectorPenControls()
+  }
+  vectorPenLiveLayer(){
+    const state=this.vectorPenState,id=state?.liveLayerId||state?.vectorHistoryLayerId;if(!id)return null;return model.layers.find(l=>l.id===id)||null
+  }
+  vectorPenSyncLiveLayer({allowCreate=true}={}){
+    const state=this.vectorPenState;if(!state)return null;const nodes=state.nodes||[];let layer=this.vectorPenLiveLayer();
+    if(!nodes.length){
+      if(layer){model.removeLayer(layer.id);state.liveLayerId=null;this.rebuildAll()}
+      return null
+    }
+    const coords=[];for(const n of nodes){coords.push([n.x,n.y],[n.inX??n.x,n.inY??n.y],[n.outX??n.x,n.outY??n.y])}
+    const minX=Math.min(...coords.map(v=>v[0])),maxX=Math.max(...coords.map(v=>v[0])),minY=Math.min(...coords.map(v=>v[1])),maxY=Math.max(...coords.map(v=>v[1]));
+    const pad=Math.max(8,(+model.project?.width||1080)*.006),cx=(minX+maxX)/2,cy=(minY+maxY)/2,w=Math.max(24,maxX-minX+pad*2),h=Math.max(24,maxY-minY+pad*2);
+    const local=nodes.map(n=>({x:n.x-cx,y:n.y-cy,inX:(n.inX??n.x)-cx,inY:(n.inY??n.y)-cy,outX:(n.outX??n.x)-cx,outY:(n.outY??n.y)-cy,handleMode:n.handleMode||null}));
+    let created=false;
+    if(!layer&&allowCreate){
+      history.push();layer=model.addLayer('shape',{shape:'vector',name:'Vector Path',x:cx,y:cy,w,h,radius:0,color:'#27d3b5',stroke:'#27d3b5',strokeWidth:Math.max(2,Math.round((+model.project?.width||1080)*.003)),vectorClosed:!!state.closed,vectorNodes:local});
+      state.liveLayerId=layer.id;state.vectorHistoryLayerId=layer.id;created=true
+    }
+    if(!layer)return null;
+    layer.x=cx;layer.y=cy;layer.w=w;layer.h=h;layer.vectorClosed=!!state.closed;layer.vectorNodes=local;model.selected=layer.id;
+    // V5.96 — make geometry invalidation explicit instead of relying only on signature comparison.
+    // While editing, the overlay owns the visual path and the live layer stays model/timeline-only.
+    renderer.vectorEditOverlayLayerId=layer.id;
+    const textureEntry=renderer.textures?.get?.(layer.id);if(textureEntry)textureEntry.signature=null;
+    if(!state.preRenderInvalidatedForVectorEdit){
+      state.preRenderInvalidatedForVectorEdit=true;
+      try{timelinePreRender?.invalidate?.('vector-edit-enter')}catch(e){}
+    }
+    if(created)this.rebuildAll();else renderer.render();
+    return layer
+  }
+  exitVectorPenTool(){
+    const state=this.vectorPenState;if(!state)return;const liveId=state.liveLayerId;this.vectorPenSyncLiveLayer({allowCreate:true});
+    const layer=liveId?model.layers.find(l=>l.id===liveId):null;
+    if(renderer.vectorEditOverlayLayerId===liveId)renderer.vectorEditOverlayLayerId=null;
+    const textureEntry=layer?renderer.textures?.get?.(layer.id):null;if(textureEntry)textureEntry.signature=null;
+    try{timelinePreRender?.invalidate?.('vector-edit-exit')}catch(e){}
+    this.cleanupVectorPenTool();if(liveId||model.selected){this.rebuildAll()}else renderer.render();toast('Edit Points ditutup')
+  }
+  vectorPenReloadAfterHistory(){
+    const state=this.vectorPenState;if(!state)return false;
+    const id=state.vectorHistoryLayerId||state.liveLayerId,layer=id?model.layers.find(l=>l.id===id):null;
+    state.dragIndex=-1;state.pointerId=null;state.canvasHistoryPushed=false;
+    state.endpointMode=null;state.endpointCursor=null;state.navPoint=null;state.navSegmentIndex=-1;state.navT=0;
+    if(layer&&layer.type==='shape'&&layer.shape==='vector'){
+      const baseX=+layer.x||0,baseY=+layer.y||0;
+      state.nodes=(Array.isArray(layer.vectorNodes)?layer.vectorNodes:[]).map(n=>{
+        const x=baseX+(+n.x||0),y=baseY+(+n.y||0),inX=baseX+(Number.isFinite(+n.inX)?+n.inX:(+n.x||0)),inY=baseY+(Number.isFinite(+n.inY)?+n.inY:(+n.y||0)),outX=baseX+(Number.isFinite(+n.outX)?+n.outX:(+n.x||0)),outY=baseY+(Number.isFinite(+n.outY)?+n.outY:(+n.y||0));
+        const hasBezier=Math.hypot(inX-x,inY-y)>.25||Math.hypot(outX-x,outY-y)>.25;
+        return{x,y,inX,inY,outX,outY,handleMode:n.handleMode||(hasBezier?'linked':'corner')}
+      });
+      state.closed=!!layer.vectorClosed;state.liveLayerId=layer.id;state.vectorHistoryLayerId=layer.id;model.selected=layer.id;renderer.vectorEditOverlayLayerId=layer.id;
+      const keep=Number.isInteger(state.selectedIndex)&&state.selectedIndex>=0&&state.selectedIndex<state.nodes.length?state.selectedIndex:-1;
+      state.selectedIndex=keep;state.editTarget=keep>=0?(state.editTarget||'anchor'):null;
+      const last=state.nodes.at(-1);state.cursor=last?{x:last.x,y:last.y}:this.vectorPenCursorDefault();
+      if(keep>=0){const n=state.nodes[keep],target=state.editTarget;state.editCursor=target==='in'?{x:n.inX??n.x,y:n.inY??n.y}:target==='out'?{x:n.outX??n.x,y:n.outY??n.y}:{x:n.x,y:n.y}}
+      else state.editCursor={...state.cursor};
+      if(state.nodes.length){const segments=this.vectorPenNavSegmentCount(),layout=this.vectorPenNavLayout(),u=layout?clamp(+state.navU||0,layout.minU,layout.maxU):clamp(+state.navU||0,0,segments);state.navActive=true;state.navU=u;this.vectorPenEnsureNavVisible(u);this.vectorPenUpdateNavFromU(u,false)}
+      else{state.navActive=false;state.navU=0;state.navScroll=0}
+      const textureEntry=renderer.textures?.get?.(layer.id);if(textureEntry)textureEntry.signature=null;
+    }else{
+      state.nodes=[];state.closed=false;state.liveLayerId=null;state.selectedIndex=-1;state.editTarget=null;state.cursor=this.vectorPenCursorDefault();state.editCursor={...state.cursor};state.navActive=false;state.navU=0;state.navScroll=0;renderer.vectorEditOverlayLayerId=null;
+    }
+    try{timelinePreRender?.invalidate?.('vector-history-restore')}catch(e){}
+    this.drawVectorPenOverlay();renderer.render();return true
+  }
+  undoAction(){history.undo();if(this.vectorPenState)this.vectorPenReloadAfterHistory()}
+  redoAction(){history.redo();if(this.vectorPenState)this.vectorPenReloadAfterHistory()}
+  vectorPenNodeBezier(n){
+    if(!n)return false;return Math.hypot((n.inX??n.x)-n.x,(n.inY??n.y)-n.y)>.25||Math.hypot((n.outX??n.x)-n.x,(n.outY??n.y)-n.y)>.25
+  }
+  vectorPenNodeHandleMode(n){
+    if(!n||!this.vectorPenNodeBezier(n))return 'corner';
+    if(n.handleMode==='independent')return 'independent';
+    if(n.handleMode==='symmetric')return 'symmetric';
+    return 'linked'
+  }
+  vectorPenMoveTarget(index,target,p){
+    const state=this.vectorPenState,n=state?.nodes?.[index];
+    if(!n||!p)return false;
+    target=target||'anchor';
+    if(target==='anchor'){
+      const ox=n.x,oy=n.y,ddx=p.x-ox,ddy=p.y-oy;
+      n.x=p.x;n.y=p.y;
+      n.inX=(n.inX??ox)+ddx;n.inY=(n.inY??oy)+ddy;
+      n.outX=(n.outX??ox)+ddx;n.outY=(n.outY??oy)+ddy;
+    }else{
+      n[target+'X']=p.x;n[target+'Y']=p.y;
+      const handleMode=this.vectorPenNodeHandleMode(n);
+      if(handleMode!=='independent'&&this.vectorPenNodeBezier(n)){
+        const other=target==='in'?'out':'in',vx=p.x-n.x,vy=p.y-n.y,len=Math.max(1,Math.hypot(vx,vy)),otherLen=handleMode==='symmetric'?len:Math.max(1,Math.hypot((n[other+'X']??n.x)-n.x,(n[other+'Y']??n.y)-n.y));
+        n[other+'X']=n.x-vx/len*otherLen;n[other+'Y']=n.y-vy/len*otherLen;
+      }
+    }
+    state.selectedIndex=index;state.editTarget=target;state.editCursor={x:p.x,y:p.y};
+    if(target!=='anchor')n.handleMode=this.vectorPenNodeHandleMode(n)==='corner'?'linked':n.handleMode||'linked';
+    if(state.navActive&&!state.endpointMode)this.vectorPenUpdateNavFromU(state.navU,false);
+    return true
+  }
+  vectorPenSetSelected(index,target='anchor'){
+    const state=this.vectorPenState;if(!state)return false;index=Number.isInteger(index)&&index>=0&&index<state.nodes.length?index:-1;state.selectedIndex=index;state.editTarget=index>=0?target:null;state.endpointMode=null;state.endpointCursor=null;
+    if(index>=0){const n=state.nodes[index];state.editCursor={x:target==='in'?(n.inX??n.x):target==='out'?(n.outX??n.x):n.x,y:target==='in'?(n.inY??n.y):target==='out'?(n.outY??n.y):n.y}}
+    this.drawVectorPenOverlay();return index>=0
+  }
+  vectorPenHitTest(p){
+    const state=this.vectorPenState;if(!state||!p)return null;const W=Math.max(1,+model.project?.width||1),rect=state.overlay?.getBoundingClientRect?.(),unit=W/Math.max(1,rect?.width||W),anchorR=15*unit,handleR=13*unit;
+    if(state.selectedIndex>=0){const n=state.nodes[state.selectedIndex];if(n&&this.vectorPenNodeBezier(n)){
+      if(Math.hypot(p.x-(n.inX??n.x),p.y-(n.inY??n.y))<=handleR)return{index:state.selectedIndex,target:'in'};
+      if(Math.hypot(p.x-(n.outX??n.x),p.y-(n.outY??n.y))<=handleR)return{index:state.selectedIndex,target:'out'};
+    }}
+    let best=null,bestD=Infinity;for(let i=0;i<state.nodes.length;i++){const n=state.nodes[i],d=Math.hypot(p.x-n.x,p.y-n.y);if(d<=anchorR&&d<bestD){best={index:i,target:'anchor'};bestD=d}}
+    return best
+  }
+  vectorPenEndpointDefault(side){
+    const state=this.vectorPenState,nodes=state?.nodes||[],W=Math.max(1,+model.project?.width||1),H=Math.max(1,+model.project?.height||1);if(!nodes.length)return this.vectorPenCursorDefault();
+    const prepend=side==='prepend',base=prepend?nodes[0]:nodes[nodes.length-1],neighbor=nodes.length>1?(prepend?nodes[1]:nodes[nodes.length-2]):null;
+    let dx=neighbor?base.x-neighbor.x:(prepend?-1:1),dy=neighbor?base.y-neighbor.y:0,d=Math.hypot(dx,dy)||1;dx/=d;dy/=d;
+    const len=clamp(Math.max(W*.11,d*.55),Math.max(28,W*.055),Math.max(60,W*.20));
+    return{x:clamp(base.x+dx*len,0,W),y:clamp(base.y+dy*len,0,H)}
+  }
+  vectorPenSelectEndpoint(side){
+    const state=this.vectorPenState;if(!state||state.closed||!state.nodes.length)return false;side=side==='prepend'?'prepend':'append';
+    const changed=state.endpointMode!==side;state.endpointMode=side;state.selectedIndex=-1;state.editTarget=null;state.navPoint=null;state.navSegmentIndex=-1;state.navT=0;
+    if(changed||!state.endpointCursor)state.endpointCursor=this.vectorPenEndpointDefault(side);state.cursor={...state.endpointCursor};state.editCursor={...state.endpointCursor};return true
+  }
+  vectorPenCommitEndpointAdd(){
+    const state=this.vectorPenState,side=state?.endpointMode;if(!state||state.closed||(side!=='prepend'&&side!=='append'))return false;
+    history.push();
+    const c=state.endpointCursor||this.vectorPenEndpointDefault(side),W=Math.max(1,+model.project?.width||1),H=Math.max(1,+model.project?.height||1),x=clamp(+c.x||0,0,W),y=clamp(+c.y||0,0,H),node={x,y,inX:x,inY:y,outX:x,outY:y,handleMode:'corner'};
+    if(side==='prepend')state.nodes.unshift(node);else state.nodes.push(node);
+    state.selectedIndex=-1;state.editTarget=null;state.navActive=true;state.navPoint=null;state.navSegmentIndex=-1;state.navT=0;state.endpointMode=side;state.endpointCursor=this.vectorPenEndpointDefault(side);state.cursor={...state.endpointCursor};state.editCursor={...state.endpointCursor};
+    const count=this.vectorPenNavSegmentCount(),u=side==='prepend'?-1:count+1;state.navU=u;this.vectorPenEnsureNavVisible(u);this.vectorPenSyncLiveLayer();toast(side==='prepend'?'Titik baru ditambah di awal path':'Titik baru ditambah di akhir path');this.drawVectorPenOverlay();return true
+  }
+  vectorPenToggleSmooth(){
+    const state=this.vectorPenState;if(!state||state.selectedIndex<0)return;const n=state.nodes[state.selectedIndex];if(!n)return;
+    history.push();
+    const mode=this.vectorPenNodeHandleMode(n);
+    if(mode==='corner'){
+      const W=Math.max(1,+model.project?.width||1080),len=Math.max(28,W*.055);
+      n.inX=n.x-len;n.inY=n.y;n.outX=n.x+len;n.outY=n.y;n.handleMode='linked';
+      state.editTarget='out';state.editCursor={x:n.outX,y:n.outY};toast('Point: Smooth Bézier')
+    }else if(mode==='linked'||mode==='symmetric'){
+      n.handleMode='independent';
+      state.editTarget=state.editTarget==='in'?'in':'out';
+      const px=state.editTarget==='in'?(n.inX??n.x):(n.outX??n.x),py=state.editTarget==='in'?(n.inY??n.y):(n.outY??n.y);
+      state.editCursor={x:px,y:py};toast('Point: Split Bézier')
+    }else{
+      n.inX=n.x;n.inY=n.y;n.outX=n.x;n.outY=n.y;n.handleMode='corner';state.editTarget='anchor';state.editCursor={x:n.x,y:n.y};toast('Point: Corner')
+    }
+    this.vectorPenSyncLiveLayer();this.drawVectorPenOverlay()
+  }
+  vectorPenToggleSymmetric(){
+    const state=this.vectorPenState;if(!state||state.selectedIndex<0)return;const n=state.nodes[state.selectedIndex];if(!n)return;
+    const mode=this.vectorPenNodeHandleMode(n);
+    if(mode==='corner'||mode==='independent'){toast('SIMETRI hanya tersedia untuk Bézier biasa');return}
+    history.push();
+    if(mode==='symmetric'){
+      n.handleMode='linked';
+      toast('Bezier biasa: panjang handle bebas')
+    }else{
+      const outLen=Math.hypot((n.outX??n.x)-n.x,(n.outY??n.y)-n.y),inLen=Math.hypot((n.inX??n.x)-n.x,(n.inY??n.y)-n.y),target=state.editTarget==='in'?'in':'out',useLen=Math.max(1,target==='in'?inLen:outLen);
+      if(target==='in'){
+        const vx=(n.inX??n.x)-n.x,vy=(n.inY??n.y)-n.y,len=Math.max(1,Math.hypot(vx,vy));
+        n.outX=n.x-vx/len*useLen;n.outY=n.y-vy/len*useLen;
+      }else{
+        const vx=(n.outX??n.x)-n.x,vy=(n.outY??n.y)-n.y,len=Math.max(1,Math.hypot(vx,vy));
+        n.inX=n.x-vx/len*useLen;n.inY=n.y-vy/len*useLen;
+      }
+      n.handleMode='symmetric';
+      toast('SIMETRI aktif: kedua handle memanjang bersama')
+    }
+    this.vectorPenSyncLiveLayer();this.drawVectorPenOverlay()
+  }
+  vectorPenToggleClosed(){
+    const state=this.vectorPenState;if(!state)return;if(!state.closed&&state.nodes.length<3){toast('Tutup Path membutuhkan minimal 3 titik');return}history.push();if(state.closed){state.closed=false;toast('Path dibuka')}else{state.closed=true;state.endpointMode=null;state.endpointCursor=null;toast('Path ditutup')}if(state.navActive){const c=this.vectorPenNavSegmentCount();this.vectorPenUpdateNavFromU(clamp(+state.navU||0,0,c),true)}this.vectorPenSyncLiveLayer();this.drawVectorPenOverlay()
+  }
+  vectorPenPointAction(){
+    const state=this.vectorPenState;if(!state)return;
+    if(state.endpointMode){this.vectorPenCommitEndpointAdd();return}
+    if(state.selectedIndex>=0){
+      history.push();
+      const i=state.selectedIndex,removed=state.nodes.splice(i,1)[0];
+      state.closed=state.closed&&state.nodes.length>=3;
+      state.selectedIndex=-1;state.editTarget=null;state.endpointMode=null;state.endpointCursor=null;
+      if(removed)state.cursor={x:removed.x,y:removed.y};
+      state.editCursor=state.cursor?{...state.cursor}:this.vectorPenCursorDefault();
+      const count=this.vectorPenNavSegmentCount();
+      state.navU=count>0?clamp(+state.navU||0,0,count):0;
+      state.navActive=count>0;
+      this.vectorPenUpdateNavFromU(state.navU,false);
+      this.vectorPenSyncLiveLayer();toast('Titik dihapus');this.drawVectorPenOverlay();return
+    }
+    if(state.navActive&&this.vectorPenNavSegmentCount()>0&&Number.isInteger(state.navSegmentIndex)){
+      if(this.vectorPenInsertNavPoint())return
+    }
+    this.vectorPenCommitCursor()
+  }
+  refreshVectorPenControls(){
+    const state=this.vectorPenState;if(!state)return;
+    const smooth=state.leftRail?.querySelector('[data-vpen-left="smooth"]'),symmetry=state.leftRail?.querySelector('[data-vpen-left="symmetry"]'),point=state.leftRail?.querySelector('[data-vpen-left="point"]'),close=state.leftRail?.querySelector('[data-vpen-left="close"]'),badge=state.selectionBadge,hint=state.touchpad?.querySelector('.vectorPenTouchpadHint');
+    if(smooth){smooth.disabled=state.selectedIndex<0||!!state.endpointMode;smooth.classList.toggle('active',state.selectedIndex>=0&&!state.endpointMode&&this.vectorPenNodeBezier(state.nodes[state.selectedIndex]))}
+    if(symmetry){
+      const mode=state.selectedIndex>=0&&!state.endpointMode?this.vectorPenNodeHandleMode(state.nodes[state.selectedIndex]):'corner';
+      const enabled=mode==='linked'||mode==='symmetric';
+      symmetry.disabled=!enabled;
+      symmetry.classList.toggle('active',mode==='symmetric');
+      symmetry.setAttribute('aria-label',mode==='symmetric'?'Matikan simetri handle Bézier':'Aktifkan simetri handle Bézier');
+    }
+    if(point){
+      const endpoint=state.endpointMode,del=state.selectedIndex>=0&&!endpoint,insert=!del&&!endpoint&&state.navActive&&this.vectorPenNavSegmentCount()>0;
+      point.classList.toggle('delete',del);point.classList.toggle('active',!!endpoint);
+      point.innerHTML=`${del?'−':'+'}<small>${del?'HAPUS':endpoint?(endpoint==='prepend'?'AWAL':'AKHIR'):insert?'SISIP':'TAMBAH'}</small>`;
+      point.setAttribute('aria-label',del?'Hapus titik terpilih':endpoint?`Konfirmasi titik baru di ${endpoint==='prepend'?'awal':'akhir'} path`:insert?'Sisipkan titik pada posisi hijau':'Tambah titik baru')
+    }
+    if(close){close.classList.toggle('active',!!state.closed);close.setAttribute('aria-label',state.closed?'Buka path':'Tutup path')}
+    if(hint){
+      if(state.endpointMode)hint.innerHTML=`<div><b>${state.endpointMode==='prepend'?'Tambah titik di awal':'Tambah titik di akhir'}</b>Geser untuk menempatkan titik baru, lalu ketuk sekali touchpad untuk mengonfirmasi.</div>`;
+      else if(state.selectedIndex>=0)hint.innerHTML='<div><b>Touchpad edit</b>Geser untuk memindahkan anchor/handle yang terpilih.</div>';
+      else hint.innerHTML='<div><b>Touchpad edit</b>Pilih titik dari kanan, atau pilih + di ujung path untuk menambah titik baru.</div>'
+    }
+    if(badge){
+      if(state.endpointMode)badge.innerHTML=`ADD <b>${state.endpointMode==='prepend'?'START':'END'}</b> · TAP TO CONFIRM`;
+      else if(state.selectedIndex>=0){const mode=this.vectorPenNodeHandleMode(state.nodes[state.selectedIndex]);badge.innerHTML=`POINT <b>${state.selectedIndex+1}/${state.nodes.length}</b> · ${state.editTarget==='in'?'HANDLE IN':state.editTarget==='out'?'HANDLE OUT':mode==='independent'?'SPLIT':mode==='symmetric'?'SYMMETRIC':mode==='linked'?'SMOOTH':'CORNER'}`;}
+      else if(state.navActive&&state.navSegmentIndex>=0)badge.innerHTML=`SEGMENT <b>${state.navSegmentIndex+1}</b> · ${Math.round(clamp(+state.navT||0,0,1)*100)}%`;
+      else badge.textContent='Tidak ada titik terpilih'
+    }
+  }
+  vectorPenNavLayout(){
+    const state=this.vectorPenState;const host=state?.editOverview||state?.editPad;if(!state||!host)return null;
+    const r=host.getBoundingClientRect?.()||{width:60,height:160},viewportW=Math.max(1,r.width),viewportH=Math.max(1,r.height),segments=this.vectorPenNavSegmentCount();
+    const spacing=clamp(viewportH*.31,46,64),selectorY=clamp(viewportH*.54,28,viewportH-28),minU=state.closed?0:-1,maxU=state.closed?segments:segments+1,span=Math.max(1,maxU-minU),scrollMax=span*spacing;
+    state.navScroll=clamp(+state.navScroll||0,0,scrollMax);
+    return{viewportW,viewportH,count:segments,segments,spacing,selectorY,minU,maxU,scrollMax,scroll:state.navScroll,
+      rawYForU:u=>selectorY+(clamp(+u||0,minU,maxU)-minU)*spacing,
+      visibleYForU:u=>selectorY+(clamp(+u||0,minU,maxU)-minU)*spacing-state.navScroll};
+  }
+  vectorPenEnsureNavVisible(u){
+    const state=this.vectorPenState,layout=this.vectorPenNavLayout();if(!state||!layout)return 0;
+    state.navScroll=clamp((clamp(+u||0,layout.minU,layout.maxU)-layout.minU)*layout.spacing,0,layout.scrollMax);return state.navScroll;
+  }
+  vectorPenUpdateNavFromScroll(scroll,selectAnchor=true){
+    const state=this.vectorPenState,layout=this.vectorPenNavLayout();if(!state||!layout)return null;
+    state.navScroll=clamp(+scroll||0,0,layout.scrollMax);const u=layout.minU+(layout.spacing>0?state.navScroll/layout.spacing:0);return this.vectorPenUpdateNavFromU(u,selectAnchor);
+  }
+  drawVectorPenEditOverview(){
+    const state=this.vectorPenState,canvas=state?.editOverview,ctx=canvas?.getContext?.('2d');if(!state||!canvas||!ctx)return;
+    const r=canvas.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1),cw=Math.max(1,Math.round(r.width*dpr)),ch=Math.max(1,Math.round(r.height*dpr));if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch}
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,r.width,r.height);const nodes=state.nodes,n=nodes.length;if(!n)return;
+    const layout=this.vectorPenNavLayout();if(!layout)return;const {segments,viewportW,minU,maxU}=layout,cx=viewportW*.53,yForU=u=>layout.visibleYForU(u),xForU=u=>cx+Math.sin((+u||0)*1.07)*Math.min(7,viewportW*.09);
+    ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=1.35;
+    // Open paths expose virtual + targets one slot before the first anchor and one slot after the last anchor.
+    if(!state.closed){ctx.save();ctx.setLineDash([3,3]);ctx.strokeStyle='rgba(183,194,212,.42)';ctx.beginPath();ctx.moveTo(xForU(-1),yForU(-1));ctx.lineTo(xForU(0),yForU(0));ctx.moveTo(xForU(segments),yForU(segments));ctx.lineTo(xForU(segments+1),yForU(segments+1));ctx.stroke();ctx.restore()}
+    if(segments>0){ctx.strokeStyle='#2de2bd';ctx.beginPath();for(let i=0;i<=segments;i++){const xx=xForU(i),yy=yForU(i);if(i===0)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy)}ctx.stroke()}
+    for(let i=0;i<n;i++){const u=i,xx=xForU(u),yy=yForU(u),selected=i===state.selectedIndex;if(yy<-12||yy>layout.viewportH+12)continue;ctx.beginPath();ctx.arc(xx,yy,selected?3.7:2.6,0,Math.PI*2);ctx.fillStyle=selected?'#f5f7fc':'#b7c2d4';ctx.fill();if(selected){ctx.lineWidth=1.2;ctx.strokeStyle='#2de2bd';ctx.stroke()}}
+    if(state.closed&&n>1){const xx=xForU(segments),yy=yForU(segments);if(yy>=-10&&yy<=layout.viewportH+10){ctx.beginPath();ctx.arc(xx,yy,state.selectedIndex===0?3.7:2.6,0,Math.PI*2);ctx.fillStyle=state.selectedIndex===0?'#f5f7fc':'#b7c2d4';ctx.fill()}}
+    const drawPlus=(u,active)=>{const x=xForU(u),y=yForU(u);if(y<-16||y>layout.viewportH+16)return;ctx.save();ctx.strokeStyle=active?'#00e5a8':'#9aa6bb';ctx.lineWidth=active?1.8:1.25;const a=5;ctx.beginPath();ctx.moveTo(x-a,y);ctx.lineTo(x+a,y);ctx.moveTo(x,y-a);ctx.lineTo(x,y+a);ctx.stroke();if(active){ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.strokeStyle='rgba(0,229,168,.55)';ctx.lineWidth=1;ctx.stroke()}ctx.restore()};
+    if(!state.closed){drawPlus(-1,state.endpointMode==='prepend');drawPlus(segments+1,state.endpointMode==='append')}
+    if(state.selectedIndex>=0&&this.vectorPenNodeBezier(nodes[state.selectedIndex])){const u=state.selectedIndex,ax=xForU(u),ay=yForU(u),arm=Math.min(13,viewportW*.18);if(ay>=-18&&ay<=layout.viewportH+18){ctx.strokeStyle='rgba(220,229,246,.62)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ax-arm,ay+8);ctx.lineTo(ax,ay);ctx.lineTo(ax+arm,ay-8);ctx.stroke();for(const [hx,hy,k] of [[ax-arm,ay+8,'in'],[ax+arm,ay-8,'out']]){ctx.beginPath();ctx.arc(hx,hy,2.3,0,Math.PI*2);ctx.fillStyle=state.editTarget===k?'#ff91a6':'#dce4f2';ctx.fill()}}}
+    if(state.navActive){const u=clamp(+state.navU||0,minU,maxU),px=xForU(u),py=layout.selectorY;ctx.save();ctx.strokeStyle='rgba(0,229,168,.10)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(4,py);ctx.lineTo(layout.viewportW-4,py);ctx.stroke();ctx.restore();if(state.endpointMode){ctx.strokeStyle='#00e5a8';ctx.lineWidth=1.8;const a=5;ctx.beginPath();ctx.moveTo(px-a,py);ctx.lineTo(px+a,py);ctx.moveTo(px,py-a);ctx.lineTo(px,py+a);ctx.stroke()}else{ctx.beginPath();ctx.arc(px,py,2.6,0,Math.PI*2);ctx.fillStyle='#ffd24d';ctx.fill();ctx.lineWidth=1;ctx.strokeStyle='#4b3a00';ctx.stroke()}}
+  }
+  vectorPenNavSegmentCount(){
+    const state=this.vectorPenState,n=state?.nodes?.length||0;if(n<2)return 0;return state.closed?n:n-1
+  }
+  vectorPenCubicPoint(a,b,t){
+    t=clamp(+t||0,0,1);const u=1-t,p0={x:a.x,y:a.y},p1={x:a.outX??a.x,y:a.outY??a.y},p2={x:b.inX??b.x,y:b.inY??b.y},p3={x:b.x,y:b.y};
+    return{x:u*u*u*p0.x+3*u*u*t*p1.x+3*u*t*t*p2.x+t*t*t*p3.x,y:u*u*u*p0.y+3*u*u*t*p1.y+3*u*t*t*p2.y+t*t*t*p3.y}
+  }
+  vectorPenUpdateNavFromU(u,selectAnchor=true){
+    const state=this.vectorPenState;if(!state)return null;const n=state.nodes.length,segments=this.vectorPenNavSegmentCount(),layout=this.vectorPenNavLayout();if(!n||!layout){state.navActive=false;state.navU=0;state.navSegmentIndex=-1;state.navT=0;state.navPoint=null;state.endpointMode=null;state.endpointCursor=null;state.navScroll=0;return null}
+    u=clamp(+u||0,layout.minU,layout.maxU);state.navActive=true;state.navU=u;this.vectorPenEnsureNavVisible(u);const spacing=Math.max(1,layout.spacing||22),threshold=clamp(10/spacing,.07,.20);
+    if(!state.closed&&Math.abs(u+1)<=threshold){this.vectorPenSelectEndpoint('prepend');state.navU=-1;state.navScroll=this.vectorPenEnsureNavVisible(-1);return null}
+    if(!state.closed&&Math.abs(u-(segments+1))<=threshold){this.vectorPenSelectEndpoint('append');state.navU=segments+1;state.navScroll=this.vectorPenEnsureNavVisible(segments+1);return null}
+    state.endpointMode=null;state.endpointCursor=null;
+    if(segments<=0){state.navSegmentIndex=-1;state.navT=0;state.navPoint=null;if(selectAnchor&&Math.abs(u)<=threshold){state.selectedIndex=0;state.editTarget='anchor';state.editCursor={x:state.nodes[0].x,y:state.nodes[0].y}}else if(selectAnchor){state.selectedIndex=-1;state.editTarget=null}return null}
+    const pathU=clamp(u,0,segments);let seg=Math.floor(Math.min(pathU,segments-1e-7)),t=pathU-seg;if(pathU>=segments){seg=segments-1;t=1}state.navSegmentIndex=seg;state.navT=t;const a=state.nodes[seg],b=state.nodes[(seg+1)%n];state.navPoint=this.vectorPenCubicPoint(a,b,t);
+    if(selectAnchor){const nearest=Math.round(pathU),dist=Math.abs(pathU-nearest);if(u>=0&&u<=segments&&dist<=threshold){const idx=state.closed?(nearest%n):clamp(nearest,0,n-1);state.selectedIndex=idx;state.editTarget='anchor';const node=state.nodes[idx];state.editCursor={x:node.x,y:node.y}}else{state.selectedIndex=-1;state.editTarget=null;state.editCursor=state.navPoint?{...state.navPoint}:state.editCursor}}
+    return state.navPoint
+  }
+  vectorPenInsertNavPoint(){
+    const state=this.vectorPenState,count=this.vectorPenNavSegmentCount();if(!state||count<=0||!Number.isInteger(state.navSegmentIndex))return false;
+    const seg=clamp(state.navSegmentIndex,0,count-1),n=state.nodes.length,a=state.nodes[seg],b=state.nodes[(seg+1)%n],t=clamp(+state.navT||0,0,1);
+    if(!a||!b||t<=.001||t>=.999)return false;
+    history.push();
+    const lerp=(p,q,k)=>({x:p.x+(q.x-p.x)*k,y:p.y+(q.y-p.y)*k});
+    const p0={x:a.x,y:a.y},p1={x:a.outX??a.x,y:a.outY??a.y},p2={x:b.inX??b.x,y:b.inY??b.y},p3={x:b.x,y:b.y};
+    const q0=lerp(p0,p1,t),q1=lerp(p1,p2,t),q2=lerp(p2,p3,t),r0=lerp(q0,q1,t),r1=lerp(q1,q2,t),sp=lerp(r0,r1,t);
+    // De Casteljau split preserves the exact visible cubic curve.
+    a.outX=q0.x;a.outY=q0.y;b.inX=q2.x;b.inY=q2.y;
+    const node={x:sp.x,y:sp.y,inX:sp.x,inY:sp.y,outX:sp.x,outY:sp.y,handleMode:'corner'};
+    const insertAt=seg+1;state.nodes.splice(insertAt,0,node);
+    state.selectedIndex=insertAt;state.editTarget='anchor';state.editCursor={x:node.x,y:node.y};state.cursor={x:node.x,y:node.y};
+    // New point occupies exactly the previous fractional rail position, now an integer anchor position.
+    state.navU=insertAt;state.navActive=true;this.vectorPenUpdateNavFromU(state.navU,true);this.vectorPenEnsureNavVisible(state.navU,16);
+    this.vectorPenSyncLiveLayer();toast('Titik disisipkan pada garis');this.drawVectorPenOverlay();return true
+  }
+  vectorPenCursorDefault(){
+    return{x:Math.max(1,+model.project?.width||1)/2,y:Math.max(1,+model.project?.height||1)/2}
+  }
+  vectorPenCommitCursor(){
+    const state=this.vectorPenState;if(!state||state.closed)return false;
+    const W=Math.max(1,+model.project?.width||1),H=Math.max(1,+model.project?.height||1),c=state.cursor||this.vectorPenCursorDefault(),x=clamp(+c.x||0,0,W),y=clamp(+c.y||0,0,H),first=state.nodes[0];
+    const rect=state.overlay?.getBoundingClientRect?.(),unit=W/Math.max(1,rect?.width||W),closeRadius=15*unit;
+    history.push();
+    if(first&&state.nodes.length>=3&&Math.hypot(x-first.x,y-first.y)<=closeRadius){
+      state.closed=true;state.selectedIndex=0;state.editTarget='anchor';state.editCursor={x:first.x,y:first.y};
+      this.vectorPenSyncLiveLayer();this.drawVectorPenOverlay();return true
+    }
+    state.nodes.push({x,y,inX:x,inY:y,outX:x,outY:y,handleMode:'corner'});
+    const newIndex=state.nodes.length-1;
+    state.cursor={x,y};state.editCursor={x,y};state.selectedIndex=-1;state.editTarget=null;state.navActive=true;state.navSegmentIndex=-1;state.navPoint=null;state.endpointMode=null;state.endpointCursor=null;
+    // Keep V5.98 live-layer creation: the first point still creates the timeline layer immediately.
+    this.vectorPenSyncLiveLayer();
+    // V5.100R: center the newly created free point on the fixed right-panel selector,
+    // but DO NOT select it. That preserves the original V5.99 center-touchpad Add
+    // behavior, so a clean tap can still create the next point. Scrolling the right
+    // navigator onto an anchor later still selects it normally. Endpoint + logic is untouched.
+    state.navU=newIndex;
+    this.vectorPenUpdateNavFromU(newIndex,false);
+    this.vectorPenEnsureNavVisible(newIndex);
+    state.selectedIndex=-1;state.editTarget=null;
+    this.drawVectorPenOverlay();return true
+  }
+  installVectorPenTouchpad(state){
+    const editor=$('#editor');if(!editor||!state)return null;
+    const dock=document.createElement('section');dock.className='vectorPenTouchpadDock vectorEditPoints';dock.setAttribute('aria-label','Touchpad Pen Tool dan Edit Points');
+    dock.innerHTML='<div class="vectorPenTouchpadHead"><b>Edit Points · Pen Tool</b><span>TENGAH: EDIT / TAMBAH • KANAN: NAVIGASI TITIK</span></div><div class="vectorPenLeftRail"><button type="button" class="vectorPenRailBtn" data-vpen-left="back" aria-label="Kembali">←<small>KEMBALI</small></button><button type="button" class="vectorPenRailBtn" data-vpen-left="close" aria-label="Tutup path">◌<small>PATH</small></button><button type="button" class="vectorPenRailBtn" data-vpen-left="smooth" aria-label="Corner atau Smooth Bézier" disabled>⌁<small>BÉZIER</small></button><button type="button" class="vectorPenRailBtn" data-vpen-left="symmetry" aria-label="Simetri handle Bézier" disabled>⇄<small>SIMETRI</small></button><button type="button" class="vectorPenRailBtn pointAction" data-vpen-left="point" aria-label="Tambah titik">+<small>TAMBAH</small></button></div><div id="vectorPenTouchpad" class="vectorPenTouchpad" role="button" tabindex="0" aria-label="Geser untuk edit atau menempatkan titik baru; saat + ujung terpilih, tap sekali untuk mengonfirmasi"><div class="vectorPenTouchpadHint"><div><b>Touchpad edit</b>Pilih titik dari kanan, lalu geser di sini untuk memindahkan anchor/handle.</div></div><div class="vectorPenTouchpadFinger" aria-hidden="true"></div></div><div id="vectorPenEditPad" class="vectorPenEditPad" role="application" aria-label="Navigator urutan titik dan segmen; geser seperti halaman"><canvas class="vectorPenEditOverview" aria-hidden="true"></canvas><div class="vectorPenEditPadHint">GESER HALAMAN ↑↓</div></div>';
+    editor.append(dock);state.touchpadDock=dock;state.touchpad=dock.querySelector('#vectorPenTouchpad');state.touchpadFinger=dock.querySelector('.vectorPenTouchpadFinger');state.leftRail=dock.querySelector('.vectorPenLeftRail');state.editPad=dock.querySelector('#vectorPenEditPad');state.editPointer=null;state.editOverview=dock.querySelector('.vectorPenEditOverview');
+    const pad=state.touchpad,finger=state.touchpadFinger;if(!pad)return dock;
+    let gesture=null;
+    const point=(e)=>{const r=pad.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top,w:Math.max(1,r.width),h:Math.max(1,r.height)}};
+    const setFinger=(p)=>{if(!finger||!p)return;finger.style.left=`${clamp(p.x,0,p.w)}px`;finger.style.top=`${clamp(p.y,0,p.h)}px`};
+    const resetFinger=()=>{if(!finger)return;finger.style.left='50%';finger.style.top='50%'};
+    const selectedTargetPoint=()=>{if(state.selectedIndex<0)return state.cursor||this.vectorPenCursorDefault();const n=state.nodes[state.selectedIndex];if(!n)return state.cursor||this.vectorPenCursorDefault();const target=state.editTarget||'anchor';return target==='in'?{x:n.inX??n.x,y:n.inY??n.y}:target==='out'?{x:n.outX??n.x,y:n.outY??n.y}:{x:n.x,y:n.y}};
+    const moveSelectedTarget=(p)=>{const i=state.selectedIndex,target=state.editTarget||'anchor';if(i<0)return;this.vectorPenMoveTarget(i,target,p)};
+    const canAutoInsertFromNav=()=>!!(this.vectorPenState&&!state.endpointMode&&state.selectedIndex<0&&state.navActive&&this.vectorPenNavSegmentCount()>0&&Number.isInteger(state.navSegmentIndex)&&state.navPoint&&clamp(+state.navT||0,0,1)>.001&&clamp(+state.navT||0,0,1)<.999);
+    const down=e=>{if(!this.vectorPenState||state.closed&&state.selectedIndex<0)return;e.preventDefault();e.stopPropagation();const q=point(e);let autoInserted=false;if(canAutoInsertFromNav())autoInserted=!!this.vectorPenInsertNavPoint();const endpoint=!!state.endpointMode,selected=state.selectedIndex>=0&&!endpoint,base=endpoint?(state.endpointCursor||this.vectorPenEndpointDefault(state.endpointMode)):selected?selectedTargetPoint():(state.cursor||this.vectorPenCursorDefault());gesture={id:e.pointerId,startX:e.clientX,startY:e.clientY,baseX:base.x,baseY:base.y,moved:false,selected,endpoint,historyPushed:autoInserted};pad.classList.add('tracking');setFinger(q);try{pad.setPointerCapture(e.pointerId)}catch(err){}};
+    const move=e=>{if(!gesture||gesture.id!==e.pointerId||!this.vectorPenState)return;e.preventDefault();e.stopPropagation();const dx=e.clientX-gesture.startX,dy=e.clientY-gesture.startY;if(Math.hypot(dx,dy)>5)gesture.moved=true;const overlayRect=state.overlay?.getBoundingClientRect?.(),W=Math.max(1,+model.project?.width||1),H=Math.max(1,+model.project?.height||1),unit=W/Math.max(1,overlayRect?.width||W),p={x:clamp(gesture.baseX+dx*unit,0,W),y:clamp(gesture.baseY+dy*unit,0,H)};if(gesture.endpoint&&state.endpointMode){state.endpointCursor=p;state.cursor={...p};state.editCursor={...p}}else if(gesture.selected&&state.selectedIndex>=0){if(!gesture.historyPushed){history.push();gesture.historyPushed=true}moveSelectedTarget(p);this.vectorPenSyncLiveLayer()}else{state.navActive=false;state.endpointMode=null;state.endpointCursor=null;state.cursor=p;state.editCursor={...p}}setFinger(point(e));this.drawVectorPenOverlay()};
+    const finish=(e,cancelled=false)=>{if(!gesture||gesture.id!==e.pointerId)return;e.preventDefault();e.stopPropagation();const wasMoved=gesture.moved,wasSelected=gesture.selected,wasEndpoint=gesture.endpoint;gesture=null;pad.classList.remove('tracking');resetFinger();try{pad.releasePointerCapture(e.pointerId)}catch(err){}if(!cancelled&&wasEndpoint&&!wasMoved){this.vectorPenCommitEndpointAdd();return}if(!cancelled&&!wasEndpoint&&!wasSelected&&!wasMoved){state.navActive=false;this.vectorPenCommitCursor()}else this.drawVectorPenOverlay()};
+    pad.addEventListener('pointerdown',down,{passive:false});pad.addEventListener('pointermove',move,{passive:false});pad.addEventListener('pointerup',e=>finish(e,false),{passive:false});pad.addEventListener('pointercancel',e=>finish(e,true),{passive:false});pad.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&this.vectorPenState){e.preventDefault();if(state.endpointMode)this.vectorPenCommitEndpointAdd();else{state.navActive=false;this.vectorPenCommitCursor()}}});
+
+    state.leftRail.querySelector('[data-vpen-left="back"]').onclick=()=>this.exitVectorPenTool();
+    state.leftRail.querySelector('[data-vpen-left="close"]').onclick=()=>this.vectorPenToggleClosed();
+    state.leftRail.querySelector('[data-vpen-left="smooth"]').onclick=()=>this.vectorPenToggleSmooth();
+    state.leftRail.querySelector('[data-vpen-left="symmetry"]').onclick=()=>this.vectorPenToggleSymmetric();
+    state.leftRail.querySelector('[data-vpen-left="point"]').onclick=()=>this.vectorPenPointAction();
+
+    const ep=state.editPad;let editGesture=null;
+    const editDown=e=>{if(!this.vectorPenState||this.vectorPenNavSegmentCount()<=0)return;e.preventDefault();e.stopPropagation();const layout=this.vectorPenNavLayout();if(!layout)return;editGesture={id:e.pointerId,startY:e.clientY,baseScroll:clamp(+state.navScroll||0,0,layout.scrollMax)};ep.classList.add('tracking');state.navActive=true;this.vectorPenUpdateNavFromScroll(editGesture.baseScroll,true);try{ep.setPointerCapture(e.pointerId)}catch(err){}};
+    const editMove=e=>{if(!editGesture||editGesture.id!==e.pointerId||!this.vectorPenState)return;e.preventDefault();e.stopPropagation();const layout=this.vectorPenNavLayout();if(!layout)return;const dy=e.clientY-editGesture.startY;/* page-scroll semantics: drag content up => advance down the point list */const scroll=clamp(editGesture.baseScroll-dy,0,layout.scrollMax);this.vectorPenUpdateNavFromScroll(scroll,true);this.drawVectorPenOverlay()};
+    const editUp=e=>{if(!editGesture||editGesture.id!==e.pointerId)return;e.preventDefault();e.stopPropagation();editGesture=null;ep.classList.remove('tracking');try{ep.releasePointerCapture(e.pointerId)}catch(err){}this.drawVectorPenOverlay()};
+    const editWheel=e=>{if(!this.vectorPenState)return;const layout=this.vectorPenNavLayout();if(!layout||layout.scrollMax<=0)return;e.preventDefault();e.stopPropagation();this.vectorPenUpdateNavFromScroll((+state.navScroll||0)+e.deltaY,true);this.drawVectorPenOverlay()};
+    ep.addEventListener('pointerdown',editDown,{passive:false});ep.addEventListener('pointermove',editMove,{passive:false});ep.addEventListener('pointerup',editUp,{passive:false});ep.addEventListener('pointercancel',editUp,{passive:false});ep.addEventListener('wheel',editWheel,{passive:false});
+    this.drawVectorPenOverlay();return dock
+  }
+
+  startVectorPenTool(existingLayer=null){
+    if(this.vectorPenState)return;
+    const wrap=$('#canvasWrap'),stage=$('#stage');if(!wrap||!stage)return;
+    const editLayer=existingLayer&&existingLayer.type==='shape'&&existingLayer.shape==='vector'?existingLayer:null;
+    this.closeDrawer();renderer.endInteraction?.();
+    const overlay=document.createElement('canvas');overlay.className='vectorPenOverlay';overlay.setAttribute('aria-label',editLayer?'Edit Vector Points canvas':'Pen Tool canvas');
+    wrap.classList.add('vectorPenActive');wrap.append(overlay);
+    const baseX=editLayer?(+editLayer.x||0):0,baseY=editLayer?(+editLayer.y||0):0;
+    const existingNodes=editLayer&&Array.isArray(editLayer.vectorNodes)?editLayer.vectorNodes.map(n=>{
+      const x=baseX+(+n.x||0),y=baseY+(+n.y||0),inX=baseX+(Number.isFinite(+n.inX)?+n.inX:(+n.x||0)),inY=baseY+(Number.isFinite(+n.inY)?+n.inY:(+n.y||0)),outX=baseX+(Number.isFinite(+n.outX)?+n.outX:(+n.x||0)),outY=baseY+(Number.isFinite(+n.outY)?+n.outY:(+n.y||0));
+      const hasBezier=Math.hypot(inX-x,inY-y)>.25||Math.hypot(outX-x,outY-y)>.25;
+      return{x,y,inX,inY,outX,outY,handleMode:n.handleMode||(hasBezier?'linked':'corner')}
+    }):[];
+    const initialCursor=existingNodes.length?{x:existingNodes[existingNodes.length-1].x,y:existingNodes[existingNodes.length-1].y}:this.vectorPenCursorDefault();
+    const state=this.vectorPenState={overlay,hud:null,hint:null,nodes:existingNodes,cursor:{...initialCursor},editCursor:{...initialCursor},selectedIndex:-1,editTarget:null,closed:!!editLayer?.vectorClosed,dragIndex:-1,pointerId:null,touchpadDock:null,touchpad:null,touchpadFinger:null,leftRail:null,editPad:null,editPointer:null,editOverview:null,selectionBadge:null,navActive:false,navU:0,navSegmentIndex:-1,navT:0,navPoint:null,navScroll:0,endpointMode:null,endpointCursor:null,liveLayerId:editLayer?.id||null,vectorHistoryLayerId:editLayer?.id||null,canvasHistoryPushed:false,preRenderInvalidatedForVectorEdit:false};
+    this.installVectorPenTouchpad(state);const badge=document.createElement('div');badge.className='vectorPenSelectionBadge';badge.textContent='Tidak ada titik terpilih';($('#viewport')||wrap).append(badge);state.selectionBadge=badge;
+    if(editLayer){
+      model.selected=editLayer.id;
+      this.vectorPenSyncLiveLayer({allowCreate:false});
+      if(state.nodes.length){state.navActive=true;state.navU=0;this.vectorPenEnsureNavVisible(0);this.vectorPenUpdateNavFromU(0,false)}
+    }
+    const down=e=>{
+      e.preventDefault();e.stopPropagation();
+      const pt=this.vectorPenProjectPoint(e,overlay),hit=this.vectorPenHitTest(pt);
+      if(!hit){this.drawVectorPenOverlay();return}
+      state.dragIndex=hit.index;state.pointerId=e.pointerId;state.canvasHistoryPushed=false;state.selectedIndex=hit.index;state.editTarget=hit.target||'anchor';
+      state.navActive=false;state.navSegmentIndex=-1;state.navPoint=null;state.endpointMode=null;state.endpointCursor=null;
+      state.cursor={x:pt.x,y:pt.y};
+      const n=state.nodes[hit.index];
+      state.editCursor=hit.target==='in'?{x:n.inX??n.x,y:n.inY??n.y}:hit.target==='out'?{x:n.outX??n.x,y:n.outY??n.y}:{x:n.x,y:n.y};
+      try{overlay.setPointerCapture(e.pointerId)}catch(err){}
+      this.drawVectorPenOverlay()
+    };
+    const move=e=>{
+      if(!this.vectorPenState)return;
+      if(state.dragIndex>=0&&state.pointerId===e.pointerId){
+        e.preventDefault();const pt=this.vectorPenProjectPoint(e,overlay);
+        if(!state.canvasHistoryPushed){history.push();state.canvasHistoryPushed=true}
+        state.cursor={x:pt.x,y:pt.y};
+        this.vectorPenMoveTarget(state.dragIndex,state.editTarget||'anchor',{x:pt.x,y:pt.y});
+        this.vectorPenSyncLiveLayer();
+        this.drawVectorPenOverlay();
+      }
+    };
+    const up=e=>{if(state.pointerId===e.pointerId){state.dragIndex=-1;state.pointerId=null;state.canvasHistoryPushed=false;try{overlay.releasePointerCapture(e.pointerId)}catch(err){}}this.vectorPenSyncLiveLayer();this.drawVectorPenOverlay()};
+    overlay.addEventListener('pointerdown',down,{passive:false});overlay.addEventListener('pointermove',move,{passive:false});overlay.addEventListener('pointerup',up,{passive:false});overlay.addEventListener('pointercancel',up,{passive:false});
+    this.drawVectorPenOverlay();toast('Edit Points aktif • kanan: navigator titik/segmen • +: sisip/hapus • tengah: edit geometry')
+  }
+  cleanupVectorPenTool(){
+    const state=this.vectorPenState;if(!state)return;
+    if(renderer.vectorEditOverlayLayerId===state.liveLayerId)renderer.vectorEditOverlayLayerId=null;
+    state.overlay?.remove();state.hud?.remove();state.hint?.remove();state.selectionBadge?.remove();state.touchpadDock?.remove();$('#canvasWrap')?.classList.remove('vectorPenActive');this.vectorPenState=null
+  }
+  cancelVectorPenTool(){this.exitVectorPenTool()}
+  finishVectorPenTool(forceClosed=false){
+    const state=this.vectorPenState;if(!state)return;if(forceClosed&&state.nodes.length>=3&&!state.closed){history.push();state.closed=true}this.vectorPenSyncLiveLayer({allowCreate:true});this.exitVectorPenTool()
   }
   applyTemplate(name){history.push();if(name==='title'){const l=model.addLayer('text',{text:'OPEN MOTION',fontSize:model.project.height*.08}),t0=l.start,t1=Math.min(t0+.7,t0+l.duration),tf=Math.min(t0+.45,t0+l.duration);model.anim.setKey(l,'scaleX',t0,.45,'ease-out');model.anim.setKey(l,'scaleX',t1,1,'overshoot');model.anim.setKey(l,'scaleY',t0,.45,'ease-out');model.anim.setKey(l,'scaleY',t1,1,'overshoot');model.anim.setKey(l,'opacity',t0,0,'ease-out');model.anim.setKey(l,'opacity',tf,1,'ease-out')}
     if(name==='parallax'){model.mode3d=true;[-420,0,420].forEach((z,i)=>{model.addLayer('shape',{shape:'rect',name:'Parallax '+(i+1),space3d:true,z,x:model.project.width*(.3+i*.2),y:model.project.height*(.38+i*.13),w:model.project.width*.34,h:model.project.height*.14,color:['#6ca8ff','#27d3b5','#ff907c'][i]})})}
     if(name==='camera'){model.mode3d=true;const c=model.addLayer('camera'),t0=c.start,t1=t0+c.duration,z=c.z;model.anim.setKey(c,'z',t0,z,'ease-in-out');model.anim.setKey(c,'z',t1,z*.55,'ease-in-out');model.anim.setKey(c,'roll',t0,0,'ease-in-out');model.anim.setKey(c,'roll',t1,3,'ease-in-out')}
     this.rebuildAll();this.openInspectorRoot()}
-  openInspectorRoot(){const l=model.selectedLayer();if(!l){this.closeDrawer();return}this.drawerMode='root';timeline.refreshKeyframeInteractionState?.();const ins=(id,ico,txt,extra='')=>`<button class="insBtn" data-ins="${id}" ${extra}><span>${ico}</span>${txt}</button>`;const mediaTools=(l.type==='video'||l.type==='audio')?this.mediaQuickHTML(l):this.layerQuickHTML(l);const isRelinkable=['image','video','audio'].includes(l.type);const isBlendable=!['audio','camera','null'].includes(l.type);const blendTile=isBlendable?ins('blend','◒','Blending & Opacity','aria-label="Buka Blending dan Opacity"'):'';const relinkTile=isRelinkable?ins('relink','↻','Tautkan Ulang','id="omsInspectorRelinkBtn" aria-label="Tautkan ulang media"'):'';const html=`<div class="drawerBody"><div class="propTitle">${esc(l.name)} ${model.layer3DEnabled(l)?'<span class="badge3d">TRUE 3D</span>':''}</div>${mediaTools}<div class="inspectorGrid">${ins('move','✥','Transform')}${ins('color','◉','Warna & Fill')}${blendTile}${ins('effects','✦','Efek')}${ins('mask','⬡','Mask')}${l.type==='text'?ins('text','T','Edit Teks'):''}${l.type==='shape'?ins('shape','◇','Edit Bentuk'):''}${ins('keys','⌁','Keyframes')}${ins('hier','◎','Scene Graph')}${ins('three','◇','Ruang 3D')}${relinkTile}</div><div style="height:10px"></div><button id="deleteLayer" class="createBtn" style="background:#3b1e2a;color:#ff91a6">HAPUS LAYER</button></div>`;this.drawerShell('Inspector',html);$$('[data-ins]').forEach(b=>b.onclick=()=>{if(b.dataset.ins==='relink'){openRelinkMenu(l);return}this.openInspector(b.dataset.ins)});this.bindMediaQuick(l);$('#deleteLayer').onclick=()=>{history.push();for(const camera of model.layers.filter(x=>x.type==='camera'&&x.orbitTargetId===l.id))this.cameraOrbitDisable(camera);model.removeLayer(l.id);this.closeDrawer();this.rebuildAll()}}
+  openInspectorRoot(){const l=model.selectedLayer();if(!l){this.closeDrawer();return}this.drawerMode='root';timeline.refreshKeyframeInteractionState?.();const ins=(id,ico,txt,extra='')=>`<button class="insBtn" data-ins="${id}" ${extra}><span>${ico}</span>${txt}</button>`;const mediaTools=(l.type==='video'||l.type==='audio')?this.mediaQuickHTML(l):this.layerQuickHTML(l);const isRelinkable=['image','video','audio'].includes(l.type);const isBlendable=!['audio','camera','null'].includes(l.type);const blendTile=isBlendable?ins('blend','◒','Blending & Opacity','aria-label="Buka Blending dan Opacity"'):'';const relinkTile=isRelinkable?ins('relink','↻','Tautkan Ulang','id="omsInspectorRelinkBtn" aria-label="Tautkan ulang media"'):'';const html=`<div class="drawerBody"><div class="propTitle">${esc(l.name)} ${model.layer3DEnabled(l)?'<span class="badge3d">TRUE 3D</span>':''}</div>${mediaTools}<div class="inspectorGrid">${ins('move','✥','Transform')}${ins('color','◉','Warna & Fill')}${blendTile}${ins('effects','✦','Efek')}${ins('mask','⬡','Mask')}${l.type==='text'?ins('text','T','Edit Teks'):''}${l.type==='shape'?(l.shape==='vector'?ins('shape','✎','Edit Vektor'):ins('shape','◇','Edit Bentuk')):''}${ins('keys','⌁','Keyframes')}${ins('hier','◎','Scene Graph')}${ins('three','◇','Ruang 3D')}${relinkTile}</div><div style="height:10px"></div><button id="deleteLayer" class="createBtn" style="background:#3b1e2a;color:#ff91a6">HAPUS LAYER</button></div>`;this.drawerShell('Inspector',html);$$('[data-ins]').forEach(b=>b.onclick=()=>{if(b.dataset.ins==='relink'){openRelinkMenu(l);return}this.openInspector(b.dataset.ins)});this.bindMediaQuick(l);$('#deleteLayer').onclick=()=>{history.push();for(const camera of model.layers.filter(x=>x.type==='camera'&&x.orbitTargetId===l.id))this.cameraOrbitDisable(camera);model.removeLayer(l.id);this.closeDrawer();this.rebuildAll()}}
   mediaQuickContext(l){
     const frame=1/Math.max(1,timeline.projectFPS?.()||model.project?.fps||30);
     const t=+model.time||0,start=Math.max(0,+l.start||0),end=start+Math.max(0,+l.duration||0);
@@ -15562,18 +16120,18 @@ class UIController{
     const current=normalizeBlendMode(l.blend),opacity=Math.round(clamp(model.prop(l,'opacity'),0,1)*100),modeButton=(value,label)=>{const cssMode=value==='source-over'?'normal':value==='lighter'?'screen':value;return `<button type="button" class="blendModeBtn ${current===value?'active':''}" data-blend-mode="${value}" aria-pressed="${current===value}" title="${esc(label)}"><span class="blendModeSwatch"><i></i><i style="mix-blend-mode:${cssMode}"></i></span><span class="blendModeName">${esc(label)}</span><span class="blendModeCheck">✓</span></button>`};
     const categories=BLEND_MODE_GROUPS.map(group=>{const open=group.modes.some(mode=>mode[0]===current);return `<section class="blendCategory ${open?'open':''}" data-blend-category="${group.id}"><button type="button" class="blendCategoryHead" data-blend-toggle><span class="blendCategoryArrow">›</span><b>${esc(group.label)}</b><small>${group.modes.length} mode</small></button><div class="blendModeGrid">${group.modes.map(mode=>modeButton(mode[0],mode[1])).join('')}</div></section>`}).join('');
     const matte=trackMatteSettings(l),maskable=model.layers.filter(layer=>layer.id!==l.id&&!['audio','camera','null'].includes(layer.type)&&!isTrackMatteSource(layer)),sourceIndex=model.layers.indexOf(l),belowCount=maskable.filter(layer=>model.layers.indexOf(layer)>sourceIndex).length;
-    const sourceShape=l.type==='shape'?({star:'Bintang',triangle:'Segitiga',ellipse:'Elips',circle:'Lingkaran',line:'Garis'}[l.shape]||'Persegi'):l.type==='video'?`Video ${Math.round(+l.w||0)}×${Math.round(+l.h||0)}`:l.type==='image'?`Gambar ${Math.round(+l.w||0)}×${Math.round(+l.h||0)}`:l.type==='text'?'Alpha teks':l.type==='mesh'?'Siluet mesh':'Alpha layer';
+    const sourceShape=l.type==='shape'?({star:'Bintang',triangle:'Segitiga',ellipse:'Elips',circle:'Lingkaran',line:'Garis',vector:'Vector Path'}[l.shape]||'Persegi'):l.type==='video'?`Video ${Math.round(+l.w||0)}×${Math.round(+l.h||0)}`:l.type==='image'?`Gambar ${Math.round(+l.w||0)}×${Math.round(+l.h||0)}`:l.type==='text'?'Alpha teks':l.type==='mesh'?'Siluet mesh':'Alpha layer';
     const targetRows=maskable.map(layer=>`<label class="blendMaskTarget"><input type="checkbox" data-matte-target="${layer.id}" ${matte.targetIds.includes(layer.id)?'checked':''}><span><b>${esc(layer.name)}</b><small>${model.layers.indexOf(layer)>sourceIndex?'Di bawah sumber':'Di atas sumber'} • ${esc(layer.type)}</small></span></label>`).join('')||'<div class="blendMaskEmpty">Belum ada layer yang dapat dijadikan target.</div>';
     const maskPanel=`<section class="blendMaskCard ${matte.mode==='none'?'inactive':''}" id="blendTrackMatte"><div class="blendMaskHeading"><span class="blendMaskGlyph">◩</span><div><b>Masking Layer</b><small>Bentuk mengikuti alpha layer ini</small></div><span class="blendMaskState" id="blendMaskState">${matte.mode==='none'?'Nonaktif':matte.mode==='exclude'?'Exclude':'Mask'}</span></div><div class="blendMaskSource"><span>${esc(sourceShape)}</span><small>${esc(l.name)} menjadi sumber mask dan tidak ikut dicat sebagai warna.</small></div><div class="blendMaskModes"><button type="button" data-matte-mode="none" class="${matte.mode==='none'?'active':''}"><i>○</i><span>Nonaktif</span></button><button type="button" data-matte-mode="mask" class="${matte.mode==='mask'?'active':''}"><i>◉</i><span>Mask</span><small>Area dalam</small></button><button type="button" data-matte-mode="exclude" class="${matte.mode==='exclude'?'active':''}"><i>⊘</i><span>Exclude</span><small>Area luar</small></button></div><div class="blendMaskScopeTitle">Terapkan ke</div><div class="blendMaskScopes"><button type="button" data-matte-scope="below" class="${matte.scope==='below'?'active':''}"><span>Semua di bawah</span><small>${belowCount} layer</small></button><button type="button" data-matte-scope="selected" class="${matte.scope==='selected'?'active':''}"><span>Layer tertentu</span><small>Pilih satu atau lebih</small></button></div><div class="blendMaskTargets ${matte.scope==='selected'?'':'hidden'}" id="blendMaskTargets">${targetRows}</div><div class="blendMaskNote" id="blendMaskNote">${matte.mode==='none'?'Aktifkan Mask atau Exclude untuk menggunakan layer ini sebagai sumber.':matte.scope==='below'?`Mempengaruhi ${belowCount} layer di bawah posisi sumber pada timeline.`:`Mempengaruhi ${matte.targetIds.filter(id=>maskable.some(layer=>layer.id===id)).length} layer yang dipilih.`}</div></section>`;
     return `<div class="drawerBody blendOpacityPanel"><section class="blendOpacityCard"><div class="blendOpacityHeading"><div><b>Opacity</b><small>Transparansi layer pada frame ini</small></div><button class="diamond ${model.anim.hasKeyAt(l,'opacity',model.time)?'on':''}" data-key="opacity" data-kf-visual-prop="opacity" aria-label="Keyframe opacity">◇</button></div><div class="blendOpacityControl"><span class="blendOpacityIcon">◐</span><input id="blendOpacityRange" type="range" min="0" max="100" step="1" value="${opacity}" aria-label="Opacity layer"><label><input id="blendOpacityNumber" type="number" min="0" max="100" step="1" value="${opacity}" aria-label="Nilai opacity"><span>%</span></label></div><div class="blendOpacityPresets">${[0,25,50,75,100].map(value=>`<button type="button" data-opacity-preset="${value}" class="${opacity===value?'active':''}">${value}%</button>`).join('')}</div></section><div class="blendCurrent"><span>Mode aktif</span><b id="blendCurrentLabel">${esc(blendModeLabel(current))}</b></div><div class="blendCategories">${categories}</div><div class="miniNote">Blending dihitung terhadap seluruh layer di bawahnya. Opacity dapat diberi keyframe dan tetap digunakan pada preview maupun ekspor.</div>${maskPanel}</div>`
   }
-  openInspector(type){const l=model.selectedLayer();if(!l)return;this.drawerMode=type;timeline.refreshKeyframeInteractionState?.();let html='';if(type==='move')html=this.transformHTML(l);
+  openInspector(type){const l=model.selectedLayer();if(!l)return;if(type==='shape'&&l.type==='shape'&&l.shape==='vector'){this.startVectorPenTool(l);return}this.drawerMode=type;timeline.refreshKeyframeInteractionState?.();let html='';if(type==='move')html=this.transformHTML(l);
     else if(type==='color')html=`<div class="drawerBody propPanel"><div class="colorRow"><input id="fillColor" type="color" value="${l.color||'#ffffff'}"><input id="fillHex" type="text" value="${l.color||'#ffffff'}"></div>${this.row('Stroke','strokeWidth',l.strokeWidth||0,false,'1')}<div class="miniNote">Opacity dan mode komposit kini tersedia di menu Blending & Opacity.</div></div>`;
     else if(type==='blend')html=this.blendingOpacityHTML(l);
     else if(type==='effects'){const e=l.effects||{};html=`<div class="drawerBody propPanel">${this.row('Blur','effects.blur',e.blur||0,false,'1')}${this.row('Brightness','effects.brightness',e.brightness??100,false,'1')}${this.row('Contrast','effects.contrast',e.contrast??100,false,'1')}${this.row('Saturation','effects.saturate',e.saturate??100,false,'1')}${this.row('Hue','effects.hue',e.hue||0,false,'1')}</div>`}
     else if(type==='mask'){html=`<div class="drawerBody propPanel"><div class="switchRow"><span>Aktifkan Mask</span><input id="maskEnabled" type="checkbox" ${l.mask?.enabled?'checked':''}></div><div class="propRow"><label>Tipe</label><select id="maskType"><option value="rect">Rectangle</option><option value="ellipse">Ellipse</option></select><span></span></div></div>`}
     else if(type==='text'){html=`<div class="drawerBody propPanel"><div class="propRow"><label>Teks</label><input id="textValue" value="${esc(l.text)}"><span></span></div>${this.row('Font Size','fontSize',l.fontSize,false,'1')}<div class="propRow"><label>Weight</label><select id="fontWeight"><option>400</option><option>500</option><option>600</option><option>700</option><option>800</option><option>900</option></select><span></span></div></div>`}
-    else if(type==='shape'){html=`<div class="drawerBody propPanel"><div class="propRow"><label>Bentuk</label><select id="shapeType"><option value="rect">Rectangle</option><option value="ellipse">Ellipse</option><option value="triangle">Triangle</option><option value="star">Star</option><option value="line">Line</option></select><span></span></div>${this.row('Lebar','w',l.w,false,'1')}${this.row('Tinggi','h',l.h,false,'1')}${this.row('Radius','radius',l.radius||0,false,'1')}</div>`}
+    else if(type==='shape'){html=l.shape==='vector'?`<div class="drawerBody propPanel"><div class="propTitle">Vector Path</div><div class="switchRow"><span>Tutup Path</span><input id="vectorClosed" type="checkbox" ${l.vectorClosed?'checked':''}></div>${this.row('Stroke','strokeWidth',l.strokeWidth||0,false,'1')}<div class="miniNote">${Array.isArray(l.vectorNodes)?l.vectorNodes.length:0} anchor • Fill aktif saat path tertutup. Gunakan Transform untuk memindahkan, memutar, atau menskalakan vector.</div></div>`:`<div class="drawerBody propPanel"><div class="propRow"><label>Bentuk</label><select id="shapeType"><option value="rect">Rectangle</option><option value="ellipse">Ellipse</option><option value="triangle">Triangle</option><option value="star">Star</option><option value="line">Line</option></select><span></span></div>${this.row('Lebar','w',l.w,false,'1')}${this.row('Tinggi','h',l.h,false,'1')}${this.row('Radius','radius',l.radius||0,false,'1')}</div>`}
     else if(type==='hier'){html=this.hierarchyHTML(l)}
     else if(type==='keys'){this.openGraphEditor();return}
     else if(type==='three')html=this.threeHTML(l);
@@ -16174,10 +16732,12 @@ class UIController{
     return 'custom';
   }
   transformModeEasingName(l){
+    const seg=this.transformModeSegmentsAt(l)[0];
+    if(seg?.from)return this.easingPresetName(seg.from.easing||EASING_PRESETS.linear);
     for(const prop of this.transformModeProps(l)){
       const arr=l.kf?.[prop]||[];
       const k=arr.find(x=>Math.abs(x.t-model.time)<.015);
-      if(k) return this.easingPresetName(k.easing);
+      if(k)return this.easingPresetName(k.easing||EASING_PRESETS.linear);
     }
     return 'linear';
   }
@@ -16282,11 +16842,30 @@ class UIController{
     }
     this.updateTransformEaseUI(l);
     if(this.transformEaseEditorOpen){
-      if(this.transformModeHasEaseSegment(l)){
+      const segs=this.transformModeSegmentsAt(l);
+      const editor=$('.easeEditor');
+      const currentStructure=editor?.dataset?.easeStructure||'';
+      if(segs.length){
+        const spec=this.transformModeEasingSpec(l);
+        const structure=spec?.type==='spring'?'spring':spec?.type==='hold'?'hold':'bezier';
+        // Crossing into a different easing structure — including returning from
+        // the neutral no-segment state — rebuilds only the drawer body and keeps
+        // Easing mode open.
+        if(editor&&currentStructure&&currentStructure!==structure&&this.drawerMode==='move'){
+          this.openInspector('move');
+          return;
+        }
         this.drawTransformEaseEditor(l);
+        this.updateTransformEasePresetRail(l);
       }else{
-        this.transformEaseEditorOpen=false;
-        if(this.drawerMode==='move')this.openInspector('move');
+        // V5.85 — the playhead is not between two keyframes. Replace any stale
+        // Bezier/Spring/Hold graph with the neutral “Pilih Segmen” UI immediately,
+        // but do NOT close Easing or jump back to XYZ Transform.
+        if(this.drawerMode==='move'&&currentStructure&&currentStructure!=='none'){
+          this.openInspector('move');
+          return;
+        }
+        this.updateTransformEasePlayhead(l);
       }
     }
   }
@@ -16316,18 +16895,47 @@ class UIController{
   }
   transformModeSegmentsAt(l,time=model.time){
     const out=[];
+    if(!l)return out;
     const eps=.015;
-    for(const prop of this.transformModeProps(l)){
+    const context=`${l.id||''}|${this.transformMode||'position'}`;
+    const props=this.transformModeProps(l);
+
+    // V5.84/V5.85 — easing segments are boundary-aware. At an exact keyframe,
+    // prefer the outgoing segment (the easing owned by that keyframe); on the
+    // final keyframe use the incoming segment. Outside the first/last keyframe,
+    // however, there is deliberately no active segment.
+    for(const prop of props){
       const arr=(l.kf?.[prop]||[]).slice().sort((a,b)=>a.t-b.t);
       if(arr.length<2)continue;
-      for(let i=0;i<arr.length-1;i++){
-        const from=arr[i],to=arr[i+1];
-        if(time>from.t+eps && time<to.t-eps){
-          out.push({prop,from,to,index:i});
-          break;
+      let seg=null;
+
+      const exactIndex=arr.findIndex(k=>Math.abs(k.t-time)<=eps);
+      if(exactIndex>=0){
+        const i=exactIndex<arr.length-1?exactIndex:exactIndex-1;
+        if(i>=0&&i<arr.length-1)seg={prop,from:arr[i],to:arr[i+1],index:i};
+      }
+
+      if(!seg){
+        for(let i=0;i<arr.length-1;i++){
+          const from=arr[i],to=arr[i+1];
+          if(time>from.t+eps&&time<to.t-eps){seg={prop,from,to,index:i};break}
         }
       }
+      if(seg)out.push(seg);
     }
+
+    if(out.length){
+      if(this.transformEaseEditorOpen){
+        this._transformEasePinContext=context;
+        this._transformEasePinnedSegments=out.map(({prop,from,to})=>({prop,fromId:from.id,toId:to.id}));
+      }
+      return out;
+    }
+
+    // V5.85 — Easing stays open as an editing mode, but a curve may only be
+    // displayed for a real interval bounded by TWO keyframes. Do not reuse the
+    // previously pinned segment before the first keyframe or after the last one;
+    // those regions have no interpolation segment and must show “Pilih Segmen”.
     return out;
   }
   transformModeHasEaseSegment(l){
@@ -16406,6 +17014,28 @@ class UIController{
     }
     return 'M2 30 L30 2';
   }
+  updateTransformEasePresetRail(l){
+    const current=this.transformModeEasingName(l);
+    $$('[data-transform-ease-preset]').forEach(btn=>btn.classList.toggle('active',btn.dataset.transformEasePreset===current));
+  }
+  transformEasePlayheadProgress(l){
+    const seg=this.transformModeSegmentsAt(l)[0];
+    if(!seg)return null;
+    const span=Math.max(1e-7,(+seg.to.t||0)-(+seg.from.t||0));
+    return clamp((model.time-(+seg.from.t||0))/span,0,1);
+  }
+  updateTransformEasePlayhead(l){
+    const line=$('#easePlayhead');
+    if(!line)return;
+    const progress=this.transformEasePlayheadProgress(l);
+    if(progress==null){line.style.opacity='0';return}
+    const x=7+progress*86;
+    line.setAttribute('x1',x.toFixed(3));
+    line.setAttribute('x2',x.toFixed(3));
+    line.setAttribute('y1','7');
+    line.setAttribute('y2','93');
+    line.style.opacity='';
+  }
   transformEasePresetRailHTML(l){
     const current=this.transformModeEasingName(l);
     const presets=[
@@ -16425,7 +17055,7 @@ class UIController{
   }
   transformEaseEditorHTML(l){
     if(!this.transformModeHasEaseSegment(l)){
-      return `<div class="easeEditor"><div class="easeEditorHead"><b>Easing</b><small>Tidak ada segmen aktif</small></div><div class="easeNoKey"><div><b>Pilih Segmen</b>Arahkan playhead di antara dua keyframe. Easing akan mengatur interpolasi segmen tersebut, bukan membuat keyframe baru.</div></div><div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="openCurveEditor">Curve</button><span></span></div></div>`;
+      return `<div class="easeEditor" data-ease-structure="none"><div class="easeEditorHead"><b>Easing</b><small>Tidak ada segmen aktif</small></div><div class="easeNoKey"><div><b>Pilih Segmen</b>Arahkan playhead di antara dua keyframe. Easing akan tetap terbuka dan mengikuti segmen saat playhead menemukannya.</div></div><div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><span></span></div></div>`;
     }
 
     const spec=this.transformModeEasingSpec(l);
@@ -16434,28 +17064,28 @@ class UIController{
     const label=this.easingPresetName(spec)==='custom'?'Custom Cubic Bezier':this.transformModeEasingName(l);
 
     if(type==='spring'){
-      return `<div class="easeEditor">
+      return `<div class="easeEditor" data-ease-structure="spring">
         <div class="easeEditorHead"><b>Spring Easing</b><small>${esc(label)}</small></div>
-        <div class="easeGraphWrap"><svg id="transformEaseGraph" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"><line class="easeAxis" x1="7" y1="93" x2="93" y2="93"></line><line class="easeAxis" x1="7" y1="93" x2="7" y2="7"></line><path id="easeCurve" class="easeCurve" d=""></path></svg></div>
+        <div class="easeGraphWrap"><svg id="transformEaseGraph" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"><line class="easeAxis" x1="7" y1="93" x2="93" y2="93"></line><line class="easeAxis" x1="7" y1="93" x2="7" y2="7"></line><line id="easePlayhead" class="easePlayhead" x1="7" y1="7" x2="7" y2="93"></line><path id="easeCurve" class="easeCurve" d=""></path></svg></div>
         <div class="easeSpringPanel">
           <label class="easeSpringRow"><span>Stiffness</span><input id="easeSpringStiffness" type="range" min="20" max="400" step="1" value="${Number(spec.stiffness??130)}"><input id="easeSpringStiffnessN" type="number" min="20" max="400" step="1" value="${Number(spec.stiffness??130)}"></label>
           <label class="easeSpringRow"><span>Damping</span><input id="easeSpringDamping" type="range" min="1" max="60" step=".5" value="${Number(spec.damping??13)}"><input id="easeSpringDampingN" type="number" min="1" max="60" step=".5" value="${Number(spec.damping??13)}"></label>
           <label class="easeSpringRow"><span>Mass</span><input id="easeSpringMass" type="range" min=".1" max="5" step=".1" value="${Number(spec.mass??1)}"><input id="easeSpringMassN" type="number" min=".1" max="5" step=".1" value="${Number(spec.mass??1)}"></label>
         </div>
-        <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="openCurveEditor">Curve</button><button id="easeMakeBezier">Bezier</button><button id="easeResetPreset">Reset</button></div>
+        <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="easeMakeBezier">Bezier</button><button id="easeResetPreset">Reset</button></div>
       </div>`;
     }
 
     if(type==='hold'){
-      return `<div class="easeEditor">
+      return `<div class="easeEditor" data-ease-structure="hold">
         <div class="easeEditorHead"><b>Hold Easing</b><small>Step / no interpolation</small></div>
-        <div class="easeGraphWrap"><svg id="transformEaseGraph" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"><line class="easeAxis" x1="7" y1="93" x2="93" y2="93"></line><line class="easeAxis" x1="7" y1="93" x2="7" y2="7"></line><path id="easeCurve" class="easeCurve" d="M7 93 L88 93 L93 7"></path></svg></div>
+        <div class="easeGraphWrap"><svg id="transformEaseGraph" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"><line class="easeAxis" x1="7" y1="93" x2="93" y2="93"></line><line class="easeAxis" x1="7" y1="93" x2="7" y2="7"></line><line id="easePlayhead" class="easePlayhead" x1="7" y1="7" x2="7" y2="93"></line><path id="easeCurve" class="easeCurve" d="M7 93 L88 93 L93 7"></path></svg></div>
         <div class="easeHoldPanel"><div><b>HOLD</b><br>Nilai ditahan sampai keyframe berikutnya lalu berpindah tanpa interpolasi.</div></div>
-        <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="openCurveEditor">Curve</button><button id="easeMakeBezier">Bezier</button><button id="easeResetPreset">Linear</button></div>
+        <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="easeMakeBezier">Bezier</button><button id="easeResetPreset">Linear</button></div>
       </div>`;
     }
 
-    return `<div class="easeEditor">
+    return `<div class="easeEditor" data-ease-structure="bezier">
       <div class="easeEditorHead"><b>Cubic Bezier Easing</b><small id="easeEditorName">${esc(label)}</small></div>
       <div class="easeGraphWrap">
         <svg id="transformEaseGraph" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
@@ -16463,6 +17093,7 @@ class UIController{
           <line class="easeAxis" x1="7" y1="93" x2="7" y2="7"></line>
           <line class="easeCross" x1="50" y1="7" x2="50" y2="93"></line>
           <line class="easeCross" x1="7" y1="50" x2="93" y2="50"></line>
+          <line id="easePlayhead" class="easePlayhead" x1="7" y1="7" x2="7" y2="93"></line>
           <line id="easeGuide1" class="easeGuide" x1="7" y1="93" x2="7" y2="93"></line>
           <line id="easeGuide2" class="easeGuide" x1="93" y1="7" x2="93" y2="7"></line>
           <path id="easeCurve" class="easeCurve" d=""></path>
@@ -16478,7 +17109,7 @@ class UIController{
         <label class="easeParam"><span>X2</span><input id="easeX2" type="number" min="0" max="1" step=".01" value="${bez.x2.toFixed(2)}"></label>
         <label class="easeParam"><span>Y2</span><input id="easeY2" type="number" min="-1.5" max="2.5" step=".01" value="${bez.y2.toFixed(2)}"></label>
       </div>
-      <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="openCurveEditor">Curve</button><button id="easeReverseCurve">↔ Balik</button><button id="easeResetPreset">Linear</button></div>
+      <div class="easeEditorFoot"><button id="easeEditorBack">← Kembali</button><button id="easeReverseCurve">↔ Balik</button><button id="easeResetPreset">Linear</button></div>
     </div>`;
   }
   drawTransformEaseEditor(l){
@@ -16487,6 +17118,7 @@ class UIController{
     if(!svg||!curve)return;
 
     const spec=this.transformModeEasingSpec(l);
+    this.updateTransformEasePlayhead(l);
     if(spec.type==='spring'){
       let d='';
       for(let i=0;i<=80;i++){
@@ -16497,10 +17129,12 @@ class UIController{
         d+=(i?' L':'M')+x.toFixed(2)+' '+y.toFixed(2);
       }
       curve.setAttribute('d',d);
+      this.updateTransformEasePresetRail(l);
       return;
     }
     if(spec.type==='hold'){
       curve.setAttribute('d','M7 93 L88 93 L93 7');
+      this.updateTransformEasePresetRail(l);
       return;
     }
 
@@ -16525,23 +17159,21 @@ class UIController{
     }
     const name=$('#easeEditorName');
     if(name)name.textContent=this.easingPresetName(spec)==='custom'?'Custom Cubic Bezier':this.easingPresetName(spec);
+    this.updateTransformEasePresetRail(l);
   }
   bindTransformEasingEditor(l){
     if(!this.transformEaseEditorOpen)return;
 
     const back=$('#easeEditorBack');
     if(back)back.onclick=()=>{
+      // V5.83 — Back from the classic/Cubic Bezier easing editor is structural
+      // navigation. Return to the XYZ Position/Rotation transform page.
       this.transformEaseEditorOpen=false;
+      this._transformEasePinContext='';this._transformEasePinnedSegments=[];
+      this.curveReturnToEasing=false;
+      this.transformMode='position';
+      this.drawerMode='move';
       this.openInspector('move');
-    };
-
-    const openCurve=$('#openCurveEditor');
-    if(openCurve)openCurve.onclick=()=>{
-      const seg=this.transformModeSegmentsAt(l)[0];
-      const prop=seg?.prop||this.transformModeProps(l)[0]||this.graphProp;
-      if(seg?.from?.id)this.graphSelectedKeyId=seg.from.id;
-      this.transformEaseEditorOpen=false;
-      this.openGraphEditor(prop,{fromEasing:true});
     };
 
     if(!this.transformModeHasEaseSegment(l)){
@@ -16928,7 +17560,9 @@ class UIController{
         return;
       }
 
-      this.transformEaseEditorOpen=!this.transformEaseEditorOpen;
+      const opening=!this.transformEaseEditorOpen;
+      this.transformEaseEditorOpen=opening;
+      if(opening){this._transformEasePinContext='';this._transformEasePinnedSegments=[];this.transformModeSegmentsAt(l)}
       this.openInspector('move');
     });
 
@@ -17488,7 +18122,7 @@ class UIController{
     }
     if(type==='mask'){$('#maskEnabled').onchange=e=>{history.push();l.mask.enabled=e.target.checked;renderer.render()};$('#maskType').value=l.mask.type;$('#maskType').onchange=e=>{history.push();l.mask.type=e.target.value;renderer.render()}}
     if(type==='text'){$('#textValue').oninput=e=>{l.text=e.target.value;renderer.render()};$('#fontWeight').value=l.fontWeight;$('#fontWeight').onchange=e=>{history.push();l.fontWeight=+e.target.value;renderer.render()}}
-    if(type==='shape'){$('#shapeType').value=l.shape;$('#shapeType').onchange=e=>{history.push();l.shape=e.target.value;renderer.render()}}
+    if(type==='shape'){if(l.shape==='vector'){const closed=$('#vectorClosed');if(closed)closed.onchange=e=>{history.push();l.vectorClosed=e.target.checked;renderer.render()}}else{const shapeType=$('#shapeType');if(shapeType){shapeType.value=l.shape;shapeType.onchange=e=>{history.push();l.shape=e.target.value;renderer.render()}}}}
     if(type==='hier')$('#parentSelect').onchange=e=>{history.push();l.parentId=e.target.value||null;renderer.render();this.openInspector('hier')};
     if(type==='three'&&$('#env3d'))$('#env3d').onchange=e=>{
       if(l.type==='mesh'){e.target.checked=true;return}
@@ -17539,12 +18173,33 @@ class UIController{
   }
   getNested(obj,path){return path.split('.').reduce((o,k)=>o?.[k],obj)}
   setNested(obj,path,val){if(path==='orbitDistance')val=Math.max(.001,+val||.001);const parts=path.split('.');let o=obj;for(let i=0;i<parts.length-1;i++)o=o[parts[i]]||(o[parts[i]]={});o[parts.at(-1)]=val}
+  curveGraphTimeDomain(layer=model.selectedLayer?.()){
+    const fps=Math.max(1,+model.project?.fps||30),frame=1/fps;
+    const start=Math.max(0,+layer?.start||0),duration=Math.max(frame,+layer?.duration||frame);
+    return{start,duration,end:start+duration,frame};
+  }
+  curveGraphLocalTime(globalTime,layer=model.selectedLayer?.()){
+    const d=this.curveGraphTimeDomain(layer);return clamp((+globalTime||0)-d.start,0,d.duration);
+  }
+  curveGraphGlobalTime(localTime,layer=model.selectedLayer?.()){
+    const d=this.curveGraphTimeDomain(layer);return d.start+clamp(+localTime||0,0,d.duration);
+  }
+  curveGraphKeys(layer,prop=this.graphProp){
+    if(!layer)return[];
+    const d=this.curveGraphTimeDomain(layer),eps=Math.max(1e-7,d.frame*.02);
+    return (layer.kf?.[prop]||[]).filter(k=>Number.isFinite(+k.t)&&+k.t>=d.start-eps&&+k.t<=d.end+eps).slice().sort((a,b)=>a.t-b.t);
+  }
+  curveGraphEditTime(layer=model.selectedLayer?.()){
+    const d=this.curveGraphTimeDomain(layer),raw=clamp(+model.time||0,d.start,d.end);
+    const snapped=timeline?.snapTime?timeline.snapTime(raw,'round'):raw;
+    return clamp(snapped,d.start,d.end);
+  }
   curveGraphProps(l,preferredProp=null){
     // V5.49 — Curve Editor is a view of existing animation data, not a list of
     // every property that *could* be animated. Show only properties that
     // currently contain keyframes. A property explicitly opened from
     // Transform/Easing remains available so the hand-off is never broken.
-    const keyed=Object.keys(l.kf||{}).filter(prop=>Array.isArray(l.kf?.[prop])&&l.kf[prop].length>0);
+    const keyed=Object.keys(l.kf||{}).filter(prop=>this.curveGraphKeys(l,prop).length>0);
     const out=[...keyed];
     if(preferredProp&&!out.includes(preferredProp))out.unshift(preferredProp);
     // Defensive fallback for opening Curve Editor on a layer with no keys at
@@ -17572,7 +18227,7 @@ class UIController{
   }
   curveGraphApplyPreset(name){
     const l=model.selectedLayer();if(!l)return;
-    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t);
+    const arr=this.curveGraphKeys(l,this.graphProp);
     const key=this.curveGraphSelected(arr);
     if(!key)return toast('Tambahkan keyframe lebih dulu');
     history.push();
@@ -17582,7 +18237,7 @@ class UIController{
   }
   curveGraphMakeBezier(){
     const l=model.selectedLayer();if(!l)return;
-    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),key=this.curveGraphSelected(arr);
+    const arr=this.curveGraphKeys(l,this.graphProp),key=this.curveGraphSelected(arr);
     if(!key||!this.curveGraphOutgoing(arr,key))return toast('Pilih keyframe yang memiliki segmen setelahnya');
     history.push();
     key.easing={type:'cubic-bezier',x1:.42,y1:0,x2:.58,y2:1};
@@ -17631,9 +18286,9 @@ class UIController{
   }
   updateCurveGraphSelectionUI(){
     const l=model.selectedLayer();if(!l)return;
-    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),key=this.curveGraphSelected(arr);
+    const arr=this.curveGraphKeys(l,this.graphProp),key=this.curveGraphSelected(arr);
     const time=$('#curveKeyTime'),value=$('#curveKeyValue'),ease=$('#curveEaseName'),make=$('#curveMakeBezier');
-    if(time){time.disabled=!key;if(key&&document.activeElement!==time)time.value=(+key.t||0).toFixed(3)}
+    if(time){time.disabled=!key;if(key&&document.activeElement!==time)time.value=this.curveGraphLocalTime(key.t,l).toFixed(3)}
     if(value){value.disabled=!key;if(key&&document.activeElement!==value)value.value=(+key.v||0).toFixed(3)}
     if(ease)ease.textContent=key?this.curveGraphEaseLabel(key):'Pilih keyframe';
     if(make)make.disabled=!this.curveGraphOutgoing(arr,key);
@@ -17652,18 +18307,18 @@ class UIController{
     const props=this.curveGraphProps(l,preferredProp);
     this.graphProp=preferredProp&&props.includes(preferredProp)?preferredProp:(this.graphProp&&props.includes(this.graphProp)?this.graphProp:props[0]);
     if(this.graphView!=='speed')this.graphView='value';
-    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t);
+    const arr=this.curveGraphKeys(l,this.graphProp);
     const selected=this.curveGraphSelected(arr),selectedIndex=selected?arr.findIndex(k=>k.id===selected.id):-1;
     const presetNames=[['linear','Linear'],['ease-in','Ease In'],['ease-out','Ease Out'],['ease-in-out','Ease I/O'],['overshoot','Overshoot'],['spring','Spring'],['hold','Hold']];
     const selectionBlock=`<div class="curveSelection">
-        <label><span>WAKTU</span><input id="curveKeyTime" type="number" step=".001" ${selected?'':'disabled'} value="${selected?(+selected.t||0).toFixed(3):''}"></label>
+        <label><span>WAKTU</span><input id="curveKeyTime" type="number" step=".001" ${selected?'':'disabled'} value="${selected?this.curveGraphLocalTime(selected.t,l).toFixed(3):''}"></label>
         <label><span>NILAI</span><input id="curveKeyValue" type="number" step=".001" ${selected?'':'disabled'} value="${selected?(+selected.v||0).toFixed(3):''}"></label>
         <div class="curveEaseBox"><span style="display:block;color:#7f899d;font-size:9px;font-weight:750;margin-bottom:4px">EASING KELUAR</span><div class="curveEaseReadout"><b id="curveEaseName">${selected?esc(this.curveGraphEaseLabel(selected)):'Pilih keyframe'}</b><button id="curveMakeBezier" type="button" ${this.curveGraphOutgoing(arr,selected)?'':'disabled'}>BEZIER</button></div></div>
       </div>`;
     const presetBlock=`<div class="curvePresetGrid">${presetNames.map(([id,label])=>`<button type="button" data-curve-ease="${id}" class="${selected&&this.easingPresetName(selected.easing||EASING_PRESETS.linear)===id?'active':''}">${label}</button>`).join('')}</div>`;
     const navigatorBlock=`<div class="curveKeyNavigator"><button id="curvePrevKey" type="button" ${selectedIndex<=0?'disabled':''} aria-label="Keyframe sebelumnya">‹</button><b id="curveKeyPosition">${arr.length?`KEYFRAME ${selectedIndex>=0?selectedIndex+1:0}/${arr.length}`:'KEYFRAME 0/0'}</b><button id="curveNextKey" type="button" ${selectedIndex<0||selectedIndex>=arr.length-1?'disabled':''} aria-label="Keyframe berikutnya">›</button></div>`;
     const controls=`<div id="curveKeyPopover" class="curveKeyPopover hidden"><div class="curveKeyPopoverHead"><button id="curvePrevKey" type="button" ${selectedIndex<=0?'disabled':''} aria-label="Keyframe sebelumnya">‹</button><b id="curveKeyPosition">${arr.length?`KEYFRAME ${selectedIndex>=0?selectedIndex+1:0}/${arr.length}`:'KEYFRAME 0/0'}</b><button id="curveNextKey" type="button" ${selectedIndex<0||selectedIndex>=arr.length-1?'disabled':''} aria-label="Keyframe berikutnya">›</button><button id="curveKeyPopoverClose" type="button" aria-label="Tutup kontrol keyframe">×</button></div>${selectionBlock}${presetBlock}</div>`;
-    const keyedNow=model.anim.hasKeyAt(l,this.graphProp,model.time,.015);
+    const keyedNow=model.anim.hasKeyAt(l,this.graphProp,this.curveGraphEditTime(l),.015);
     const html=`<div class="drawerBody curveGraphBody">
       <div class="curveGraphTop">
         <select id="graphProp" class="curveGraphProp" aria-label="Properti Curve Editor">${props.map(p=>`<option value="${esc(p)}" ${p===this.graphProp?'selected':''}>${esc(this.curveGraphPropLabel(p))}</option>`).join('')}</select>
@@ -17676,8 +18331,15 @@ class UIController{
     this.drawerShell('Curve Editor',html);
     $('#drawer')?.classList.add('curveGraphDrawer');
     const back=$('#drawerBack');if(back)back.onclick=()=>{
-      if(this.curveReturnToEasing){this.curveReturnToEasing=false;this.transformEaseEditorOpen=true;this.drawerMode='move';this.openInspector('move')}
-      else this.openInspectorRoot();
+      // V5.82 — Back from Curve Editor is structural navigation, not an
+      // easing-mode toggle. Always return to the XYZ Position/Rotation page.
+      // The EASING chip in the header remains the explicit way to go back to
+      // the classic easing editor.
+      this.curveReturnToEasing=false;
+      this.transformEaseEditorOpen=false;
+      this.transformMode='position';
+      this.drawerMode='move';
+      this.openInspector('move');
     };
     $('#graphProp').onchange=e=>{this.graphSelectedKeyId=null;this.openGraphEditor(e.target.value,{preserveReturn:true})};
     $$('[data-curve-view]').forEach(b=>b.onclick=()=>{this.graphView=b.dataset.curveView;this.openGraphEditor(this.graphProp,{preserveReturn:true})});
@@ -17685,14 +18347,15 @@ class UIController{
     if(chip)chip.onclick=()=>{if(chip.disabled)return;pop?.classList.toggle('hidden')};
     if(popClose)popClose.onclick=()=>pop?.classList.add('hidden');
     const goKey=delta=>{
-      const current=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),key=this.curveGraphSelected(current),i=key?current.findIndex(k=>k.id===key.id):-1,target=current[i+delta];
+      const current=this.curveGraphKeys(l,this.graphProp),key=this.curveGraphSelected(current),i=key?current.findIndex(k=>k.id===key.id):-1,target=current[i+delta];
       if(!target)return;
       this.graphSelectedKeyId=target.id;model.time=target.t;this.updatePlayhead();renderer.render();this.updateCurveGraphSelectionUI();this.drawGraph();
     };
     $('#curvePrevKey')?.addEventListener('click',()=>goKey(-1));
     $('#curveNextKey')?.addEventListener('click',()=>goKey(1));
     $('#addGraphKey').onclick=()=>{
-      const prop=this.graphProp,t=model.time,existing=model.anim.nearestKey(l,prop,t,.015);
+      const prop=this.graphProp,t=this.curveGraphEditTime(l),existing=model.anim.nearestKey(l,prop,t,.015);
+      model.time=t;this.updatePlayhead();
       history.push();
       if(existing){
         const a=l.kf?.[prop]||[];l.kf[prop]=a.filter(k=>k.id!==existing.id);if(this.graphSelectedKeyId===existing.id)this.graphSelectedKeyId=null;toast('Keyframe dihapus');
@@ -17708,8 +18371,11 @@ class UIController{
       history.push();
       if(kind==='value')k.v=+value||0;
       else{
-        const sorted=a.slice().sort((x,y)=>x.t-y.t),i=sorted.findIndex(x=>x.id===k.id),frame=1/Math.max(1,model.project?.fps||30),lo=i>0?sorted[i-1].t+frame:0,hi=i<sorted.length-1?sorted[i+1].t-frame:model.project.duration;
-        k.t=clamp(Math.round((+value||0)/frame)*frame,lo,hi);a.sort((x,y)=>x.t-y.t);model.time=k.t;this.updatePlayhead();
+        const sorted=this.curveGraphKeys(l,this.graphProp),i=sorted.findIndex(x=>x.id===k.id),d=this.curveGraphTimeDomain(l),frame=d.frame;
+        let lo=Math.max(d.start,i>0?sorted[i-1].t+frame:d.start),hi=Math.min(d.end,i>=0&&i<sorted.length-1?sorted[i+1].t-frame:d.end);
+        if(hi<lo)lo=hi=k.t;
+        const globalTarget=d.start+clamp(+value||0,0,d.duration),snapped=Math.round(globalTarget/frame)*frame;
+        k.t=clamp(snapped,lo,hi);a.sort((x,y)=>x.t-y.t);model.time=k.t;this.updatePlayhead();
       }
       timeline.rebuild();renderer.render();this.updateCurveGraphSelectionUI();this.drawGraph();
     };
@@ -17719,28 +18385,29 @@ class UIController{
   updateCurveGraphKeyToggle(){
     const btn=$('#addGraphKey'),l=model.selectedLayer?.();
     if(!btn||!l||!this.graphProp)return;
-    const keyed=model.anim.hasKeyAt(l,this.graphProp,model.time,.015);
+    const keyed=model.anim.hasKeyAt(l,this.graphProp,this.curveGraphEditTime(l),.015);
     btn.classList.toggle('transformKeyOn',keyed);
     btn.textContent=keyed?'◇−':'◇+';
     btn.title=keyed?'Hapus keyframe pada waktu ini':'Tambah keyframe pada playhead';
     btn.setAttribute('aria-pressed',keyed?'true':'false');
   }
   updateCurveGraphPlayhead(){
-    const el=$('#curveGraphPlayhead'),cv=$('#graphCanvas');
-    if(!el||!cv||!model.project)return;
-    const maxT=Math.max(1/30,+model.project.duration||1),W=cv.width||900,mL=68,mR=20,gw=W-mL-mR;
-    const x=mL+clamp((+model.time||0)/maxT,0,1)*gw;
+    const el=$('#curveGraphPlayhead'),cv=$('#graphCanvas'),l=model.selectedLayer?.();
+    if(!el||!cv||!model.project||!l)return;
+    const d=this.curveGraphTimeDomain(l),W=cv.width||900,mL=68,mR=20,gw=W-mL-mR;
+    const local=this.curveGraphLocalTime(model.time,l),x=mL+clamp(local/d.duration,0,1)*gw;
     el.style.left=`${(x/W)*100}%`;
     this.updateCurveGraphKeyToggle();
   }
   startCurveGraphPlaybackLoop(){
     if(this._curveGraphPlaybackRAF){cancelAnimationFrame(this._curveGraphPlaybackRAF);this._curveGraphPlaybackRAF=0}
-    let lastTime=NaN;
+    let lastTime=NaN,lastDomainSig='';
     const tick=()=>{
-      const drawer=$('#drawer'),cv=$('#graphCanvas');
-      if(!drawer?.classList.contains('curveGraphDrawer')||!cv){this._curveGraphPlaybackRAF=0;return}
-      const t=+model.time||0;
-      if(model.playing||!Number.isFinite(lastTime)||Math.abs(t-lastTime)>.000001){this.updateCurveGraphPlayhead();lastTime=t}
+      const drawer=$('#drawer'),cv=$('#graphCanvas'),l=model.selectedLayer?.();
+      if(!drawer?.classList.contains('curveGraphDrawer')||!cv||!l){this._curveGraphPlaybackRAF=0;return}
+      const t=+model.time||0,d=this.curveGraphTimeDomain(l),domainSig=`${l.id}:${d.start.toFixed(6)}:${d.duration.toFixed(6)}`;
+      if(domainSig!==lastDomainSig){lastDomainSig=domainSig;this.drawGraph();lastTime=t}
+      else if(model.playing||!Number.isFinite(lastTime)||Math.abs(t-lastTime)>.000001){this.updateCurveGraphPlayhead();lastTime=t}
       this._curveGraphPlaybackRAF=requestAnimationFrame(tick);
     };
     this.updateCurveGraphPlayhead();
@@ -17749,8 +18416,8 @@ class UIController{
   drawGraph(){
     const cv=$('#graphCanvas');if(!cv)return;
     const c=cv.getContext('2d'),l=model.selectedLayer();if(!l)return;
-    const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),view=this.graphView==='speed'?'speed':'value';
-    const W=cv.width,H=cv.height,m={l:68,r:20,t:28,b:42},gw=W-m.l-m.r,gh=H-m.t-m.b,maxT=Math.max(1/30,+model.project?.duration||1);
+    const arr=this.curveGraphKeys(l,this.graphProp),view=this.graphView==='speed'?'speed':'value',domain=this.curveGraphTimeDomain(l);
+    const W=cv.width,H=cv.height,m={l:68,r:20,t:28,b:42},gw=W-m.l-m.r,gh=H-m.t-m.b,maxT=domain.duration;
     c.clearRect(0,0,W,H);c.fillStyle='#0f141f';c.fillRect(0,0,W,H);
     const samples=this.curveGraphSample(arr,view);
     const graphVisual=timeline?.keyframeVisualPolicy?.visualFor?.(this.graphProp)||null;
@@ -17761,8 +18428,8 @@ class UIController{
     let minY=Math.min(...ys),maxY=Math.max(...ys);
     if(Math.abs(maxY-minY)<1e-6){const p=Math.max(1,Math.abs(maxY)*.15);minY-=p;maxY+=p}
     else{const p=(maxY-minY)*.13;minY-=p;maxY+=p}
-    const xFor=t=>m.l+clamp(t/maxT,0,1)*gw,yFor=v=>m.t+(maxY-v)/(maxY-minY)*gh;
-    const timeFor=x=>clamp((x-m.l)/gw,0,1)*maxT,valueFor=y=>maxY-clamp((y-m.t)/gh,0,1)*(maxY-minY);
+    const xFor=t=>m.l+clamp(((+t||0)-domain.start)/maxT,0,1)*gw,yFor=v=>m.t+(maxY-v)/(maxY-minY)*gh;
+    const timeFor=x=>domain.start+clamp((x-m.l)/gw,0,1)*maxT,valueFor=y=>maxY-clamp((y-m.t)/gh,0,1)*(maxY-minY);
     // Grid + labels.
     c.lineWidth=1;c.font='12px ui-monospace,monospace';c.textBaseline='middle';
     for(let i=0;i<=5;i++){
@@ -17778,7 +18445,7 @@ class UIController{
     // without redrawing the entire graph canvas.
     this.updateCurveGraphPlayhead();
     const selected=this.curveGraphSelected(arr),outgoing=this.curveGraphOutgoing(arr,selected);
-    const hit={keys:[],handles:[],m,W,H,gw,gh,maxT,minY,maxY,xFor,yFor,timeFor,valueFor,view,selectedId:selected?.id||null};
+    const hit={keys:[],handles:[],m,W,H,gw,gh,maxT,timeStart:domain.start,timeEnd:domain.end,minY,maxY,xFor,yFor,timeFor,valueFor,view,selectedId:selected?.id||null};
     // Value-graph Bezier handles for selected outgoing segment.
     if(view==='value'&&outgoing){
       const a=outgoing.from,b=outgoing.to,dv=(+b.v||0)-(+a.v||0),dt=b.t-a.t;
@@ -17817,19 +18484,19 @@ class UIController{
       if(handle){beginHistory();state.mode='handle';state.which=handle.which;state.id=handle.a.id;this.graphSelectedKeyId=handle.a.id;this.updateCurveGraphSelectionUI();return}
       if(keyHit){
         this.graphSelectedKeyId=keyHit.id;this.updateCurveGraphSelectionUI();this.drawGraph();
-        const arr=(l.kf?.[this.graphProp]||[]).slice().sort((a,b)=>a.t-b.t),i=arr.findIndex(k=>k.id===keyHit.id),frame=1/Math.max(1,model.project?.fps||30);
-        state.lo=i>0?arr[i-1].t+frame:0;state.hi=i<arr.length-1?arr[i+1].t-frame:model.project.duration;state.mode='key';state.id=keyHit.id;beginHistory();return
+        const arr=this.curveGraphKeys(l,this.graphProp),i=arr.findIndex(k=>k.id===keyHit.id),d=this.curveGraphTimeDomain(l),frame=d.frame;
+        state.lo=Math.max(d.start,i>0?arr[i-1].t+frame:d.start);state.hi=Math.min(d.end,i>=0&&i<arr.length-1?arr[i+1].t-frame:d.end);if(state.hi<state.lo)state.lo=state.hi=keyHit.key.t;state.mode='key';state.id=keyHit.id;beginHistory();return
       }
       // Empty graph tap moves the project playhead, not a keyframe.
-      model.time=timeline.snapTime?timeline.snapTime(h.timeFor(p.x),'round'):h.timeFor(p.x);this.updatePlayhead();renderer.render();this.drawGraph();state.mode='playhead';
+      {const d=this.curveGraphTimeDomain(l),raw=h.timeFor(p.x),snapped=timeline.snapTime?timeline.snapTime(raw,'round'):raw;model.time=clamp(snapped,d.start,d.end)}this.updatePlayhead();renderer.render();this.drawGraph();state.mode='playhead';
     };
     cv.onpointermove=e=>{
       if(state.pointer!==e.pointerId||!state.mode||state.mode==='playhead')return;e.preventDefault();const h=this._curveGraphHit;if(!h)return;const p=pos(e),a=l.kf?.[this.graphProp]||[];
       if(state.mode==='key'){
-        const k=a.find(x=>x.id===state.id);if(!k)return;const frame=1/Math.max(1,model.project?.fps||30),rawT=h.timeFor(p.x);k.t=clamp(Math.round(rawT/frame)*frame,state.lo,state.hi);if(h.view==='value')k.v=h.valueFor(p.y);a.sort((x,y)=>x.t-y.t);model.time=k.t;this.updatePlayhead();renderer.render();this.drawGraph();return
+        const k=a.find(x=>x.id===state.id);if(!k)return;const frame=this.curveGraphTimeDomain(l).frame,rawT=h.timeFor(p.x);k.t=clamp(Math.round(rawT/frame)*frame,state.lo,state.hi);if(h.view==='value')k.v=h.valueFor(p.y);a.sort((x,y)=>x.t-y.t);model.time=k.t;this.updatePlayhead();renderer.render();this.drawGraph();return
       }
       if(state.mode==='handle'){
-        const sorted=a.slice().sort((x,y)=>x.t-y.t),i=sorted.findIndex(k=>k.id===state.id);if(i<0||i>=sorted.length-1)return;const from=sorted[i],to=sorted[i+1],dt=to.t-from.t,dv=(+to.v||0)-(+from.v||0);if(Math.abs(dt)<1e-7||Math.abs(dv)<1e-7)return;
+        const sorted=this.curveGraphKeys(l,this.graphProp),i=sorted.findIndex(k=>k.id===state.id);if(i<0||i>=sorted.length-1)return;const from=sorted[i],to=sorted[i+1],dt=to.t-from.t,dv=(+to.v||0)-(+from.v||0);if(Math.abs(dt)<1e-7||Math.abs(dv)<1e-7)return;
         const b=this.normalizeBezierSpec(from.easing||EASING_PRESETS.linear),tt=h.timeFor(p.x),vv=h.valueFor(p.y),xn=clamp((tt-from.t)/dt,0,1),yn=clamp((vv-(+from.v||0))/dv,-1.5,2.5);
         if(state.which===1){b.x1=xn;b.y1=yn}else{b.x2=xn;b.y2=yn}from.easing=b;renderer.render();this.drawGraph();
       }
@@ -23476,7 +24143,7 @@ $$('#aspectGrid .aspect').forEach(b=>b.onclick=()=>{
 });
 
 $('#createProject').onclick=createProject;
-$('#backHome').onclick=async()=>{await autosave.flush();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}editorTopVisibility.show({reflow:false});ui.showHome()};$('#saveProject').onclick=()=>ui.saveLocal(true);$('#undoBtn').onclick=()=>history.undo();$('#redoBtn').onclick=()=>history.redo();$('#fitBtn').onclick=()=>ui.fit();$('#zoom').oninput=e=>ui.setZoom(+e.target.value/100);
+$('#backHome').onclick=async()=>{await autosave.flush();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}editorTopVisibility.show({reflow:false});ui.showHome()};$('#saveProject').onclick=()=>ui.saveLocal(true);$('#undoBtn').onclick=()=>ui.undoAction();$('#redoBtn').onclick=()=>ui.redoAction();$('#fitBtn').onclick=()=>ui.fit();$('#zoom').oninput=e=>ui.setZoom(+e.target.value/100);
 $('#toggle3d').onclick=()=>{model.mode3d=!model.mode3d;if(model.mode3d&&!model.hasActive3DLayer())toast('Aktifkan Ruang 3D pada layer atau tampilkan layer kamera');ui.syncProject();renderer.render()};
 $('#cameraView').onclick=()=>{if(model.cameraView){viewportNav.enterFromMainCamera();renderer.render()}else viewportNav.setCameraView(true)};
 $('#snapToggle').onclick=()=>{model.snap=!model.snap;ui.syncProject()};
@@ -23570,7 +24237,7 @@ applyHomeLanguage();
 $('#projectInput').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const text=await f.text(),isXML=/\.xml$/i.test(f.name)||/^\s*</.test(text),raw=isXML?XMLBridge.parse(text,f.name):JSON.parse(text),payload=!isXML&&['open-motion-v3','open-motion-v4'].includes(raw.format)?{project:raw.project,layers:raw.layers,selected:raw.selected,time:raw.time,mode3d:raw.mode3d,cameraView:raw.cameraView,snap:raw.snap}:raw;if(!payload.project||!Array.isArray(payload.layers))throw Error('schema');model.restore(payload,{timeOverride:0});history.clear();ui.authorizeEditorOpen();ui.showEditor();toast(isXML?'XML dimigrasikan ke scene 3D':'Paket proyek dibuka')}catch(err){console.error(err);toast('File proyek/XML tidak valid')}e.target.value=''};
 $('#settingsBtn').onclick=()=>{if(!model.project)return;omsDiagnostics.log('ui','OPEN_SETTINGS','',{time:model.time});const d=ui.drawerShell('Project & Environment',`<div class="drawerBody propPanel"><div class="true3dCard"><i>4</i><div><b>Open Motion Scene 4</b><small>WebGL • matriks 4×4 • XML interchange • satu file HTML</small></div></div><div class="propRow"><label>Nama</label><input id="projectNameEdit" value="${esc(model.project.name)}"><span></span></div><div class="colorRow"><input id="bgEdit" type="color" value="${model.project.bg}"><input value="Background" disabled></div><div class="switchRow"><span>Grid Dunia 3D</span><input id="gridEdit" type="checkbox" ${model.project.grid?'checked':''}></div><div class="propRow"><label>Playhead</label><select id="playheadModeSelect"><option value="center">Tetap di Tengah</option><option value="moving">Bergerak (Mode Lama)</option></select><span></span></div><div class="miniNote" id="playheadModeHelp">Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.</div><div class="propRow"><label>Layout 9:16</label><select id="portraitLayoutSelect"><option value="side">Samping (Baru)</option><option value="classic">Horizontal (Klasik)</option></select><span></span></div><div class="miniNote" id="portraitLayoutHelp">Khusus komposisi 9:16 atau lebih tinggi pada mobile. Pilihan ini disimpan di perangkat.</div><div class="propRow"><label>Kualitas Preview</label><select id="previewQualitySelect"><option value="auto">Otomatis</option><option value="1">Penuh — 100%</option><option value="0.75">Tinggi — 75%</option><option value="0.5">Sedang — 50%</option><option value="0.25">Rendah — 25%</option></select><span></span></div><div class="miniNote" id="previewQualityHelp">Kualitas preview hanya memengaruhi editor. Ekspor tetap memakai kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.</div><div class="switchRow"><span>Ambient Editor</span><input id="editorAmbientToggle" type="checkbox" ${omsEditorAmbient.enabled?'checked':''}></div><div class="miniNote" id="editorAmbientHelp">Aktif secara default dengan intensitas 100%. Warna workspace mengikuti komposisi dengan sampling berkala dan transisi lambat seperti pencahayaan ambient; efek hanya pada UI editor dan tidak masuk ke hasil ekspor. Pilihan disimpan di perangkat.</div><div class="propRow"><label>Intensitas Ambient</label><input id="editorAmbientIntensity" type="range" min="0" max="100" step="5" value="${omsEditorAmbient.intensity}"><span id="editorAmbientIntensityValue">${omsEditorAmbient.intensity}%</span></div><div class="miniNote">Mengatur kekuatan warna ambient tanpa mengubah tampilan dasar UI. Piksel putih/abu terang otomatis diberi bobot lebih kecil agar tidak mendominasi ambient.</div><div class="propRow"><label>Diagnostik</label><button id="openDiagnosticsHub" class="preRenderSettingButton" type="button">BUKA</button><span id="diagnosticSettingState">Nonaktif</span></div><div class="miniNote">Diagnostik modular untuk Timeline, Playback, Video, Audio, Render, Export, GPU Fast, Cache, Memory, dan UI. Semua nonaktif secara default; aktifkan hanya kategori yang sedang diuji.</div><div class="propRow"><label>Uji 1080p</label><select id="nativeCapacityTestTarget"><option value="auto">Auto 4→16</option><option value="4">4 layer</option><option value="6">6 layer</option><option value="8">8 layer</option><option value="10">10 layer</option><option value="12">12 layer</option><option value="16">16 layer</option></select><button id="runNativeCapacityBenchmark" class="diamond" type="button" title="Uji kapasitas native 1080p">▶</button></div><div class="miniNote" id="nativeCapacityStatus">${omsNativeCapacity.summary()}</div><div class="miniNote">Adaptive N-Source mempertahankan sebanyak mungkin video pada decoder native. Saat beban melewati kapasitas terukur, Open Motion menurunkan cadence upload texture layer berprioritas rendah secara progresif sebelum memakai fallback WebCodecs.</div><div class="switchRow"><span>Pre-render Timeline</span><input id="timelinePreRenderToggle" type="checkbox" ${timelinePreRender.enabled?'checked':''}></div><div class="propRow"><label>Mode Pre-render</label><select id="timelinePreRenderMode"><option value="normal">Normal — Real-time</option><option value="follow">Real-time Mengejar — Tanpa Celah</option><option value="semi">Semi Kuat — Prioritas Cache</option><option value="complete">Kuat — Tanpa Lewat Frame</option></select><span></span></div><div class="miniNote" id="timelinePreRenderModeHelp">Normal menjaga real-time dan boleh melewatkan cache jika decoder tertinggal. Real-time Mengejar juga menjaga playhead/audio real-time, tetapi pre-render mempertahankan antrean frame berurutan di belakang playhead dan mengejar tanpa sengaja membuat celah. Semi Kuat memberi frame yang hilang waktu singkat untuk masuk cache sehingga playback boleh sedikit melambat. Kuat menunggu setiap frame. Tombol Rekam Pre-render tetap memaksa Mode Kuat selama aktif.</div><div class="propRow"><label>Mode Cache</label><select id="timelinePreRenderStorage"><option value="lossless">Lossless — Hemat RAM</option><option value="classic">Klasik — RAM Besar, CPU Ringan</option><option value="video">Video HW — Hemat RAM & CPU</option></select><span></span></div><div class="miniNote" id="timelinePreRenderStorageHelp">Lossless memakai Hot ImageBitmap + PNG lossless. Klasik menyimpan ImageBitmap mentah dengan CPU paling ringan. Video HW memakai WebCodecs prefer-hardware untuk kompresi preview berkualitas tinggi: RAM jauh lebih hemat tanpa biaya PNG yang berat; ekspor tidak terpengaruh. ⚠️ Kompatibilitas Video HW bergantung pada browser, SoC, dan driver codec; prefer-hardware tidak menjamin encoder hardware benar-benar dipakai. Jika jalur video tidak didukung atau gagal, Open Motion akan fallback ke Cache Klasik.</div><div class="propRow"><label>Cache Preview</label><button id="clearTimelinePreRender" class="preRenderSettingButton" type="button">BERSIHKAN</button><span></span></div><div class="miniNote" id="timelinePreRenderStatus">${timelinePreRender.statsText()}</div><div class="miniNote">Pre-render Timeline nonaktif secara default agar preview live mendapat prioritas penuh. Jika diaktifkan manual, pilihan disimpan di perangkat. Pada mobile/touch, Mode Normal dan Real-time Mengejar tidak menjalankan decoder pre-render kedua selama Play; Semi Kuat, Kuat, dan Rekam tetap tersedia sebagai mode eksplisit. Garis hijau menunjukkan frame yang benar-benar masih tersedia.</div><div class="miniNote">Editor Camera hanya mengubah sudut pandang kerja. PNG dan video selalu dirender melalui Main Camera tanpa grid atau gizmo editor.</div></div>`);ui.drawerMode='settings';timeline.refreshKeyframeInteractionState?.();$('#projectNameEdit').onchange=e=>{history.push();model.project.name=e.target.value;ui.syncProject()};$('#bgEdit').oninput=e=>{timelinePreRender.invalidate('background');model.project.bg=e.target.value;renderer.render()};$('#gridEdit').onchange=e=>{timelinePreRender.invalidate('grid');model.project.grid=e.target.checked;renderer.render()};const ph=$('#playheadModeSelect');ph.value=model.project.playheadMode||'center';const updateHelp=()=>{$('#playheadModeHelp').textContent=ph.value==='center'?'Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.':'Bergerak (Mode Lama): timeline tetap pada posisi scroll dan playhead bergerak mengikuti waktu.'};updateHelp();ph.onchange=e=>{history.push();model.project.playheadMode=e.target.value;const sc=$('#timelineScroll');if(model.project.playheadMode==='moving')sc.scrollLeft=0;timeline.rebuild();renderer.render();updateHelp()};const portraitSel=$('#portraitLayoutSelect');if(portraitSel){portraitSel.value=portraitSideControls?.layoutPreference?.()||'side';portraitSel.onchange=e=>{portraitSideControls?.setLayoutPreference?.(e.target.value);const changed=portraitSideControls?.sync?.({refit:false});requestAnimationFrame(()=>{ui.fit();timeline.rebuild();if(editorSplit?.isDrawerOpen?.())editorSplit.autoForDrawer(0);else editorSplit?.scheduleFit?.({render:true});if(changed)renderer.render()})}}const diagBtn=$('#openDiagnosticsHub');if(diagBtn)diagBtn.onclick=()=>omsDiagnostics.openPanel();omsDiagnostics.updateSettingState();omsNativeCapacity.updateSettingState();const nativeBenchBtn=$('#runNativeCapacityBenchmark'),nativeBenchTarget=$('#nativeCapacityTestTarget');if(nativeBenchBtn)nativeBenchBtn.onclick=()=>omsNativeBenchmark.open(nativeBenchTarget?.value||'auto');const previewSel=$('#previewQualitySelect'),previewHelp=$('#previewQualityHelp');if(previewSel){previewSel.value=omsPreviewQualityPreference();const updatePreviewHelp=()=>{if(previewHelp)previewHelp.textContent=`Kualitas preview editor saat ini ${omsPreviewQualityPercent()}%. Ekspor tetap kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.`};updatePreviewHelp();previewSel.onchange=e=>{omsSetPreviewQuality(e.target.value);updatePreviewHelp();toast(`Kualitas preview ${omsPreviewQualityPercent()}%`)}}const ambientToggle=$('#editorAmbientToggle'),ambientHelp=$('#editorAmbientHelp');if(ambientToggle){ambientToggle.checked=!!omsEditorAmbient.enabled;ambientToggle.onchange=e=>{const enabled=omsEditorAmbient.setEnabled(e.target.checked);if(ambientHelp)ambientHelp.textContent=enabled?'Aktif • workspace mengikuti warna komposisi dengan sampling ±2 detik dan transisi ±2,4 detik. Hanya UI editor; ekspor tidak terpengaruh.':'Ambient Editor nonaktif. Aktifkan untuk membuat warna workspace mengikuti komposisi dengan sampling berkala dan transisi lambat; efek hanya pada UI editor dan tidak masuk ke hasil ekspor. Pilihan disimpan di perangkat.';toast(enabled?'Ambient Editor aktif':'Ambient Editor nonaktif')}}const ambientIntensity=$('#editorAmbientIntensity'),ambientIntensityValue=$('#editorAmbientIntensityValue');if(ambientIntensity){ambientIntensity.value=String(omsEditorAmbient.intensity);const updateAmbientIntensity=()=>{const v=omsEditorAmbient.setIntensity(ambientIntensity.value);if(ambientIntensityValue)ambientIntensityValue.textContent=`${v}%`};ambientIntensity.oninput=updateAmbientIntensity;ambientIntensity.onchange=updateAmbientIntensity}const preRenderToggle=$('#timelinePreRenderToggle');if(preRenderToggle)preRenderToggle.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const enabled=timelinePreRender.setEnabled(e.target.checked);omsDiagnostics.log('cache','PRERENDER_TOGGLE',enabled?'ON':'OFF',{mode:timelinePreRender.mode,storage:timelinePreRender.storageMode});toast(enabled?'Pre-render timeline aktif':'Pre-render timeline nonaktif');if(wasPlaying)clock.start()};const preRenderMode=$('#timelinePreRenderMode'),preRenderModeHelp=$('#timelinePreRenderModeHelp');if(preRenderMode){preRenderMode.value=timelinePreRender.mode;const updatePreRenderModeHelp=()=>{if(!preRenderModeHelp)return;if(preRenderMode.value==='complete')preRenderModeHelp.textContent='Kuat: setiap frame wajib masuk cache sebelum timeline maju. Area yang belum tercache boleh melambat dan hening agar audio tidak lari; saat playhead kembali ke area cache yang siap, audio otomatis diputar sinkron.';else if(preRenderMode.value==='semi')preRenderModeHelp.textContent='Semi Kuat: setiap frame yang hilang diberi waktu singkat untuk exact seek + capture. Playback boleh sedikit melambat dan audio dapat tertahan sesaat, tetapi satu frame berat tidak bisa menghentikan playback tanpa batas.';else if(preRenderMode.value==='follow')preRenderModeHelp.textContent='Real-time Mengejar: playhead dan audio tetap real-time. Pre-render B-frame-safe berjalan sebagai cursor berurutan di belakang playhead; jika perangkat lambat garis hijau akan tertinggal, bukan melompat ke depan dan meninggalkan celah. Worker terus mengejar sampai menyamai bagian timeline yang sudah dilewati.';else preRenderModeHelp.textContent='Normal: playback dan audio tetap real-time, tetapi frame yang masuk pre-render didecode melalui pipeline sequential presentation-order yang sama dengan Kuat/Rekam agar video B-frame aman. Jika decoder tidak sempat mengejar, frame cache boleh terlewat tanpa memperlambat playback.'};updatePreRenderModeHelp();preRenderMode.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const mode=timelinePreRender.setMode(e.target.value);omsDiagnostics.log('cache','PRERENDER_MODE',mode,{enabled:timelinePreRender.enabled});updatePreRenderModeHelp();toast(mode==='complete'?'Pre-render Kuat aktif':mode==='semi'?'Pre-render Semi Kuat aktif':mode==='follow'?'Pre-render Real-time Mengejar aktif':'Pre-render Normal aktif');if(wasPlaying)clock.start()}}const preRenderStorage=$('#timelinePreRenderStorage'),preRenderStorageHelp=$('#timelinePreRenderStorageHelp');if(preRenderStorage){preRenderStorage.value=timelinePreRender.storageMode;const updatePreRenderStorageHelp=()=>{if(!preRenderStorageHelp)return;preRenderStorageHelp.textContent=preRenderStorage.value==='classic'?'Klasik: semua frame cache tetap sebagai ImageBitmap mentah. CPU paling ringan, tetapi RAM jauh lebih besar dan frame lama dieviksi saat batas tercapai.':preRenderStorage.value==='video'?'Video HW: frame dekat playhead tetap ImageBitmap, frame jauh dikompresi sebagai keyframe video WebCodecs dengan preferensi hardware. RAM dan CPU biasanya jauh lebih hemat daripada PNG; kualitas preview sangat tinggi tetapi tidak pixel-identical. Ekspor tetap asli. ⚠️ Kompatibilitas bergantung pada browser, SoC, dan driver codec. prefer-hardware hanya preferensi dan tidak menjamin encoder hardware digunakan; jika encoder/decoder tidak didukung atau gagal, Open Motion otomatis fallback ke Cache Klasik.':'Lossless: frame dekat playhead tetap ImageBitmap, frame jauh dikompresi PNG lossless. FPS/kualitas pixel cache tetap sama, RAM lebih hemat dengan biaya CPU tambahan.'};updatePreRenderStorageHelp();preRenderStorage.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const mode=timelinePreRender.setStorageMode(e.target.value);omsDiagnostics.log('cache','CACHE_STORAGE_MODE',mode,{enabled:timelinePreRender.enabled});updatePreRenderStorageHelp();renderer.render();toast(mode==='classic'?'Cache Klasik aktif • CPU paling ringan':mode==='video'?'Cache Video HW aktif • RAM & CPU hemat':'Cache Lossless aktif • RAM lebih hemat');if(wasPlaying)clock.start()}}const clearPreRender=$('#clearTimelinePreRender');if(clearPreRender)clearPreRender.onclick=()=>{omsDiagnostics.log('cache','CACHE_CLEAR','manual',{stats:timelinePreRender.statsText?.()});timelinePreRender.clear('manual');renderer.render();toast('Cache pre-render dibersihkan')}};
 
-document.addEventListener('keydown',e=>{const tag=document.activeElement?.tagName;if(['INPUT','SELECT','TEXTAREA'].includes(tag))return;if(e.code==='Space'){e.preventDefault();clock.toggle()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?history.redo():history.undo()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();ui.saveLocal()}if(e.key==='Delete'&&model.selected){history.push();model.removeLayer(model.selected);ui.rebuildAll()}});
+document.addEventListener('keydown',e=>{const tag=document.activeElement?.tagName;if(['INPUT','SELECT','TEXTAREA'].includes(tag))return;if(e.code==='Space'){e.preventDefault();clock.toggle()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?ui.redoAction():ui.undoAction()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();ui.saveLocal()}if(e.key==='Delete'&&model.selected){history.push();model.removeLayer(model.selected);ui.rebuildAll()}});
 window.addEventListener('resize',()=>{
   if(!$('#editor').classList.contains('hidden')){
     setTimeout(()=>{
@@ -26607,6 +27274,84 @@ html.omsMobileLandscapeDesktop #preRenderRecordBtn{left:35px!important}
 }
 @media(min-width:900px){
   .blendModeGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.blendModeBtn{min-height:68px}.blendOpacityPanel{padding:12px}
+}
+
+/* V5.102 — Edit Points uses the same mobile height envelope as Inspector. */
+@media(max-width:899px){
+  .vectorPenTouchpadDock.vectorEditPoints{
+    left:0!important;
+    right:0!important;
+    bottom:0!important;
+    height:clamp(210px,36dvh,300px)!important;
+    max-height:clamp(210px,36dvh,300px)!important;
+    border-radius:14px 14px 0 0!important;
+    border-left:0!important;
+    border-right:0!important;
+    border-bottom:0!important;
+    grid-template-columns:62px minmax(0,1fr) 84px!important;
+    grid-template-rows:42px minmax(0,1fr)!important;
+    box-shadow:0 -14px 35px rgba(0,0,0,.30)!important;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenTouchpadHead{
+    min-height:42px;
+    padding:0 10px;
+    gap:8px;
+    border-bottom-color:#30364b;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenTouchpadHead b{
+    flex:0 0 auto;
+    font-size:11px;
+    white-space:nowrap;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenTouchpadHead span{
+    flex:1 1 auto;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    text-align:right;
+    font-size:8px;
+    letter-spacing:.035em;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenLeftRail{
+    padding:8px 5px 8px 7px;
+    gap:5px;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenRailBtn{
+    border-radius:9px;
+    font-size:19px;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenRailBtn small{
+    bottom:5px;
+    font-size:6.5px;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenRailBtn.pointAction{font-size:27px}
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenTouchpad{
+    margin:8px 7px 8px 8px!important;
+    border-radius:10px;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenTouchpadHint{
+    padding:16px;
+    font-size:9px;
+    line-height:1.35;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenEditPad{
+    margin:8px 8px 8px 2px!important;
+    border-radius:10px;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenEditPad:after{top:7px}
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenEditPadHint{bottom:7px}
+}
+@media(max-width:700px){
+  .vectorPenTouchpadDock.vectorEditPoints{
+    grid-template-columns:58px minmax(0,1fr) 76px!important;
+    height:clamp(210px,36dvh,300px)!important;
+    max-height:clamp(210px,36dvh,300px)!important;
+  }
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenTouchpadHead b{font-size:10px}
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenTouchpadHead span{font-size:7.2px}
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenRailBtn{font-size:18px}
+  .vectorPenTouchpadDock.vectorEditPoints .vectorPenRailBtn.pointAction{font-size:25px}
 }
 </style>
 <!-- V4.71 — uncached manual scrubbing accepts only direction-safe progressive WebCodecs frames, preventing freeze without restoring backward stale-frame jumps. -->
