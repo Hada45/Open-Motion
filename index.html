@@ -3724,6 +3724,7 @@ input[type=range]{accent-color:var(--accent)}
 <!-- V5.102 — Edit Points layout polish: on mobile the Vector Edit/Pen Tool dock now uses the same height envelope as Inspector (clamp(210px,36dvh,300px)), with Inspector-style bottom docking, header height, cleaner spacing, wider point navigator, and less cramped controls. -->
 <!-- V5.103 — Vector Edit Points: smaller canvas anchor markers (hit targets unchanged) plus full global Undo/Redo support for create/edit actions. Point add/insert/delete, path close/open, Bezier mode changes, and anchor/handle drags checkpoint once per action; active Edit Points reloads from the restored model after Undo/Redo. -->
 <!-- V5.107 — Vector Edit Points: add a dedicated linked-handle symmetry toggle below BÉZIER. In regular Bézier mode, enabling SIMETRI makes the opposite handle mirror both angle and length while dragging; Split Bézier remains independent. -->
+<!-- V5.108 — Bézier orientation root fix: when a Corner point becomes regular Bézier, IN/OUT handles are oriented from actual path order (previous → anchor → next) instead of fixed screen-left/screen-right. This prevents reversed handles and looped curves on triangles or paths whose point order runs right-to-left. -->
 </head>
 <body>
 <div class="app">
@@ -15578,6 +15579,34 @@ class UIController{
     if(n.handleMode==='symmetric')return 'symmetric';
     return 'linked'
   }
+  vectorPenDefaultBezierDirection(index){
+    const state=this.vectorPenState,nodes=state?.nodes||[],node=nodes[index];
+    if(!node)return{x:1,y:0};
+    const norm=(x,y)=>{const m=Math.hypot(x,y);return m>1e-6?{x:x/m,y:y/m}:null};
+    const count=nodes.length;
+    const prev=state?.closed&&count>1?nodes[(index-1+count)%count]:(index>0?nodes[index-1]:null);
+    const next=state?.closed&&count>1?nodes[(index+1)%count]:(index<count-1?nodes[index+1]:null);
+    let dir=null;
+    if(prev&&next){
+      const toPrev=norm((+prev.x||0)-node.x,(+prev.y||0)-node.y),toNext=norm((+next.x||0)-node.x,(+next.y||0)-node.y);
+      if(toPrev&&toNext)dir=norm(toNext.x-toPrev.x,toNext.y-toPrev.y)||toNext;
+      else dir=toNext|| (toPrev?{x:-toPrev.x,y:-toPrev.y}:null);
+    }else if(next){
+      dir=norm((+next.x||0)-node.x,(+next.y||0)-node.y);
+    }else if(prev){
+      const toPrev=norm((+prev.x||0)-node.x,(+prev.y||0)-node.y);dir=toPrev?{x:-toPrev.x,y:-toPrev.y}:null;
+    }
+    if(!dir)dir={x:1,y:0};
+    // OUT must face the next point whenever one exists. This sign check prevents
+    // the handle pair from being assigned backwards when path order runs right-to-left.
+    if(next){const vx=(+next.x||0)-node.x,vy=(+next.y||0)-node.y;if(dir.x*vx+dir.y*vy<0)dir={x:-dir.x,y:-dir.y}}
+    return dir
+  }
+  vectorPenApplyDefaultBezierOrientation(index,lenIn,lenOut=lenIn){
+    const state=this.vectorPenState,n=state?.nodes?.[index];if(!n)return false;
+    const d=this.vectorPenDefaultBezierDirection(index),a=Math.max(1,+lenIn||1),b=Math.max(1,+lenOut||a);
+    n.inX=n.x-d.x*a;n.inY=n.y-d.y*a;n.outX=n.x+d.x*b;n.outY=n.y+d.y*b;return true
+  }
   vectorPenMoveTarget(index,target,p){
     const state=this.vectorPenState,n=state?.nodes?.[index];
     if(!n||!p)return false;
@@ -15640,7 +15669,7 @@ class UIController{
     const mode=this.vectorPenNodeHandleMode(n);
     if(mode==='corner'){
       const W=Math.max(1,+model.project?.width||1080),len=Math.max(28,W*.055);
-      n.inX=n.x-len;n.inY=n.y;n.outX=n.x+len;n.outY=n.y;n.handleMode='linked';
+      this.vectorPenApplyDefaultBezierOrientation(state.selectedIndex,len,len);n.handleMode='linked';
       state.editTarget='out';state.editCursor={x:n.outX,y:n.outY};toast('Point: Smooth Bézier')
     }else if(mode==='linked'||mode==='symmetric'){
       n.handleMode='independent';
