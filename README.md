@@ -64,6 +64,60 @@ active development.
 
 ---
 
+## Screenshots
+
+### Home
+
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/Hada45/Open-Motion/refs/heads/Asset/Home.jpg"
+    width="900"
+    alt="Open Motion Home"
+  />
+</p>
+
+### Timeline
+
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/Hada45/Open-Motion/refs/heads/Asset/Timeline.jpg"
+    width="900"
+    alt="Open Motion Timeline"
+  />
+</p>
+
+### Camera Transform
+
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/Hada45/Open-Motion/refs/heads/Asset/Camera%20transform.jpg"
+    width="900"
+    alt="Open Motion Camera Transform"
+  />
+</p>
+
+### Curve Editor
+
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/Hada45/Open-Motion/refs/heads/Asset/Curve%20editor.jpg"
+    width="900"
+    alt="Open Motion Curve Editor"
+  />
+</p>
+
+### Vector Editor
+
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/Hada45/Open-Motion/refs/heads/Asset/vector.jpg"
+    width="900"
+    alt="Open Motion Vector Editor"
+  />
+</p>
+
+---
+
 ## Features
 
 ### ⌨️ Keyframe Animation
