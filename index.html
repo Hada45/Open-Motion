@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- V5.112 — Android/browser Back router: install one same-document History API guard and route Back to the topmost Open Motion UI first. Inspector/Transform/Curve/Easing follow their existing Back hierarchy, while drawers, vector Edit Points, export sheets/results, project selection, popovers and common modals close before browser history is allowed to leave the app. -->
+<!-- V5.113 — Reusable Android Back sentinel: replace the one-shot re-push guard with a stable base/guard history pair. Each consumed Android Back moves guard→base, routes one Open Motion UI step, then history.forward() restores the SAME guard entry. This makes repeated Back presses walk Transform → Inspector → Editor → Home reliably, including local/content:// documents, without growing session history. -->
 <html lang="id">
 <head>
 <!-- V5.76 — True fullscreen export preview. Fullscreen video now occupies the entire viewport; transport controls are an overlay that starts hidden, appears on desktop mouse movement or mobile touch, then auto-hides again after inactivity. V5.75 fast tail finalize + native-resolution GPU Fast export are preserved. -->
@@ -1999,6 +2001,26 @@ input[type=range]{accent-color:var(--accent)}
 .simpleHome .projectMeta span{margin:0;color:#9298a1;font-size:6.5px;white-space:nowrap}
 .simpleHome .projectMeta .projectDate{overflow:hidden;text-overflow:ellipsis}
 .simpleHome .projectArrow{position:absolute;right:0;top:50%;width:22px;height:22px;display:grid;place-items:center;border:0;border-radius:6px;color:#72a996;font-size:10px;transform:translateY(-50%)}
+.simpleHome .projectCard{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:pan-y}
+.simpleHome .projectSelectMark{display:none;position:absolute;right:11px;top:50%;width:23px;height:23px;transform:translateY(-50%);border:1.5px solid #bac2c8;border-radius:50%;background:#fff;color:transparent;place-items:center;font-size:12px;font-weight:900;z-index:4;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.simpleHome.projectSelectionMode .projectSelectMark{display:grid}
+.simpleHome.projectSelectionMode .projectArrow{display:none}
+.simpleHome.projectSelectionMode .projectMeta{padding-right:42px}
+.simpleHome .projectCard.projectSelected{border-color:#5fd8b5;background:#f1fbf7;box-shadow:0 0 0 1px rgba(74,201,165,.22)}
+.simpleHome .projectCard.projectSelected .projectSelectMark{border-color:#4bcaa6;background:#59d5b1;color:#073f31}
+.simpleHome .projectCard.projectSelected .projectThumb{box-shadow:0 0 0 2px rgba(82,211,175,.35)}
+.simpleHome.projectSelectionMode .fabHome{display:none!important;pointer-events:none!important}
+.simpleHome.projectSelectionMode .homeMain{padding-bottom:118px}
+.projectSelectionBar{position:fixed;z-index:90;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translate(-50%,calc(100% + 28px));width:min(680px,calc(100% - 18px));height:92px;border:1px solid rgba(255,255,255,.1);border-radius:18px;background:#485170;box-shadow:0 18px 42px rgba(0,0,0,.32);display:grid;grid-template-columns:repeat(3,1fr);align-items:stretch;padding:8px 8px 7px;opacity:0;visibility:hidden;pointer-events:none;transition:transform .2s ease,opacity .2s ease,visibility 0s linear .2s}
+.projectSelectionBar.active{transform:translate(-50%,0);opacity:1;visibility:visible;pointer-events:auto;transition:transform .2s ease,opacity .2s ease,visibility 0s}
+.projectSelectionCount{position:absolute;left:50%;top:-12px;transform:translateX(-50%);height:23px;min-width:68px;padding:0 10px;border-radius:999px;background:#69dbba;color:#123f34;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:900;letter-spacing:.04em;box-shadow:0 4px 12px rgba(0,0,0,.16)}
+.projectSelectionAction{border:0;background:transparent;color:#fff;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font:inherit;touch-action:manipulation}
+.projectSelectionAction:active:not(:disabled){background:rgba(255,255,255,.1)}
+.projectSelectionAction:disabled{opacity:.34}
+.projectSelectionAction svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.projectSelectionAction span{font-size:10px;font-weight:750;letter-spacing:.01em}
+.projectSelectionAction.delete{color:#fff}
+@media(max-width:520px){.projectSelectionBar{width:calc(100% - 14px);height:88px;border-radius:16px;padding:8px 4px 6px}.projectSelectionAction svg{width:27px;height:27px}.projectSelectionAction span{font-size:9px}}
 .simpleHome .homeEmpty{
   min-height:min(54vh,430px);
   padding:30px 18px;
@@ -3561,6 +3583,17 @@ input[type=range]{accent-color:var(--accent)}
 #exportResultStage:fullscreen.fsControlsHidden,#exportResultStage:-webkit-full-screen.fsControlsHidden{cursor:none!important}
 #exportResultStage:fullscreen.fsControlsVisible,#exportResultStage:-webkit-full-screen.fsControlsVisible{cursor:default!important}
 @media (hover:none),(pointer:coarse){#exportResultStage:fullscreen,#exportResultStage:-webkit-full-screen{cursor:default!important}}
+/* V5.116 — mobile app-controlled fullscreen; avoids browser-owned education banner. */
+body.omsExportPseudoFullscreen{overflow:hidden!important;overscroll-behavior:none!important}
+#exportResultStage.omsPseudoFullscreen{position:fixed!important;inset:0!important;z-index:100050!important;width:100vw!important;height:100dvh!important;max-width:none!important;overflow:hidden!important;background:#05070c!important;margin:0!important;border-radius:0!important}
+#exportResultStage.omsPseudoFullscreen.omsPseudoLandscape{inset:auto!important;left:50%!important;top:50%!important;width:100dvh!important;height:100vw!important;transform:translate(-50%,-50%) rotate(90deg)!important;transform-origin:center center!important}
+#exportResultStage.omsPseudoFullscreen .exportResultMediaWrap{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important}
+#exportResultStage.omsPseudoFullscreen .exportResultMediaWrap video{width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;object-fit:contain!important}
+#exportResultStage.omsPseudoFullscreen .exportResultControls{position:absolute!important;z-index:20!important;left:0!important;right:0!important;bottom:0!important;height:78px!important;min-height:78px!important;padding:14px max(18px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left))!important;background:linear-gradient(to top,rgba(4,7,13,.94) 0%,rgba(4,7,13,.74) 58%,rgba(4,7,13,0) 100%)!important;border-top:0!important;opacity:1;transform:translateY(0);visibility:visible;pointer-events:auto;transition:opacity .18s ease,transform .18s ease,visibility 0s linear 0s}
+#exportResultStage.omsPseudoFullscreen.fsControlsHidden .exportResultControls{opacity:0!important;transform:translateY(14px)!important;visibility:hidden!important;pointer-events:none!important;transition:opacity .18s ease,transform .18s ease,visibility 0s linear .18s!important}
+#exportResultStage.omsPseudoFullscreen.fsControlsHidden{cursor:none!important}
+#exportResultStage.omsPseudoFullscreen.fsControlsVisible{cursor:default!important}
+@media (hover:none),(pointer:coarse){#exportResultStage.omsPseudoFullscreen{cursor:default!important}}
 
 .exportResultBottom{background:#151827;padding:20px max(20px,env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));border-top:1px solid #2b3044}
 .exportResultActions{display:grid;grid-template-columns:1.15fr .85fr;gap:10px;max-width:760px;margin:0 auto}
@@ -3725,6 +3758,7 @@ input[type=range]{accent-color:var(--accent)}
 <!-- V5.103 — Vector Edit Points: smaller canvas anchor markers (hit targets unchanged) plus full global Undo/Redo support for create/edit actions. Point add/insert/delete, path close/open, Bezier mode changes, and anchor/handle drags checkpoint once per action; active Edit Points reloads from the restored model after Undo/Redo. -->
 <!-- V5.107 — Vector Edit Points: add a dedicated linked-handle symmetry toggle below BÉZIER. In regular Bézier mode, enabling SIMETRI makes the opposite handle mirror both angle and length while dragging; Split Bézier remains independent. -->
 <!-- V5.108 — Bézier orientation root fix: when a Corner point becomes regular Bézier, IN/OUT handles are oriented from actual path order (previous → anchor → next) instead of fixed screen-left/screen-right. This prevents reversed handles and looped curves on triangles or paths whose point order runs right-to-left. -->
+<!-- V5.111 — Homepage project selection UX: Export now opens the full Export & Share sheet for the selected project instead of downloading a project package immediately. The selected project is loaded temporarily for export without navigating into the editor, and the previous editor model is restored when Export/Preview closes. Tapping blank homepage space outside project cards/action bar exits project selection mode. -->
 </head>
 <body>
 <div class="app">
@@ -3768,6 +3802,19 @@ input[type=range]{accent-color:var(--accent)}
         <div id="projectList" class="projectGrid"></div>
       </section>
     </main>
+
+    <div id="projectSelectionBar" class="projectSelectionBar" role="toolbar" aria-label="Aksi proyek terpilih">
+      <div id="projectSelectionCount" class="projectSelectionCount">1 dipilih</div>
+      <button id="projectActionExport" class="projectSelectionAction" type="button" aria-label="Ekspor proyek">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5"/><path d="M5 12v7h14v-7"/></svg><span>Ekspor</span>
+      </button>
+      <button id="projectActionDuplicate" class="projectSelectionAction" type="button" aria-label="Gandakan proyek">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="10" height="10" rx="1.5"/><rect x="4" y="4" width="10" height="10" rx="1.5"/></svg><span>Gandakan</span>
+      </button>
+      <button id="projectActionDelete" class="projectSelectionAction delete" type="button" aria-label="Hapus proyek">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7"/></svg><span>Hapus</span>
+      </button>
+    </div>
 
     <div id="languageModal" class="languageModal hidden" role="dialog" aria-modal="true" aria-labelledby="languageTitle">
       <section class="languageSheet">
@@ -13961,6 +14008,35 @@ class OMSPersistentStore{
     for(const meta of this.readLocalIndex()){if(!meta?.id)continue;const old=merged.get(meta.id);if(!old||(+meta.updated||0)>(+old.updated||0))merged.set(meta.id,meta)}
     return[...merged.values()]
   }
+  async putProjectData(data){
+    if(!data?.project?.id)return false;
+    const meta=this.projectMeta(data.project);
+    try{
+      const db=await this.open(),tx=db.transaction('projects','readwrite');
+      tx.objectStore('projects').put({id:meta.id,meta,data});
+      await this.txDone(tx)
+    }catch(e){console.warn('Project write failed:',e);return false}
+    this.writeLocalIndex(meta);
+    try{localStorage.setItem('oms4_lite_'+meta.id,JSON.stringify(data))}catch(e){}
+    return true
+  }
+  async deleteProjectIds(ids){
+    const set=new Set((ids||[]).filter(Boolean));if(!set.size)return true;
+    try{
+      const db=await this.open(),tx=db.transaction('projects','readwrite'),store=tx.objectStore('projects');
+      for(const id of set)store.delete(id);
+      await this.txDone(tx)
+    }catch(e){console.warn('Project delete failed:',e);return false}
+    for(const id of set){
+      try{localStorage.removeItem('oms4_lite_'+id)}catch(e){}
+      try{localStorage.removeItem('oms3_'+id)}catch(e){}
+    }
+    for(const key of ['oms4_project_index','oms3_projects']){
+      try{const arr=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(arr))localStorage.setItem(key,JSON.stringify(arr.filter(x=>!set.has(x?.id))))}catch(e){}
+    }
+    try{const last=localStorage.getItem('oms4_last_saved_project');if(set.has(last))localStorage.removeItem('oms4_last_saved_project')}catch(e){}
+    return true
+  }
   async requestDurableStorage(){try{if(navigator.storage?.persist)await navigator.storage.persist()}catch(e){}}
 }
 const persistentStore=new OMSPersistentStore();
@@ -13968,8 +14044,8 @@ class OMSAutoSave{
   constructor(store){this.store=store;this.lastFingerprint='';this.busy=false;this.pending=false;this.timer=setInterval(()=>this.check(),700);bus.on('model:changed',()=>this.markDirty());bus.on('project:duration',()=>this.markDirty())}
   fingerprint(){if(!model.project)return'';mediaAssets.captureLayers(model.layers);const d=model.serialize({includeMedia:false});delete d.time;delete d.selected;if(d.project){d.project={...d.project};delete d.project.updated}return JSON.stringify(d)}
   markDirty(){this.lastFingerprint=''}
-  async check(force=false){if(!model.project)return false;const fp=this.fingerprint();if(!force&&fp===this.lastFingerprint)return false;if(this.busy){this.pending=true;return false}this.busy=true;try{const ok=await this.store.saveCurrent();if(ok)this.lastFingerprint=fp;return ok}finally{this.busy=false;if(this.pending){this.pending=false;setTimeout(()=>this.check(true),0)}}}
-  async flush(notify=false){if(!model.project)return false;const ok=await this.store.saveCurrent({notify});if(ok)this.lastFingerprint=this.fingerprint();return ok}
+  async check(force=false){if(window.omsHomeProjectExportActive)return false;if(!model.project)return false;const fp=this.fingerprint();if(!force&&fp===this.lastFingerprint)return false;if(this.busy){this.pending=true;return false}this.busy=true;try{const ok=await this.store.saveCurrent();if(ok)this.lastFingerprint=fp;return ok}finally{this.busy=false;if(this.pending){this.pending=false;setTimeout(()=>this.check(true),0)}}}
+  async flush(notify=false){if(window.omsHomeProjectExportActive)return false;if(!model.project)return false;const ok=await this.store.saveCurrent({notify});if(ok)this.lastFingerprint=this.fingerprint();return ok}
 }
 const autosave=new OMSAutoSave(persistentStore);
 
@@ -15074,6 +15150,7 @@ class UIController{
     $('#home').classList.remove('hidden');
     $('#editor').classList.add('hidden');
     this.closeDrawer();
+    this.exitProjectSelection?.({silent:true});
     this.loadProjectList();
 
     const modal=$('#newModal');
@@ -15261,9 +15338,21 @@ class UIController{
     const editorModeToggle=$('#transformEditorModeToggle');
 
     if(close)close.onclick=()=>this.closeDrawer();
-    if(back)back.onclick=()=>this.drawerMode==='root'
-      ?this.closeDrawer()
-      :this.openInspectorRoot();
+    if(back)back.onclick=()=>{
+      if(easingHeader){
+        this.transformEaseEditorOpen=false;
+        this._transformEasePinContext='';
+        this._transformEasePinnedSegments=[];
+        this.curveReturnToEasing=false;
+        this.transformMode='position';
+        this.drawerMode='move';
+        this.openInspector('move');
+        return;
+      }
+      this.drawerMode==='root'
+        ?this.closeDrawer()
+        :this.openInspectorRoot();
+    };
     if(spaceToggle)spaceToggle.onclick=()=>{
       const layer=model.selectedLayer();
       if(!layer)return;
@@ -18544,6 +18633,119 @@ class UIController{
       if(sel) this.updateTransformKeyUI(sel);
     }
   }
+  projectSelectionSet(){
+    if(!(this._homeProjectSelection instanceof Set))this._homeProjectSelection=new Set();
+    return this._homeProjectSelection
+  }
+  projectSelectionActive(){return !!this._homeProjectSelectionMode}
+  enterProjectSelection(id){
+    if(!id)return;
+    this._homeProjectSelectionMode=true;
+    this.projectSelectionSet().add(id);
+    this.refreshProjectSelectionUI();
+    try{navigator.vibrate?.(18)}catch(e){}
+  }
+  exitProjectSelection({silent=false}={}){
+    this._homeProjectSelectionMode=false;
+    this.projectSelectionSet().clear();
+    const home=$('#home'),bar=$('#projectSelectionBar'),fab=$('#newProjectFab');
+    home?.classList.remove('projectSelectionMode');bar?.classList.remove('active');
+    if(fab&&!$('#newModal')?.classList.contains('hidden')){fab.style.display='none';fab.style.pointerEvents='none'}
+    else if(fab){fab.style.display='';fab.style.pointerEvents='auto'}
+    if(!silent)this.refreshProjectSelectionUI()
+  }
+  toggleProjectSelection(id){
+    if(!id)return;const set=this.projectSelectionSet();
+    if(set.has(id))set.delete(id);else set.add(id);
+    if(!set.size){this.exitProjectSelection({silent:true});this.refreshProjectSelectionUI();return}
+    this._homeProjectSelectionMode=true;this.refreshProjectSelectionUI()
+  }
+  refreshProjectSelectionUI(){
+    const active=this.projectSelectionActive(),set=this.projectSelectionSet(),count=set.size,home=$('#home'),bar=$('#projectSelectionBar'),fab=$('#newProjectFab');
+    home?.classList.toggle('projectSelectionMode',active);
+    bar?.classList.toggle('active',active&&count>0);
+    $$('#projectList .projectCard').forEach(card=>{
+      const selected=set.has(card.dataset.projectId);
+      card.classList.toggle('projectSelected',selected);
+      card.setAttribute('aria-pressed',active?String(selected):'false')
+    });
+    const countEl=$('#projectSelectionCount');if(countEl)countEl.textContent=homeLanguage==='id'?`${count} dipilih`:`${count} selected`;
+    const exportBtn=$('#projectActionExport'),duplicateBtn=$('#projectActionDuplicate'),deleteBtn=$('#projectActionDelete');
+    if(exportBtn)exportBtn.disabled=count!==1;
+    if(duplicateBtn)duplicateBtn.disabled=count!==1;
+    if(deleteBtn)deleteBtn.disabled=count<1;
+    if(fab){if(active){fab.style.display='none';fab.style.pointerEvents='none'}else if($('#newModal')?.classList.contains('hidden')){fab.style.display='';fab.style.pointerEvents='auto'}}
+  }
+  bindProjectCardLongPress(card,project){
+    let timer=0,startX=0,startY=0;
+    const clear=()=>{if(timer){clearTimeout(timer);timer=0}};
+    card.addEventListener('pointerdown',e=>{
+      if(this.projectSelectionActive())return;
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      card._omsLongPressFired=false;startX=e.clientX;startY=e.clientY;clear();
+      timer=setTimeout(()=>{timer=0;card._omsLongPressFired=true;this.enterProjectSelection(project.id)},500)
+    },{passive:true});
+    card.addEventListener('pointermove',e=>{if(timer&&Math.hypot(e.clientX-startX,e.clientY-startY)>11)clear()},{passive:true});
+    card.addEventListener('pointerup',clear,{passive:true});
+    card.addEventListener('pointercancel',clear,{passive:true});
+    card.addEventListener('lostpointercapture',clear,{passive:true});
+    card.addEventListener('contextmenu',e=>{e.preventDefault();clear();if(!this.projectSelectionActive()){card._omsLongPressFired=true;this.enterProjectSelection(project.id)}})
+  }
+  async exportSelectedProject(){
+    const ids=[...this.projectSelectionSet()];if(ids.length!==1)return;
+    const data=await persistentStore.loadProjectData(ids[0]);if(!data?.project){toast('Proyek tidak dapat diekspor');return}
+    if(this._homeProjectExportContext)return;
+    this._homeProjectExportContext={
+      snapshot:model.project?model.serialize({includeMedia:false}):null,
+      hadProject:!!model.project,
+      autosaveFingerprint:autosave.lastFingerprint,
+      projectId:ids[0]
+    };
+    window.omsHomeProjectExportActive=true;
+    try{
+      model.restore(data,{timeOverride:0});
+      renderer.resize();
+      renderer.render();
+      this.exitProjectSelection({silent:true});
+      this.refreshProjectSelectionUI();
+      await openExportSheet();
+    }catch(err){
+      console.warn('Homepage export sheet failed:',err);
+      this.restoreHomeProjectExportContext();
+      toast('UI ekspor tidak dapat dibuka')
+    }
+  }
+  restoreHomeProjectExportContext(){
+    const ctx=this._homeProjectExportContext;if(!ctx)return false;
+    this._homeProjectExportContext=null;
+    window.omsHomeProjectExportActive=false;
+    try{
+      if(ctx.snapshot)model.restore(ctx.snapshot,{timeOverride:Number.isFinite(+ctx.snapshot.time)?+ctx.snapshot.time:0});
+      else if(!ctx.hadProject)model.reset();
+      autosave.lastFingerprint=ctx.autosaveFingerprint||'';
+      renderer.resize();
+      if(!$('#editor')?.classList.contains('hidden'))renderer.render();
+    }catch(err){console.warn('Homepage export context restore failed:',err)}
+    return true
+  }
+  async duplicateSelectedProject(){
+    const ids=[...this.projectSelectionSet()];if(ids.length!==1)return;
+    const data=await persistentStore.loadProjectData(ids[0]);if(!data?.project){toast('Proyek tidak dapat digandakan');return}
+    const clone=typeof structuredClone==='function'?structuredClone(data):JSON.parse(JSON.stringify(data));
+    const metas=await persistentStore.listProjects(),names=new Set(metas.map(x=>String(x.name||'').toLocaleLowerCase(homeLocale()))),original=String(clone.project.name||homeTr('untitled')),base=homeLanguage==='id'?`${original} Salinan`:`${original} Copy`;
+    let name=base,n=2;while(names.has(name.toLocaleLowerCase(homeLocale())))name=`${base} ${n++}`;
+    const now=Date.now();clone.project={...clone.project,id:uid('project'),name,created:now,updated:now};
+    const ok=await persistentStore.putProjectData(clone);if(!ok){toast('Gagal menggandakan proyek');return}
+    this.exitProjectSelection({silent:true});await this.loadProjectList();toast(homeLanguage==='id'?'Proyek digandakan':'Project duplicated')
+  }
+  async deleteSelectedProjects(){
+    const ids=[...this.projectSelectionSet()];if(!ids.length)return;
+    const msg=homeLanguage==='id'?`Hapus ${ids.length} proyek? Tindakan ini tidak dapat dibatalkan.`:`Delete ${ids.length} project${ids.length===1?'':'s'}? This cannot be undone.`;
+    if(!confirm(msg))return;
+    const ok=await persistentStore.deleteProjectIds(ids);if(!ok){toast('Gagal menghapus proyek');return}
+    if(model.project?.id&&ids.includes(model.project.id)){model.reset();history.clear();autosave.lastFingerprint='';try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}}
+    this.exitProjectSelection({silent:true});await this.loadProjectList();toast(homeLanguage==='id'?`${ids.length} proyek dihapus`:`${ids.length} project${ids.length===1?'':'s'} deleted`)
+  }
   async loadProjectList(){
     const root=$('#projectList');if(!root)return;
     const requestId=(this._projectListRequestId=(this._projectListRequestId||0)+1);
@@ -18552,9 +18754,25 @@ class UIController{
     root.innerHTML='';
     const count=$('#projectCountBadge');if(count)count.textContent=String(metas.length);
     const sort=$('#projectSort')?.value||'newest';metas.sort((a,b)=>sort==='oldest'?(+a.updated||0)-(+b.updated||0):sort==='name'?String(a.name||'').localeCompare(String(b.name||''),homeLocale()):(b.updated||0)-(a.updated||0));
-    if(!metas.length){root.innerHTML=`<div class="homeEmpty"><div class="emptyIcon" aria-hidden="true"></div><div class="emptyCopy"><b>${homeTr('noProjects')}</b><p>${homeTr('noProjectsDesc')}</p></div></div>`;return}
+    if(!metas.length){this.exitProjectSelection({silent:true});root.innerHTML=`<div class="homeEmpty"><div class="emptyIcon" aria-hidden="true"></div><div class="emptyCopy"><b>${homeTr('noProjects')}</b><p>${homeTr('noProjectsDesc')}</p></div></div>`;return}
     const dateLabel=value=>{const time=Number(value)||0;if(!time)return homeTr('unsaved');const date=new Date(time),now=new Date(),sameDay=date.toDateString()===now.toDateString();if(sameDay)return homeTr('today')+' · '+date.toLocaleTimeString(homeLocale(),{hour:'2-digit',minute:'2-digit'});return date.toLocaleDateString(homeLocale(),{day:'2-digit',month:'short',year:date.getFullYear()===now.getFullYear()?undefined:'2-digit'})};
-    metas.forEach((p,index)=>{const d=document.createElement('article'),hash=String(p.id||p.name||index).split('').reduce((n,ch)=>(n*31+ch.charCodeAt(0))>>>0,7);d.className='projectCard';d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label',homeTr('openProject').replace('{name}',p.name||homeTr('untitled')));d.style.setProperty('--thumb-hue',String(150+hash%105));d.innerHTML=`<div class="projectThumb"><span class="projectThumbBadge">SCENE 4</span></div><div class="projectMeta"><span class="projectArrow" aria-hidden="true">↗</span><b>${esc(p.name||homeTr('untitled'))}</b><div class="projectMetaLine"><span>${Number(p.width)||0}×${Number(p.height)||0} · ${Number(p.fps)||30} FPS</span><span class="projectDate">${dateLabel(p.updated)}</span></div></div>`;const open=e=>{if(e&&e.isTrusted===false)return;this.loadLocal(p.id,{userInitiated:true})};d.onclick=e=>open(e);d.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.isTrusted){e.preventDefault();open(e)}};root.appendChild(d)})
+    const validIds=new Set(metas.map(p=>p.id));for(const id of [...this.projectSelectionSet()])if(!validIds.has(id))this.projectSelectionSet().delete(id);
+    if(this.projectSelectionActive()&&!this.projectSelectionSet().size)this._homeProjectSelectionMode=false;
+    metas.forEach((p,index)=>{
+      const d=document.createElement('article'),hash=String(p.id||p.name||index).split('').reduce((n,ch)=>(n*31+ch.charCodeAt(0))>>>0,7);
+      d.className='projectCard';d.dataset.projectId=p.id;d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label',homeTr('openProject').replace('{name}',p.name||homeTr('untitled')));d.style.setProperty('--thumb-hue',String(150+hash%105));
+      d.innerHTML=`<div class="projectThumb"><span class="projectThumbBadge">SCENE 4</span></div><div class="projectMeta"><span class="projectArrow" aria-hidden="true">↗</span><span class="projectSelectMark" aria-hidden="true">✓</span><b>${esc(p.name||homeTr('untitled'))}</b><div class="projectMetaLine"><span>${Number(p.width)||0}×${Number(p.height)||0} · ${Number(p.fps)||30} FPS</span><span class="projectDate">${dateLabel(p.updated)}</span></div></div>`;
+      this.bindProjectCardLongPress(d,p);
+      const open=e=>{if(e&&e.isTrusted===false)return;this.loadLocal(p.id,{userInitiated:true})};
+      d.onclick=e=>{
+        if(d._omsLongPressFired){d._omsLongPressFired=false;e.preventDefault();e.stopPropagation();return}
+        if(this.projectSelectionActive()){e.preventDefault();e.stopPropagation();this.toggleProjectSelection(p.id);return}
+        open(e)
+      };
+      d.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.isTrusted){e.preventDefault();this.projectSelectionActive()?this.toggleProjectSelection(p.id):open(e)}};
+      root.appendChild(d)
+    });
+    this.refreshProjectSelectionUI()
   }
   async saveLocal(notify=true){if(!model.project)return false;const ok=await autosave.flush(!!notify);await this.loadProjectList();return ok}
   async loadLocal(id,{silent=false,userInitiated=false}={}){if(!userInitiated){console.warn('Blocked automatic project restore to editor:',id);return false}try{const data=await persistentStore.loadProjectData(id);if(!data)throw Error('missing project');model.restore(data,{timeOverride:0});history.clear();autosave.lastFingerprint=autosave.fingerprint();try{sessionStorage.removeItem('oms4_resume_project')}catch(e){}this.authorizeEditorOpen();this.showEditor();persistentStore.saveCurrent().catch(()=>{});return true}catch(e){console.warn('Project load failed:',e);if(!silent)toast('Proyek tidak dapat dibuka');return false}}
@@ -18562,6 +18780,282 @@ class UIController{
 }
 
 const ui=new UIController();
+
+
+/* =========================================================
+   V5.114 — REUSABLE CENTRAL APP BACK ROUTER + HOME DOUBLE-BACK EXIT
+   ---------------------------------------------------------
+   Android/Chrome Back works on browser session history, while Open Motion
+   panels are DOM/application state. V5.112 used a one-shot guard that was
+   re-created with pushState() after every consumed Back. Some Android Chrome
+   / local content:// sessions did not reliably re-arm that new entry, so the
+   next Back could escape the tab while Inspector was still open.
+
+   V5.114 keeps the same stable SAME-DOCUMENT history pair and adds Home exit confirmation:
+
+       real browser history <- OMS BASE <- OMS GUARD  (current)
+
+   Native Back moves GUARD -> BASE. If Open Motion has an internal UI step,
+   consume exactly one step and history.forward() back to the SAME GUARD.
+   No new entry is created for each Back press. Therefore repeated Back walks:
+
+       Cubic Bézier/Easing -> Transform XYZ -> Inspector -> Editor -> Home
+
+   When Home is already clean, BASE is intentionally NOT restored to GUARD;
+   one more history.back() leaves the page normally. A pushState repair exists
+   only as an emergency fallback if a browser loses the forward entry.
+   ========================================================= */
+class OMSAppBackRouter{
+  constructor(controller){
+    this.ui=controller;
+    this.baseKey='__omsBackBaseV5113';
+    this.guardKey='__omsBackGuardV5113';
+    this.initialized=false;
+    this.available=true;
+    this.restoringGuard=false;
+    this.leavingApp=false;
+    this.restoreTimer=0;
+    this.exitConfirmUntil=0;
+    this.exitConfirmMs=1700;
+    this._onPopState=e=>this.onPopState(e);
+  }
+  visible(el){return !!(el&&el.isConnected&&!el.classList.contains('hidden'))}
+  stateObject(value=window.history.state){return value&&typeof value==='object'?value:{}}
+  isBaseState(value=window.history.state){const s=this.stateObject(value);return !!s[this.baseKey]&&!s[this.guardKey]}
+  isGuardState(value=window.history.state){const s=this.stateObject(value);return !!s[this.guardKey]}
+  clearRestoreTimer(){if(this.restoreTimer){clearTimeout(this.restoreTimer);this.restoreTimer=0}}
+  clearExitConfirm(){this.exitConfirmUntil=0}
+  armExitConfirm(){
+    this.exitConfirmUntil=Date.now()+this.exitConfirmMs;
+    try{toast('Tekan sekali lagi untuk keluar dari Open Motion')}catch(e){}
+  }
+  exitConfirmArmed(){return this.exitConfirmUntil && Date.now()<=this.exitConfirmUntil}
+  installSentinel(){
+    if(!this.available)return false;
+    try{
+      const current=this.stateObject();
+
+      // Reloading while already parked on our GUARD must not append another
+      // pair. The BASE immediately behind it is still reusable.
+      if(current[this.guardKey])return true;
+
+      // A reload can theoretically happen while traversal is on BASE. In that
+      // case only restore the missing forward GUARD once.
+      if(current[this.baseKey]){
+        const guard={...current,[this.guardKey]:1};
+        window.history.pushState(guard,document.title);
+        return true;
+      }
+
+      // Preserve any application/browser state already attached to this entry.
+      // replaceState creates the stationary OMS BASE without changing history
+      // depth, then pushState creates exactly one reusable OMS GUARD in front.
+      const base={...current,[this.baseKey]:1};
+      delete base[this.guardKey];
+      window.history.replaceState(base,document.title);
+      window.history.pushState({...base,[this.guardKey]:1},document.title);
+      return true;
+    }catch(err){
+      this.available=false;
+      console.warn('Open Motion reusable Back sentinel unavailable',err);
+      return false;
+    }
+  }
+  init(){
+    if(this.initialized)return;
+    this.initialized=true;
+    window.addEventListener('popstate',this._onPopState);
+    this.installSentinel();
+  }
+  restoreSameGuard(){
+    if(!this.available||this.restoringGuard)return;
+    this.restoringGuard=true;
+    this.clearRestoreTimer();
+    try{
+      // The GUARD we just came from remains the forward entry. Reusing it is
+      // substantially more reliable than creating a fresh pushState in a
+      // popstate callback, especially on Android local/content:// documents.
+      window.history.forward();
+    }catch(err){
+      this.restoringGuard=false;
+      this.repairGuard();
+      return;
+    }
+
+    // Emergency only: if the browser never emits the forward popstate, repair
+    // the pair in place. Normal repeated Back never grows history.
+    this.restoreTimer=setTimeout(()=>{
+      if(!this.restoringGuard)return;
+      this.restoringGuard=false;
+      this.restoreTimer=0;
+      if(this.isBaseState())this.repairGuard();
+    },350);
+  }
+  repairGuard(){
+    if(!this.available)return false;
+    try{
+      if(this.isGuardState())return true;
+      const current=this.stateObject();
+      if(!current[this.baseKey])return this.installSentinel();
+      window.history.pushState({...current,[this.guardKey]:1},document.title);
+      return true;
+    }catch(err){
+      this.available=false;
+      console.warn('Open Motion Back sentinel repair failed',err);
+      return false;
+    }
+  }
+  closeKnownModal(id,closeSelector){
+    const modal=document.getElementById(id);
+    if(!modal||!modal.isConnected)return false;
+    const closer=closeSelector?modal.querySelector(closeSelector):null;
+    if(closer){closer.click();return true}
+    modal.remove();
+    return true;
+  }
+  handleInternalBack(){
+    const ui=this.ui;
+
+    // Export-preview pseudo fullscreen (mobile) is app state and must close
+    // before browser history participates.
+    if(window.omsExportResultPreview?.pseudoFullscreen){
+      try{window.omsExportResultPreview.exitPseudoFullscreen()}catch(e){}
+      return true;
+    }
+
+    // Browser fullscreen is the absolute top-most state on desktop/fallback.
+    if(document.fullscreenElement){
+      try{document.exitFullscreen?.()}catch(e){}
+      return true;
+    }
+
+    // Export result preview sits above the export sheet/editor and owns its own
+    // restoration logic for Home-initiated exports.
+    const result=document.getElementById('exportResultPreview');
+    if(this.visible(result)){
+      try{omsExportResultPreview?.close?.()}catch(e){result.classList.add('hidden')}
+      return true;
+    }
+
+    // Diagnostic/modal surfaces opened from Settings.
+    if(this.closeKnownModal('omsGpuFastDiagModal','button:last-child'))return true;
+    if(this.closeKnownModal('omsDiagnosticsHubModal','#omsDiagClose'))return true;
+    if(document.getElementById('omsNativeBenchmarkModal')){
+      // Its own close handler intentionally refuses to close while a benchmark
+      // is actively running; consume Back either way so browser history never
+      // escapes while the benchmark UI is modal.
+      document.querySelector('#omsNativeBenchmarkModal #omsBenchClose')?.click();
+      return true;
+    }
+
+    // Camera shortcut dialogs are structurally above Transform.
+    if(this.closeKnownModal('cameraOrbitShortcutModal','.cameraOrbitShortcutClose'))return true;
+    if(this.closeKnownModal('cameraLensShortcutModal','.cameraLensShortcutClose'))return true;
+
+    // Home modal sheets.
+    const lang=document.getElementById('languageModal');
+    if(this.visible(lang)){try{closeLanguageModal()}catch(e){lang.classList.add('hidden')}return true}
+    const newModal=document.getElementById('newModal');
+    if(this.visible(newModal)){try{closeNewProjectModal()}catch(e){newModal.classList.add('hidden')}return true}
+
+    // Transform numeric editor is a transient dialog above the drawer. Back
+    // commits the currently displayed value, matching its normal blur behavior.
+    if(ui?._numericEditor){ui.closeTransformNumberEditor(true);return true}
+
+    // Layer action popup overlays the workspace independently of the drawer.
+    const layerActions=document.getElementById('layerActionsShade');
+    if(this.visible(layerActions)){ui?.closeLayerActions?.();return true}
+
+    // Edit Points / Pen Tool is its own editor surface and must leave before the
+    // underlying Inspector/timeline can participate in Back navigation.
+    if(ui?.vectorPenState){ui.exitVectorPenTool?.();return true}
+
+    // Export settings should close back to the editor (or restore Home context
+    // for a Home-project export) rather than sending Chrome to another page.
+    const exportSheet=document.getElementById('exportSheet');
+    if(this.visible(exportSheet)){try{closeExportSheet()}catch(e){exportSheet.classList.add('hidden')}return true}
+
+    // Home project long-press selection/action bar.
+    if(ui?.projectSelectionActive?.()){ui.exitProjectSelection?.();return true}
+
+    // Inspector and every nested property UI use the SAME in-app Back behavior
+    // as the visible arrow. This preserves special routes such as:
+    // CUBIC BEZIER EASING -> XYZ Transform -> Inspector -> close drawer.
+    const drawer=document.getElementById('drawer');
+    if(this.visible(drawer)&&ui?.drawerMode){
+      if(ui.drawerMode==='multi'){
+        ui.finishLayerMultiSelection?.({announce:false});
+        return true;
+      }
+      if(['tool','settings','relink'].includes(ui.drawerMode)){
+        ui.closeDrawer?.();
+        return true;
+      }
+      const back=document.getElementById('drawerBack');
+      if(back&&!back.disabled){back.click();return true}
+      ui.closeDrawer?.();
+      return true;
+    }
+
+    // No internal UI remains. While inside a project, Android Back behaves like
+    // Open Motion's top-left project Back button and returns to Home first.
+    const editor=document.getElementById('editor');
+    if(this.visible(editor)){
+      const backHome=document.getElementById('backHome');
+      if(backHome){backHome.click();return true}
+      ui?.showHome?.();
+      return true;
+    }
+
+    // Clean Home has nothing left for Open Motion to consume.
+    return false;
+  }
+  onPopState(event){
+    const state=this.stateObject(event.state);
+
+    // history.forward() after a consumed Back lands here. This is not another
+    // user Back request; it simply parks the session on the reusable GUARD.
+    if(state[this.guardKey]){
+      if(this.restoringGuard){
+        this.restoringGuard=false;
+        this.clearRestoreTimer();
+      }
+      return;
+    }
+
+    // We only own traversal from our GUARD to our BASE. Unknown history entries
+    // belong to the browser/site and must never be trapped by Open Motion.
+    if(!state[this.baseKey])return;
+
+    let handled=false;
+    try{handled=this.handleInternalBack()}catch(err){console.error('Open Motion Back router error',err)}
+    if(handled){
+      this.clearExitConfirm();
+      this.restoreSameGuard();
+      return;
+    }
+
+    // Home is clean. First Back only arms an exit confirmation toast and
+    // restores the reusable GUARD. A second Back within the short timeout may
+    // leave the app/page normally.
+    if(!this.exitConfirmArmed()){
+      this.armExitConfirm();
+      this.restoreSameGuard();
+      return;
+    }
+
+    // Confirmation already armed: allow the browser to leave the page.
+    this.clearExitConfirm();
+    this.leavingApp=true;
+    this.clearRestoreTimer();
+    setTimeout(()=>{
+      try{window.history.back()}catch(e){this.leavingApp=false}
+    },0);
+  }
+}
+const omsAppBackRouter=new OMSAppBackRouter(ui);
+window.omsAppBackRouter=omsAppBackRouter;
+queueMicrotask(()=>omsAppBackRouter.init());
 
 /* =========================================================
    V3.94 — adaptive preview/timeline split + live canvas refit
@@ -20880,6 +21374,7 @@ class ExportSessionGuard{
 
 
 // ============================================================
+// V5.115 — Mobile export preview fullscreen orientation: explicit fullscreen only; horizontal video locks landscape, square/portrait locks portrait when supported.
 // V5.39 — Smooth minimal scrubber + temporally smoothed ambient preview
 // Encode finishes into one Blob. Nothing is downloaded automatically.
 // The same Blob backs preview/save; File wrapping is created lazily for Share.
@@ -20889,6 +21384,14 @@ class OMSExportResultPreview{
     this.blob=null;this.filename='';this.url='';this.shareFile=null;this.scrubbing=false;this.bound=false;this.timelineRaf=0;this.ambientTimer=0;this.ambientActiveIndex=0;this.ambientRunning=false;this.ambientSampleMs=2000;this.ambientSeekFadeMs=650;
     // V5.76 — fullscreen controls are transient overlays, not layout rows.
     this.fullscreenUiTimer=0;this.fullscreenUiHideMs=1900;this.fullscreenPointerCoarse=false;this.suppressNextFullscreenVideoClick=false;
+    // V5.115 — mobile orientation changes only after the user explicitly enters
+    // fullscreen. Horizontal exports prefer landscape; square/portrait exports
+    // prefer portrait. Normal preview orientation is never touched.
+    this.fullscreenOrientationLocked=false;
+    // V5.116 — on mobile/coarse-pointer browsers use app-controlled fullscreen
+    // so Chrome cannot display its own fullscreen education banner.
+    this.pseudoFullscreen=false;
+    this._pseudoFullscreenResize=()=>this.refreshPseudoFullscreenLayout();
   }
   el(id){return document.getElementById(id)}
   ensureBound(){
@@ -21047,12 +21550,14 @@ class OMSExportResultPreview{
   }
   releaseCurrent(){
     const video=this.el('exportResultVideo');
-    if(this.isFullscreen()){try{const p=document.exitFullscreen?.();p?.catch?.(()=>{})}catch(e){}}
+    if(this.pseudoFullscreen)this.exitPseudoFullscreen({silent:true});
+    else if(this.isNativeFullscreen()){try{const p=document.exitFullscreen?.();p?.catch?.(()=>{})}catch(e){}}
     try{video?.pause()}catch(e){}
     if(video){try{video.removeAttribute('src');video.load()}catch(e){}}
     this.stopTimelineLoop();this.stopAmbientLoop();this.clearAmbient();
     if(this.url){try{URL.revokeObjectURL(this.url)}catch(e){}}
     this.clearFullscreenUiTimer();this.suppressNextFullscreenVideoClick=false;
+    this.releaseMobileFullscreenOrientation();
     this.el('exportResultStage')?.classList.remove('fsControlsHidden','fsControlsVisible');
     this.url='';this.blob=null;this.filename='';this.shareFile=null;this.scrubbing=false
   }
@@ -21060,6 +21565,7 @@ class OMSExportResultPreview{
     const panel=this.el('exportResultPreview');if(panel?.classList.contains('hidden'))return;
     omsDiagnostics.log('export','EXPORT_PREVIEW_CLOSE','');
     panel.classList.add('hidden');this.releaseCurrent();
+    ui?.restoreHomeProjectExportContext?.();
   }
   clearFullscreenUiTimer(){
     if(this.fullscreenUiTimer){clearTimeout(this.fullscreenUiTimer);this.fullscreenUiTimer=0}
@@ -21083,25 +21589,98 @@ class OMSExportResultPreview{
     this.setFullscreenUiVisible(true);
     if(autoHide)this.scheduleFullscreenUiHide();else this.clearFullscreenUiTimer();
   }
+  mobileFullscreenOrientationTarget(){
+    const coarse=!!(window.matchMedia?.('(pointer: coarse)')?.matches||navigator.maxTouchPoints>0);
+    if(!coarse)return null;
+    const video=this.el('exportResultVideo');
+    const w=+video?.videoWidth||+model.project?.width||0,h=+video?.videoHeight||+model.project?.height||0;
+    if(!(w>0&&h>0))return null;
+    return w>h?'landscape':'portrait';
+  }
+  async applyMobileFullscreenOrientation(){
+    if(!this.isNativeFullscreen()||this.pseudoFullscreen)return false;
+    const target=this.mobileFullscreenOrientationTarget();
+    if(!target||typeof screen?.orientation?.lock!=='function')return false;
+    try{
+      await screen.orientation.lock(target);
+      this.fullscreenOrientationLocked=true;
+      omsDiagnostics.log('export','EXPORT_PREVIEW_ORIENTATION_LOCK',target,{videoWidth:this.el('exportResultVideo')?.videoWidth||0,videoHeight:this.el('exportResultVideo')?.videoHeight||0});
+      return true;
+    }catch(err){
+      this.fullscreenOrientationLocked=false;
+      omsDiagnostics.log('export','EXPORT_PREVIEW_ORIENTATION_LOCK_UNAVAILABLE',target,{message:String(err?.message||err)});
+      return false;
+    }
+  }
+  releaseMobileFullscreenOrientation(){
+    if(!this.fullscreenOrientationLocked)return;
+    this.fullscreenOrientationLocked=false;
+    try{screen.orientation?.unlock?.()}catch(e){}
+  }
   onFullscreenChange(){
+    // Native fullscreen changes are desktop/fallback only in V5.116.
+    if(this.pseudoFullscreen)return;
     this.refreshFullscreenButton();
     const stage=this.el('exportResultStage');
     this.clearFullscreenUiTimer();this.suppressNextFullscreenVideoClick=false;
     if(!stage)return;
-    if(this.isFullscreen()){
+    if(this.isNativeFullscreen()){
       // The requested behavior is a clean image immediately on entry.
       // UI returns on mouse movement (desktop) or touch (mobile).
       this.setFullscreenUiVisible(false);
-      omsDiagnostics.log('export','EXPORT_PREVIEW_FULLSCREEN_ENTER','true fullscreen controls hidden',{autoHideMs:this.fullscreenUiHideMs});
+      // Do not rotate the normal preview. Orientation is considered only after
+      // fullscreen is active; toggleFullscreen also calls this immediately from
+      // the user gesture path for browsers that require that timing.
+      this.applyMobileFullscreenOrientation().catch(()=>{});
+      omsDiagnostics.log('export','EXPORT_PREVIEW_FULLSCREEN_ENTER','true fullscreen controls hidden',{autoHideMs:this.fullscreenUiHideMs,orientationTarget:this.mobileFullscreenOrientationTarget()});
     }else{
+      this.releaseMobileFullscreenOrientation();
       stage.classList.remove('fsControlsHidden','fsControlsVisible');
       omsDiagnostics.log('export','EXPORT_PREVIEW_FULLSCREEN_EXIT','');
     }
   }
   fullscreenElement(){return document.fullscreenElement||document.webkitFullscreenElement||null}
-  isFullscreen(){
+  isNativeFullscreen(){
     const fs=this.fullscreenElement(),stage=this.el('exportResultStage');
     return !!(fs&&stage&&(fs===stage||stage.contains?.(fs)))
+  }
+  isFullscreen(){return !!(this.pseudoFullscreen||this.isNativeFullscreen())}
+  usePseudoFullscreen(){
+    return !!(window.matchMedia?.('(pointer: coarse)')?.matches||navigator.maxTouchPoints>0);
+  }
+  refreshPseudoFullscreenLayout(){
+    if(!this.pseudoFullscreen)return;
+    const stage=this.el('exportResultStage');if(!stage)return;
+    const landscapeTarget=this.mobileFullscreenOrientationTarget()==='landscape';
+    const phonePortrait=window.innerHeight>=window.innerWidth;
+    stage.classList.toggle('omsPseudoLandscape',landscapeTarget&&phonePortrait);
+  }
+  enterPseudoFullscreen(){
+    const stage=this.el('exportResultStage');if(!stage)return false;
+    this.pseudoFullscreen=true;
+    document.body.classList.add('omsExportPseudoFullscreen');
+    stage.classList.add('omsPseudoFullscreen');
+    this.refreshPseudoFullscreenLayout();
+    window.addEventListener('resize',this._pseudoFullscreenResize,{passive:true});
+    window.addEventListener('orientationchange',this._pseudoFullscreenResize,{passive:true});
+    this.clearFullscreenUiTimer();this.suppressNextFullscreenVideoClick=false;
+    this.setFullscreenUiVisible(false);
+    this.refreshFullscreenButton();
+    omsDiagnostics.log('export','EXPORT_PREVIEW_PSEUDO_FULLSCREEN_ENTER','mobile app-controlled fullscreen',{orientationTarget:this.mobileFullscreenOrientationTarget()});
+    return true
+  }
+  exitPseudoFullscreen({silent=false}={}){
+    if(!this.pseudoFullscreen)return false;
+    const stage=this.el('exportResultStage');
+    this.pseudoFullscreen=false;
+    window.removeEventListener('resize',this._pseudoFullscreenResize);
+    window.removeEventListener('orientationchange',this._pseudoFullscreenResize);
+    document.body.classList.remove('omsExportPseudoFullscreen');
+    stage?.classList.remove('omsPseudoFullscreen','omsPseudoLandscape','fsControlsHidden','fsControlsVisible');
+    this.clearFullscreenUiTimer();this.suppressNextFullscreenVideoClick=false;
+    this.refreshFullscreenButton();
+    if(!silent)omsDiagnostics.log('export','EXPORT_PREVIEW_PSEUDO_FULLSCREEN_EXIT','');
+    return true
   }
   refreshFullscreenButton(){
     const btn=this.el('exportResultFullscreen');if(!btn)return;const active=this.isFullscreen();
@@ -21114,19 +21693,29 @@ class OMSExportResultPreview{
   async toggleFullscreen(){
     const stage=this.el('exportResultStage'),video=this.el('exportResultVideo');if(!stage||!video)return;
     try{
-      if(this.isFullscreen()){
+      if(this.pseudoFullscreen){this.exitPseudoFullscreen();return}
+      if(this.isNativeFullscreen()){
         this.clearFullscreenUiTimer();
+        this.releaseMobileFullscreenOrientation();
         if(document.exitFullscreen)await document.exitFullscreen();
         else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
         this.refreshFullscreenButton();return
       }
+      // Mobile: avoid browser Fullscreen API entirely. Chrome owns the
+      // "how to exit fullscreen" education banner and webpages cannot hide it.
+      // App-controlled fullscreen gives Open Motion the same clean preview UI
+      // without triggering that browser-owned overlay.
+      if(this.usePseudoFullscreen()){this.enterPseudoFullscreen();return}
       if(stage.requestFullscreen){
         await stage.requestFullscreen({navigationUI:'hide'}).catch(()=>stage.requestFullscreen());
         this.refreshFullscreenButton();
-        if(this.isFullscreen())this.setFullscreenUiVisible(false);
+        if(this.isFullscreen()){
+          this.setFullscreenUiVisible(false);
+          await this.applyMobileFullscreenOrientation().catch(()=>false);
+        }
         return
       }
-      if(stage.webkitRequestFullscreen){stage.webkitRequestFullscreen();this.refreshFullscreenButton();setTimeout(()=>{if(this.isFullscreen())this.setFullscreenUiVisible(false)},0);return}
+      if(stage.webkitRequestFullscreen){stage.webkitRequestFullscreen();this.refreshFullscreenButton();setTimeout(()=>{if(this.isFullscreen()){this.setFullscreenUiVisible(false);this.applyMobileFullscreenOrientation().catch(()=>{})}},0);return}
       if(typeof video.webkitEnterFullscreen==='function'){video.webkitEnterFullscreen();return}
       toast('Layar penuh tidak didukung browser ini')
     }catch(err){console.warn('Fullscreen preview gagal:',err);toast('Layar penuh tidak dapat dibuka')}
@@ -23887,7 +24476,8 @@ async function openExportSheet({keepLayerSelection=false}={}){
 
 function closeExportSheet(){
   $('#exportSheet').classList.add('hidden');
-  exporter.clearLayerSelection()
+  exporter.clearLayerSelection();
+  ui?.restoreHomeProjectExportContext?.()
 }
 
 // ------------------------------------------------------------
@@ -24262,11 +24852,20 @@ $('#languageClose').onclick=closeLanguageModal;
 $('#languageModal').onclick=e=>{if(e.target===$('#languageModal'))closeLanguageModal()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#languageModal')?.classList.contains('hidden'))closeLanguageModal()});
 $('#projectSort').onchange=()=>ui.loadProjectList();
+$('#projectActionExport').onclick=()=>ui.exportSelectedProject();
+$('#projectActionDuplicate').onclick=()=>ui.duplicateSelectedProject();
+$('#projectActionDelete').onclick=()=>ui.deleteSelectedProjects();
+$('#home')?.addEventListener('pointerdown',e=>{
+  if(!ui.projectSelectionActive())return;
+  if(e.target?.closest?.('#projectSelectionBar'))return;
+  if(e.target?.closest?.('.projectCard'))return;
+  ui.exitProjectSelection();
+},{passive:true});
 applyHomeLanguage();
 $('#projectInput').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const text=await f.text(),isXML=/\.xml$/i.test(f.name)||/^\s*</.test(text),raw=isXML?XMLBridge.parse(text,f.name):JSON.parse(text),payload=!isXML&&['open-motion-v3','open-motion-v4'].includes(raw.format)?{project:raw.project,layers:raw.layers,selected:raw.selected,time:raw.time,mode3d:raw.mode3d,cameraView:raw.cameraView,snap:raw.snap}:raw;if(!payload.project||!Array.isArray(payload.layers))throw Error('schema');model.restore(payload,{timeOverride:0});history.clear();ui.authorizeEditorOpen();ui.showEditor();toast(isXML?'XML dimigrasikan ke scene 3D':'Paket proyek dibuka')}catch(err){console.error(err);toast('File proyek/XML tidak valid')}e.target.value=''};
 $('#settingsBtn').onclick=()=>{if(!model.project)return;omsDiagnostics.log('ui','OPEN_SETTINGS','',{time:model.time});const d=ui.drawerShell('Project & Environment',`<div class="drawerBody propPanel"><div class="true3dCard"><i>4</i><div><b>Open Motion Scene 4</b><small>WebGL • matriks 4×4 • XML interchange • satu file HTML</small></div></div><div class="propRow"><label>Nama</label><input id="projectNameEdit" value="${esc(model.project.name)}"><span></span></div><div class="colorRow"><input id="bgEdit" type="color" value="${model.project.bg}"><input value="Background" disabled></div><div class="switchRow"><span>Grid Dunia 3D</span><input id="gridEdit" type="checkbox" ${model.project.grid?'checked':''}></div><div class="propRow"><label>Playhead</label><select id="playheadModeSelect"><option value="center">Tetap di Tengah</option><option value="moving">Bergerak (Mode Lama)</option></select><span></span></div><div class="miniNote" id="playheadModeHelp">Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.</div><div class="propRow"><label>Layout 9:16</label><select id="portraitLayoutSelect"><option value="side">Samping (Baru)</option><option value="classic">Horizontal (Klasik)</option></select><span></span></div><div class="miniNote" id="portraitLayoutHelp">Khusus komposisi 9:16 atau lebih tinggi pada mobile. Pilihan ini disimpan di perangkat.</div><div class="propRow"><label>Kualitas Preview</label><select id="previewQualitySelect"><option value="auto">Otomatis</option><option value="1">Penuh — 100%</option><option value="0.75">Tinggi — 75%</option><option value="0.5">Sedang — 50%</option><option value="0.25">Rendah — 25%</option></select><span></span></div><div class="miniNote" id="previewQualityHelp">Kualitas preview hanya memengaruhi editor. Ekspor tetap memakai kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.</div><div class="switchRow"><span>Ambient Editor</span><input id="editorAmbientToggle" type="checkbox" ${omsEditorAmbient.enabled?'checked':''}></div><div class="miniNote" id="editorAmbientHelp">Aktif secara default dengan intensitas 100%. Warna workspace mengikuti komposisi dengan sampling berkala dan transisi lambat seperti pencahayaan ambient; efek hanya pada UI editor dan tidak masuk ke hasil ekspor. Pilihan disimpan di perangkat.</div><div class="propRow"><label>Intensitas Ambient</label><input id="editorAmbientIntensity" type="range" min="0" max="100" step="5" value="${omsEditorAmbient.intensity}"><span id="editorAmbientIntensityValue">${omsEditorAmbient.intensity}%</span></div><div class="miniNote">Mengatur kekuatan warna ambient tanpa mengubah tampilan dasar UI. Piksel putih/abu terang otomatis diberi bobot lebih kecil agar tidak mendominasi ambient.</div><div class="propRow"><label>Diagnostik</label><button id="openDiagnosticsHub" class="preRenderSettingButton" type="button">BUKA</button><span id="diagnosticSettingState">Nonaktif</span></div><div class="miniNote">Diagnostik modular untuk Timeline, Playback, Video, Audio, Render, Export, GPU Fast, Cache, Memory, dan UI. Semua nonaktif secara default; aktifkan hanya kategori yang sedang diuji.</div><div class="propRow"><label>Uji 1080p</label><select id="nativeCapacityTestTarget"><option value="auto">Auto 4→16</option><option value="4">4 layer</option><option value="6">6 layer</option><option value="8">8 layer</option><option value="10">10 layer</option><option value="12">12 layer</option><option value="16">16 layer</option></select><button id="runNativeCapacityBenchmark" class="diamond" type="button" title="Uji kapasitas native 1080p">▶</button></div><div class="miniNote" id="nativeCapacityStatus">${omsNativeCapacity.summary()}</div><div class="miniNote">Adaptive N-Source mempertahankan sebanyak mungkin video pada decoder native. Saat beban melewati kapasitas terukur, Open Motion menurunkan cadence upload texture layer berprioritas rendah secara progresif sebelum memakai fallback WebCodecs.</div><div class="switchRow"><span>Pre-render Timeline</span><input id="timelinePreRenderToggle" type="checkbox" ${timelinePreRender.enabled?'checked':''}></div><div class="propRow"><label>Mode Pre-render</label><select id="timelinePreRenderMode"><option value="normal">Normal — Real-time</option><option value="follow">Real-time Mengejar — Tanpa Celah</option><option value="semi">Semi Kuat — Prioritas Cache</option><option value="complete">Kuat — Tanpa Lewat Frame</option></select><span></span></div><div class="miniNote" id="timelinePreRenderModeHelp">Normal menjaga real-time dan boleh melewatkan cache jika decoder tertinggal. Real-time Mengejar juga menjaga playhead/audio real-time, tetapi pre-render mempertahankan antrean frame berurutan di belakang playhead dan mengejar tanpa sengaja membuat celah. Semi Kuat memberi frame yang hilang waktu singkat untuk masuk cache sehingga playback boleh sedikit melambat. Kuat menunggu setiap frame. Tombol Rekam Pre-render tetap memaksa Mode Kuat selama aktif.</div><div class="propRow"><label>Mode Cache</label><select id="timelinePreRenderStorage"><option value="lossless">Lossless — Hemat RAM</option><option value="classic">Klasik — RAM Besar, CPU Ringan</option><option value="video">Video HW — Hemat RAM & CPU</option></select><span></span></div><div class="miniNote" id="timelinePreRenderStorageHelp">Lossless memakai Hot ImageBitmap + PNG lossless. Klasik menyimpan ImageBitmap mentah dengan CPU paling ringan. Video HW memakai WebCodecs prefer-hardware untuk kompresi preview berkualitas tinggi: RAM jauh lebih hemat tanpa biaya PNG yang berat; ekspor tidak terpengaruh. ⚠️ Kompatibilitas Video HW bergantung pada browser, SoC, dan driver codec; prefer-hardware tidak menjamin encoder hardware benar-benar dipakai. Jika jalur video tidak didukung atau gagal, Open Motion akan fallback ke Cache Klasik.</div><div class="propRow"><label>Cache Preview</label><button id="clearTimelinePreRender" class="preRenderSettingButton" type="button">BERSIHKAN</button><span></span></div><div class="miniNote" id="timelinePreRenderStatus">${timelinePreRender.statsText()}</div><div class="miniNote">Pre-render Timeline nonaktif secara default agar preview live mendapat prioritas penuh. Jika diaktifkan manual, pilihan disimpan di perangkat. Pada mobile/touch, Mode Normal dan Real-time Mengejar tidak menjalankan decoder pre-render kedua selama Play; Semi Kuat, Kuat, dan Rekam tetap tersedia sebagai mode eksplisit. Garis hijau menunjukkan frame yang benar-benar masih tersedia.</div><div class="miniNote">Editor Camera hanya mengubah sudut pandang kerja. PNG dan video selalu dirender melalui Main Camera tanpa grid atau gizmo editor.</div></div>`);ui.drawerMode='settings';timeline.refreshKeyframeInteractionState?.();$('#projectNameEdit').onchange=e=>{history.push();model.project.name=e.target.value;ui.syncProject()};$('#bgEdit').oninput=e=>{timelinePreRender.invalidate('background');model.project.bg=e.target.value;renderer.render()};$('#gridEdit').onchange=e=>{timelinePreRender.invalidate('grid');model.project.grid=e.target.checked;renderer.render()};const ph=$('#playheadModeSelect');ph.value=model.project.playheadMode||'center';const updateHelp=()=>{$('#playheadModeHelp').textContent=ph.value==='center'?'Tetap di Tengah: playhead diam dan timeline bergerak saat playback/scrub.':'Bergerak (Mode Lama): timeline tetap pada posisi scroll dan playhead bergerak mengikuti waktu.'};updateHelp();ph.onchange=e=>{history.push();model.project.playheadMode=e.target.value;const sc=$('#timelineScroll');if(model.project.playheadMode==='moving')sc.scrollLeft=0;timeline.rebuild();renderer.render();updateHelp()};const portraitSel=$('#portraitLayoutSelect');if(portraitSel){portraitSel.value=portraitSideControls?.layoutPreference?.()||'side';portraitSel.onchange=e=>{portraitSideControls?.setLayoutPreference?.(e.target.value);const changed=portraitSideControls?.sync?.({refit:false});requestAnimationFrame(()=>{ui.fit();timeline.rebuild();if(editorSplit?.isDrawerOpen?.())editorSplit.autoForDrawer(0);else editorSplit?.scheduleFit?.({render:true});if(changed)renderer.render()})}}const diagBtn=$('#openDiagnosticsHub');if(diagBtn)diagBtn.onclick=()=>omsDiagnostics.openPanel();omsDiagnostics.updateSettingState();omsNativeCapacity.updateSettingState();const nativeBenchBtn=$('#runNativeCapacityBenchmark'),nativeBenchTarget=$('#nativeCapacityTestTarget');if(nativeBenchBtn)nativeBenchBtn.onclick=()=>omsNativeBenchmark.open(nativeBenchTarget?.value||'auto');const previewSel=$('#previewQualitySelect'),previewHelp=$('#previewQualityHelp');if(previewSel){previewSel.value=omsPreviewQualityPreference();const updatePreviewHelp=()=>{if(previewHelp)previewHelp.textContent=`Kualitas preview editor saat ini ${omsPreviewQualityPercent()}%. Ekspor tetap kualitas penuh. Scrub video memakai WebCodecs bila tersedia dan fallback otomatis jika tidak didukung.`};updatePreviewHelp();previewSel.onchange=e=>{omsSetPreviewQuality(e.target.value);updatePreviewHelp();toast(`Kualitas preview ${omsPreviewQualityPercent()}%`)}}const ambientToggle=$('#editorAmbientToggle'),ambientHelp=$('#editorAmbientHelp');if(ambientToggle){ambientToggle.checked=!!omsEditorAmbient.enabled;ambientToggle.onchange=e=>{const enabled=omsEditorAmbient.setEnabled(e.target.checked);if(ambientHelp)ambientHelp.textContent=enabled?'Aktif • workspace mengikuti warna komposisi dengan sampling ±2 detik dan transisi ±2,4 detik. Hanya UI editor; ekspor tidak terpengaruh.':'Ambient Editor nonaktif. Aktifkan untuk membuat warna workspace mengikuti komposisi dengan sampling berkala dan transisi lambat; efek hanya pada UI editor dan tidak masuk ke hasil ekspor. Pilihan disimpan di perangkat.';toast(enabled?'Ambient Editor aktif':'Ambient Editor nonaktif')}}const ambientIntensity=$('#editorAmbientIntensity'),ambientIntensityValue=$('#editorAmbientIntensityValue');if(ambientIntensity){ambientIntensity.value=String(omsEditorAmbient.intensity);const updateAmbientIntensity=()=>{const v=omsEditorAmbient.setIntensity(ambientIntensity.value);if(ambientIntensityValue)ambientIntensityValue.textContent=`${v}%`};ambientIntensity.oninput=updateAmbientIntensity;ambientIntensity.onchange=updateAmbientIntensity}const preRenderToggle=$('#timelinePreRenderToggle');if(preRenderToggle)preRenderToggle.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const enabled=timelinePreRender.setEnabled(e.target.checked);omsDiagnostics.log('cache','PRERENDER_TOGGLE',enabled?'ON':'OFF',{mode:timelinePreRender.mode,storage:timelinePreRender.storageMode});toast(enabled?'Pre-render timeline aktif':'Pre-render timeline nonaktif');if(wasPlaying)clock.start()};const preRenderMode=$('#timelinePreRenderMode'),preRenderModeHelp=$('#timelinePreRenderModeHelp');if(preRenderMode){preRenderMode.value=timelinePreRender.mode;const updatePreRenderModeHelp=()=>{if(!preRenderModeHelp)return;if(preRenderMode.value==='complete')preRenderModeHelp.textContent='Kuat: setiap frame wajib masuk cache sebelum timeline maju. Area yang belum tercache boleh melambat dan hening agar audio tidak lari; saat playhead kembali ke area cache yang siap, audio otomatis diputar sinkron.';else if(preRenderMode.value==='semi')preRenderModeHelp.textContent='Semi Kuat: setiap frame yang hilang diberi waktu singkat untuk exact seek + capture. Playback boleh sedikit melambat dan audio dapat tertahan sesaat, tetapi satu frame berat tidak bisa menghentikan playback tanpa batas.';else if(preRenderMode.value==='follow')preRenderModeHelp.textContent='Real-time Mengejar: playhead dan audio tetap real-time. Pre-render B-frame-safe berjalan sebagai cursor berurutan di belakang playhead; jika perangkat lambat garis hijau akan tertinggal, bukan melompat ke depan dan meninggalkan celah. Worker terus mengejar sampai menyamai bagian timeline yang sudah dilewati.';else preRenderModeHelp.textContent='Normal: playback dan audio tetap real-time, tetapi frame yang masuk pre-render didecode melalui pipeline sequential presentation-order yang sama dengan Kuat/Rekam agar video B-frame aman. Jika decoder tidak sempat mengejar, frame cache boleh terlewat tanpa memperlambat playback.'};updatePreRenderModeHelp();preRenderMode.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const mode=timelinePreRender.setMode(e.target.value);omsDiagnostics.log('cache','PRERENDER_MODE',mode,{enabled:timelinePreRender.enabled});updatePreRenderModeHelp();toast(mode==='complete'?'Pre-render Kuat aktif':mode==='semi'?'Pre-render Semi Kuat aktif':mode==='follow'?'Pre-render Real-time Mengejar aktif':'Pre-render Normal aktif');if(wasPlaying)clock.start()}}const preRenderStorage=$('#timelinePreRenderStorage'),preRenderStorageHelp=$('#timelinePreRenderStorageHelp');if(preRenderStorage){preRenderStorage.value=timelinePreRender.storageMode;const updatePreRenderStorageHelp=()=>{if(!preRenderStorageHelp)return;preRenderStorageHelp.textContent=preRenderStorage.value==='classic'?'Klasik: semua frame cache tetap sebagai ImageBitmap mentah. CPU paling ringan, tetapi RAM jauh lebih besar dan frame lama dieviksi saat batas tercapai.':preRenderStorage.value==='video'?'Video HW: frame dekat playhead tetap ImageBitmap, frame jauh dikompresi sebagai keyframe video WebCodecs dengan preferensi hardware. RAM dan CPU biasanya jauh lebih hemat daripada PNG; kualitas preview sangat tinggi tetapi tidak pixel-identical. Ekspor tetap asli. ⚠️ Kompatibilitas bergantung pada browser, SoC, dan driver codec. prefer-hardware hanya preferensi dan tidak menjamin encoder hardware digunakan; jika encoder/decoder tidak didukung atau gagal, Open Motion otomatis fallback ke Cache Klasik.':'Lossless: frame dekat playhead tetap ImageBitmap, frame jauh dikompresi PNG lossless. FPS/kualitas pixel cache tetap sama, RAM lebih hemat dengan biaya CPU tambahan.'};updatePreRenderStorageHelp();preRenderStorage.onchange=e=>{const wasPlaying=model.playing;if(wasPlaying)clock.stop({continuePreRender:false});const mode=timelinePreRender.setStorageMode(e.target.value);omsDiagnostics.log('cache','CACHE_STORAGE_MODE',mode,{enabled:timelinePreRender.enabled});updatePreRenderStorageHelp();renderer.render();toast(mode==='classic'?'Cache Klasik aktif • CPU paling ringan':mode==='video'?'Cache Video HW aktif • RAM & CPU hemat':'Cache Lossless aktif • RAM lebih hemat');if(wasPlaying)clock.start()}}const clearPreRender=$('#clearTimelinePreRender');if(clearPreRender)clearPreRender.onclick=()=>{omsDiagnostics.log('cache','CACHE_CLEAR','manual',{stats:timelinePreRender.statsText?.()});timelinePreRender.clear('manual');renderer.render();toast('Cache pre-render dibersihkan')}};
 
-document.addEventListener('keydown',e=>{const tag=document.activeElement?.tagName;if(['INPUT','SELECT','TEXTAREA'].includes(tag))return;if(e.code==='Space'){e.preventDefault();clock.toggle()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?ui.redoAction():ui.undoAction()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();ui.saveLocal()}if(e.key==='Delete'&&model.selected){history.push();model.removeLayer(model.selected);ui.rebuildAll()}});
+document.addEventListener('keydown',e=>{const tag=document.activeElement?.tagName;if(['INPUT','SELECT','TEXTAREA'].includes(tag))return;if(e.key==='Escape'&&ui.projectSelectionActive?.()){e.preventDefault();ui.exitProjectSelection();return}if(e.code==='Space'){e.preventDefault();clock.toggle()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?ui.redoAction():ui.undoAction()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();ui.saveLocal()}if(e.key==='Delete'&&ui.projectSelectionActive?.()){e.preventDefault();ui.deleteSelectedProjects();return}if(e.key==='Delete'&&model.selected){history.push();model.removeLayer(model.selected);ui.rebuildAll()}});
 window.addEventListener('resize',()=>{
   if(!$('#editor').classList.contains('hidden')){
     setTimeout(()=>{
