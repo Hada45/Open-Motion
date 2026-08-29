@@ -28,9 +28,7 @@
 
 ## Project Status
 
-<p>
-  <img src="https://img.shields.io/badge/Prototype%20%2F%20Work%20in%20Progress-F5B301?style=for-the-badge&labelColor=2B2F36" alt="Prototype / Work in Progress" />
-</p>
+**🟨 PROTOTYPE / WORK IN PROGRESS**
 
 Open Motion is still under active development and is **not production-ready yet**.
 Features, project formats, UI behavior, and internal systems may continue to change.
