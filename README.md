@@ -28,7 +28,9 @@
 
 ## Project Status
 
-> **Prototype / Work in Progress**
+<p>
+  <img src="https://img.shields.io/badge/Prototype%20%2F%20Work%20in%20Progress-F5B301?style=for-the-badge&labelColor=2B2F36" alt="Prototype / Work in Progress" />
+</p>
 
 Open Motion is still under active development and is **not production-ready yet**.
 Features, project formats, UI behavior, and internal systems may continue to change.
@@ -155,35 +157,10 @@ enough for the project.
 
 ### Opus Framework
 
-One technology being considered is
-[Opus Framework](https://youtu.be/bB4_B7TCoMY?si=6yFhzkhmmRT1DMR5).
+Open Motion may evaluate [Opus Framework](https://youtu.be/bB4_B7TCoMY?si=6yFhzkhmmRT1DMR5)
+as one possible foundation for a future native version once it becomes publicly
+available.
 
-Opus is a Kotlin Multiplatform video timeline composition framework being
-developed by The Prismatic Company. It is intended to provide foundations for
-video, audio, images, text, compositing, animation, visual effects, multimedia
-timelines, preview, rendering, export, and other media workflows.
-
-Open Motion is interested in Opus because the long-term goal is not only to
-become a video editor, but to grow toward motion graphics, animation,
-compositing, and 3D workflows.
-
-If Opus proves suitable, it could potentially provide part of the multimedia
-foundation for a future native Open Motion build, while development can remain
-focused on the parts that define Open Motion itself: the editor UI, keyframes,
-timeline workflow, animation tools, effects, and other creative features.
-
-### Not a Final Decision
-
-Opus has **not** been selected as the final engine for Open Motion.
-
-Once the framework becomes publicly available and sufficiently mature, its
-performance, features, compatibility, licensing, and development direction will
-need to be evaluated first.
-
-For now, Open Motion will continue evolving as an experimental web-based project
-while new features and ideas continue to be developed and tested.
-
----
 
 ## Technology
 
