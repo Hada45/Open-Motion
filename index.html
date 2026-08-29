@@ -9366,9 +9366,17 @@ class TimelineController{
     if('ResizeObserver' in window){
       this.timelineResizeObserver=new ResizeObserver(()=>{
         if($('#editor')?.classList.contains('hidden')||!model.project)return;
+        // V5.119 — mobile-landscape's three-line canvas/timeline splitter owns
+        // timeline geometry while the finger is resizing the two columns. On
+        // Android, ResizeObserver may arrive between pointermove and the final
+        // CSS-grid commit; letting the generic responsive-zoom path run there
+        // can rebuild with a transient width and detach ruler/scroll geometry
+        // from the fixed centered playhead. Desktop keeps its proven path.
+        if(this._mobileLandscapeSplitResizeActive || performance.now()<(this._mobileLandscapeSplitSuppressUntil||0))return;
         cancelAnimationFrame(this.initialFitRAF);
         this.initialFitRAF=requestAnimationFrame(()=>{
           if(!model.project)return;
+          if(this._mobileLandscapeSplitResizeActive || performance.now()<(this._mobileLandscapeSplitSuppressUntil||0))return;
           if((+model.project.timelineZoomVersion||0)>=1){
             this.applyViewportRelativeProjectZoom({persist:true,rebuild:true});
           }else if(this.initialFitActive){
@@ -9438,7 +9446,13 @@ class TimelineController{
     if(!model.project)return;
     const value=this.rulerPolicy.clampZoom(Number.isFinite(+px)?+px:this.px);
     const base=Math.max(.0001,this.initialSecondsFitPx(2));
-    const nextScale=Number.isFinite(+scale)?clamp(+scale,.02,50):clamp(value/base,.02,50);
+    // V5.121 — null/undefined means "derive the scale from px". Unary +null is 0,
+    // so the old Number.isFinite(+scale) check silently persisted the 0.02 floor
+    // after pinch gestures that called this method without an explicit scale.
+    // That poisoned V5.120's splitter zoom-preservation path: it faithfully kept
+    // 0.02 and then collapsed the timeline to the 8 px/s minimum on resize.
+    const hasExplicitScale=scale!==null&&scale!==undefined&&Number.isFinite(+scale);
+    const nextScale=hasExplicitScale?clamp(+scale,.02,50):clamp(value/base,.02,50);
     model.project.timelinePx=value; // compatibility/cache only; never authoritative on restore.
     model.project.timelineZoomScale=nextScale;
     model.project.timelineZoomVersion=1;
@@ -26379,6 +26393,8 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
   let timelineFitRAF=0;
   let timelineFitReleaseRAF=0;
   let splitKeepTime=0;
+  let splitKeepZoomScale=1;
+  let splitPreserveUserZoom=false;
   let mainResizeObserver=null;
   let desktopCanvasSplitRatio=null;
   let originalPositionLayerActions=null;
@@ -26417,13 +26433,28 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
     // projects enter the exact same splitter path.
     try{timeline.syncProjectZoom?.()}catch(e){}
     splitKeepTime=clamp(+model.time||0,0,Math.max(0,+model.project.duration||0));
+    splitKeepZoomScale=timeline.projectTimelineZoomScale?.(model.project)??1;
+    // V5.120 — a completed pinch writes a non-default viewport-relative zoom
+    // scale. On mobile landscape that explicit user zoom must survive the
+    // three-line splitter. V5.119 always forced scale=1 during splitter drag,
+    // which was safe before pinch but discarded the user's zoom and could let
+    // ruler/scroll geometry diverge from the centered playhead afterwards.
+    splitPreserveUserZoom=inMobileLandscapeDesktop()&&Math.abs(splitKeepZoomScale-1)>.0001;
     timeline._desktopSplitResizeActive=true;
     timeline._desktopSplitResizeTime=splitKeepTime;
-    // Internal splitter resizing is a viewport-layout operation. It deliberately
-    // restores the responsive 2-second view, including the existing one-frame
-    // safety interval after 2s, just like the initial responsive timeline fit.
+    timeline._mobileLandscapeSplitKeepScale=splitKeepZoomScale;
+    timeline._mobileLandscapeSplitPreserveUserZoom=splitPreserveUserZoom;
+    // Mobile landscape uses the same visible three-line splitter as desktop,
+    // but Chromium delivers substantially more intermediate resize callbacks on
+    // touch. Mark only that path so its geometry is owned by this transaction;
+    // the already-stable desktop-PC behavior remains unchanged.
+    timeline._mobileLandscapeSplitResizeActive=inMobileLandscapeDesktop();
+    if(timeline._mobileLandscapeSplitResizeActive)timeline._mobileLandscapeSplitSuppressUntil=0;
+    // With the default zoom, preserve the established responsive 2-second-fit
+    // splitter behavior. After a user pinch on mobile landscape, keep the
+    // explicit viewport-relative scale instead of re-arming initial fit.
     timeline.initialFitSeconds=2;
-    timeline.initialFitActive=true;
+    timeline.initialFitActive=!splitPreserveUserZoom;
     cancelAnimationFrame(timelineFitReleaseRAF);
     timelineFitReleaseRAF=0;
   }
@@ -26438,11 +26469,27 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
       model.time=keep;
       timeline._desktopSplitResizeTime=keep;
       timeline.initialFitSeconds=2;
-      timeline.initialFitActive=true;
-      // applyInitialSecondsFit rebuilds ruler/tracks with the NEW centerPad and
-      // NEW px/s. This is the piece browser-resize had but the internal splitter
-      // lacked, which caused the fixed 50% playhead to appear over another tick.
-      timeline.applyInitialSecondsFit?.({persist:true,rebuild:true});
+      const preserveMobileZoom=!!timeline._mobileLandscapeSplitResizeActive&&
+        !!timeline._mobileLandscapeSplitPreserveUserZoom;
+      if(preserveMobileZoom){
+        // The pinch scale is dimensionless relative to the CURRENT viewport.
+        // Reapply that same scale after every splitter width change so px/s,
+        // center padding, ruler and scroll are rebuilt from one coherent width.
+        timeline.initialFitActive=false;
+        if(model.project)model.project.timelineZoomScale=timeline._mobileLandscapeSplitKeepScale||splitKeepZoomScale||1;
+        timeline.applyViewportRelativeProjectZoom?.({persist:true,rebuild:true});
+      }else{
+        timeline.initialFitActive=true;
+        // applyInitialSecondsFit rebuilds ruler/tracks with the NEW centerPad and
+        // NEW px/s. This is the piece browser-resize had but the internal splitter
+        // lacked, which caused the fixed 50% playhead to appear over another tick.
+        timeline.applyInitialSecondsFit?.({persist:true,rebuild:true});
+        // At default mobile zoom, commit scale=1 for the NEW viewport so a stale
+        // project value cannot be replayed by a delayed ResizeObserver.
+        if(timeline._mobileLandscapeSplitResizeActive){
+          try{timeline.persistProjectTimelineZoom?.(timeline.px,{scale:1})}catch(e){}
+        }
+      }
       model.time=keep;
       const sc=document.getElementById('timelineScroll');
       if(sc&&timeline.isCentered?.()){
@@ -26466,14 +26513,57 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
     // animation frame so Chromium's delayed resize-scroll cannot scrub time.
     scheduleTimelineSplitFit();
     cancelAnimationFrame(timelineFitReleaseRAF);
+    const mobileLandscapeTxn=!!timeline._mobileLandscapeSplitResizeActive;
     timelineFitReleaseRAF=requestAnimationFrame(()=>{
       timelineFitReleaseRAF=requestAnimationFrame(()=>{
         if(typeof timeline==='undefined'||!timeline)return;
-        model.time=clamp(splitKeepTime,0,Math.max(0,+model.project?.duration||0));
-        timeline._desktopSplitResizeTime=model.time;
+        const keep=clamp(splitKeepTime,0,Math.max(0,+model.project?.duration||0));
+        model.time=keep;
+        timeline._desktopSplitResizeTime=keep;
+
+        if(mobileLandscapeTxn){
+          // Android landscape needs one authoritative final build after the CSS
+          // grid width has stopped changing. Keep the transaction flag active
+          // during this rebuild so scroll events cannot reinterpret the layout
+          // clamp as a user scrub.
+          timeline.initialFitSeconds=2;
+          const preserveMobileZoom=!!timeline._mobileLandscapeSplitPreserveUserZoom;
+          if(preserveMobileZoom){
+            timeline.initialFitActive=false;
+            if(model.project)model.project.timelineZoomScale=timeline._mobileLandscapeSplitKeepScale||splitKeepZoomScale||1;
+            timeline.applyViewportRelativeProjectZoom?.({persist:true,rebuild:true});
+          }else{
+            timeline.initialFitActive=true;
+            timeline.applyInitialSecondsFit?.({persist:true,rebuild:true});
+            try{timeline.persistProjectTimelineZoom?.(timeline.px,{scale:1})}catch(e){}
+          }
+          model.time=keep;
+          const sc=document.getElementById('timelineScroll');
+          if(sc&&timeline.isCentered?.()){
+            const target=keep*timeline.px;
+            timeline.syncingScroll=true;
+            sc.scrollLeft=target;
+            timeline.lastScrollLeft=target;
+          }
+          // Ignore late Android ResizeObserver deliveries briefly. The final
+          // geometry above is authoritative for this completed drag.
+          timeline._mobileLandscapeSplitSuppressUntil=performance.now()+220;
+        }
+
         timeline.updatePlayhead?.();
         timeline._desktopSplitResizeActive=false;
+        timeline._mobileLandscapeSplitResizeActive=false;
+        timeline._mobileLandscapeSplitPreserveUserZoom=false;
+        timeline._mobileLandscapeSplitKeepScale=1;
+        splitPreserveUserZoom=false;
+        splitKeepZoomScale=1;
         timelineFitReleaseRAF=0;
+        requestAnimationFrame(()=>{
+          if(typeof timeline==='undefined'||!timeline)return;
+          timeline.syncingScroll=false;
+          model.time=keep;
+          timeline.updatePlayhead?.();
+        });
       });
     });
   }
@@ -26698,6 +26788,7 @@ html.omsMobileLandscapeDesktop .layerActionsStatus{font-size:6.9px!important;pad
   setTimeout(()=>{patchLayerActionsPosition();schedule()},0);
 })();
 </script>
+<!-- V5.119 — V5.116 fallback: mobile-landscape three-line splitter now owns ResizeObserver/zoom persistence for the entire touch resize transaction, commits the final viewport once, and keeps model time + centered scroll locked; desktop-PC splitter behavior is unchanged. -->
 <!-- V5.67 — V5.59 fallback: internal three-line canvas/timeline splitter keeps its original pointer drag, but now performs a rAF-throttled live 2s+1-frame timeline fit and suppresses layout-induced scroll scrubbing until the split transaction settles. -->
 <!-- V5.70 — project-isolated responsive timeline zoom: store a dimensionless per-project zoom scale relative to the live timeline viewport; legacy absolute timelinePx snapshots normalize once, preventing A→old→A project switching from leaking stale ruler geometry. -->
 <!-- V4.41 — the existing toolbar split handle now owns horizontal split on desktop PC and mobile-landscape desktop mode; session ratio only, no project serialization. -->
@@ -28081,6 +28172,8 @@ html.omsMobileLandscapeDesktop #preRenderRecordBtn{left:35px!important}
 <!-- V5.33 — persistent INSTAL action moved into the Home header beside the language button; temporary install banner removed. -->
 
 <!-- V5.42 — Optional YouTube-inspired editor ambient mode: OFF by default, white-suppressed color sampling, adjustable intensity, sparse 40×24 sampling, and slow UI-only color transitions. -->
+
+<!-- V5.121 — fixes viewport-relative timeline zoom persistence: null/undefined scale is now derived from px instead of coercing to 0 and corrupting timelineZoomScale to 0.02. This restores V5.120 mobile-landscape splitter pinch-zoom preservation and prevents the splitter from collapsing a completed pinch to the 8 px/s floor. -->
 </body>
 
 <!-- V4.21 — WebCodecs/Mediabunny CanvasSink random-access paused scrubbing with automatic HTMLVideo fallback; device-level Preview Quality setting controls frame caches and WebGL texture resolution without affecting export quality. -->
