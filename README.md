@@ -155,9 +155,8 @@ enough for the project.
 
 ### Opus Framework
 
-Open Motion may evaluate [Opus Framework](https://youtu.be/bB4_B7TCoMY?si=6yFhzkhmmRT1DMR5)
-as one possible foundation for a future native version once it becomes publicly
-available.
+Open Motion may use [Opus Framework](https://youtu.be/bB4_B7TCoMY?si=6yFhzkhmmRT1DMR5)
+as one possible foundation for a future native version once it becomes publicly available.
 
 
 ## Technology
