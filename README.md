@@ -26,24 +26,18 @@
   <img src="https://raw.githubusercontent.com/Hada45/Open-Motion/refs/heads/Asset/vector.jpg" width="18%" alt="Open Motion Vector Editor" />
 </p>
 
+## Project Status
+
+> **Prototype / Work in Progress**
+
+Open Motion is still under active development and is **not production-ready yet**.
+Features, project formats, UI behavior, and internal systems may continue to change.
 
 ---
 
-## Project Status
 
-> [!WARNING]
-> ### Prototype / Work in Progress
->
-> ⏳ **Waiting for [Opus Framework](https://youtu.be/bB4_B7TCoMY?si=6yFhzkhmmRT1DMR5)**
->
-> Open Motion is currently an experimental browser-based prototype.
-> The project is being used to develop and validate the editor interface,
-> animation workflow, keyframe system, vector tools, 3D transforms,
-> rendering pipeline, and mobile editing experience.
->
-> It is **not production-ready yet**. Features, project data formats,
-> UI behavior, and internal implementation may change significantly
-> during development.
+
+---
 
 ## Try Open Motion
 
@@ -144,6 +138,50 @@ Open Motion is still evolving. Areas under active development include:
 - Mobile editing experience
 - Project management and persistence
 - Browser compatibility
+
+
+
+---
+
+## Future Native Architecture
+
+Open Motion is currently developed as a web-based application. This makes it
+faster to experiment with new ideas, test editor workflows, and iterate on
+features while the project is still in an early stage.
+
+In the future, there are plans to explore a native version of Open Motion,
+including an Android application, once suitable native technologies are mature
+enough for the project.
+
+### Opus Framework
+
+One technology being considered is
+[Opus Framework](https://youtu.be/bB4_B7TCoMY?si=6yFhzkhmmRT1DMR5).
+
+Opus is a Kotlin Multiplatform video timeline composition framework being
+developed by The Prismatic Company. It is intended to provide foundations for
+video, audio, images, text, compositing, animation, visual effects, multimedia
+timelines, preview, rendering, export, and other media workflows.
+
+Open Motion is interested in Opus because the long-term goal is not only to
+become a video editor, but to grow toward motion graphics, animation,
+compositing, and 3D workflows.
+
+If Opus proves suitable, it could potentially provide part of the multimedia
+foundation for a future native Open Motion build, while development can remain
+focused on the parts that define Open Motion itself: the editor UI, keyframes,
+timeline workflow, animation tools, effects, and other creative features.
+
+### Not a Final Decision
+
+Opus has **not** been selected as the final engine for Open Motion.
+
+Once the framework becomes publicly available and sufficiently mature, its
+performance, features, compatibility, licensing, and development direction will
+need to be evaluated first.
+
+For now, Open Motion will continue evolving as an experimental web-based project
+while new features and ideas continue to be developed and tested.
 
 ---
 
