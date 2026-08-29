@@ -1,4 +1,4 @@
-# Open Motion
+<h1 align="center">Open Motion</h1>.
 
 <p align="center">
   <img
