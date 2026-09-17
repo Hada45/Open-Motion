@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.openmotion.prototype.true3d'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.openmotion.prototype.true3d'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '0.1-stage1'
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs = ['..']
+            java.exclude 'app/**'
+            manifest.srcFile 'src/main/AndroidManifest.xml'
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
