@@ -25,8 +25,43 @@ jobs:
         working-directory: prototypes/gold-motion-true3d-stage1
         run: gradle :app:assembleDebug --stacktrace
 
+      - name: Split APK into four parts
+        shell: bash
+        run: |
+          mkdir -p stage1-parts
+          split -n 4 -d -a 2 \
+            prototypes/gold-motion-true3d-stage1/app/build/outputs/apk/debug/app-debug.apk \
+            stage1-parts/GOLD_TRUE3D_STAGE1.part
+          sha256sum prototypes/gold-motion-true3d-stage1/app/build/outputs/apk/debug/app-debug.apk \
+            > stage1-parts/GOLD_TRUE3D_STAGE1_SHA256.txt
+          ls -lh stage1-parts
+
       - uses: actions/upload-artifact@v4
         with:
-          name: gold-motion-true3d-stage1-apk
-          path: prototypes/gold-motion-true3d-stage1/app/build/outputs/apk/debug/app-debug.apk
+          name: GOLD_TRUE3D_STAGE1_part00
+          path: stage1-parts/GOLD_TRUE3D_STAGE1.part00
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GOLD_TRUE3D_STAGE1_part01
+          path: stage1-parts/GOLD_TRUE3D_STAGE1.part01
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GOLD_TRUE3D_STAGE1_part02
+          path: stage1-parts/GOLD_TRUE3D_STAGE1.part02
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GOLD_TRUE3D_STAGE1_part03
+          path: stage1-parts/GOLD_TRUE3D_STAGE1.part03
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GOLD_TRUE3D_STAGE1_SHA256
+          path: stage1-parts/GOLD_TRUE3D_STAGE1_SHA256.txt
           if-no-files-found: error
