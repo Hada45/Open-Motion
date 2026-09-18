@@ -26,11 +26,136 @@ jobs:
       - name: Clone TachiyomiJ2K
         run: git clone --depth 1 https://github.com/Jays2Kings/tachiyomiJ2K.git j2k
 
-      - name: Apply FTP Phase 2 patch
+      - name: Install FTP Phase 2 source
         run: |
-          cd j2k
-          git apply --check ../j2k-build/tachiyomiJ2K-ftp-phase2-cumulative.patch
-          git apply ../j2k-build/tachiyomiJ2K-ftp-phase2-cumulative.patch
+          python3 <<'PY'
+          from pathlib import Path
+
+          root = Path("j2k")
+          patch = Path("j2k-build/tachiyomiJ2K-ftp-phase2-cumulative.patch").read_text()
+
+          def extract_new_file(relpath: str) -> str:
+              marker = f"diff --git a/{relpath} b/{relpath}"
+              if marker not in patch:
+                  raise SystemExit(f"missing patch section: {relpath}")
+              section = patch.split(marker, 1)[1]
+              if "\ndiff --git " in section:
+                  section = section.split("\ndiff --git ", 1)[0]
+              lines = section.splitlines()
+              try:
+                  hunk = next(i for i, line in enumerate(lines) if line.startswith("@@"))
+              except StopIteration:
+                  raise SystemExit(f"missing hunk: {relpath}")
+              out = []
+              for line in lines[hunk + 1:]:
+                  if line.startswith("+") and not line.startswith("+++"):
+                      out.append(line[1:])
+                  elif line.startswith("\\ No newline"):
+                      pass
+                  elif line:
+                      raise SystemExit(f"unexpected line in new-file patch {relpath}: {line[:80]}")
+              return "\n".join(out) + "\n"
+
+          def write_new(relpath: str):
+              p = root / relpath
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(extract_new_file(relpath))
+
+          write_new("app/src/main/java/eu/kanade/tachiyomi/source/online/all/FtpSource.kt")
+          write_new("app/src/main/java/eu/kanade/tachiyomi/ui/setting/SourcePreferencesController.kt")
+
+          def replace_once(relpath: str, old: str, new: str):
+              p = root / relpath
+              s = p.read_text()
+              if new in s:
+                  return
+              if old not in s:
+                  raise SystemExit(f"anchor not found in {relpath}: {old[:100]!r}")
+              p.write_text(s.replace(old, new, 1))
+
+          # Dependency
+          replace_once(
+              "app/build.gradle.kts",
+              '    implementation("com.squareup.okio:okio:3.18.0")\n',
+              '    implementation("com.squareup.okio:okio:3.18.0")\n\n'
+              '    // FTP source\n'
+              '    implementation("commons-net:commons-net:3.13.0")\n',
+          )
+
+          # Register built-in FTP source.
+          replace_once(
+              "app/src/main/java/eu/kanade/tachiyomi/source/SourceManager.kt",
+              "import eu.kanade.tachiyomi.source.online.all.Cubari\n",
+              "import eu.kanade.tachiyomi.source.online.all.Cubari\n"
+              "import eu.kanade.tachiyomi.source.online.all.FtpSource\n",
+          )
+          replace_once(
+              "app/src/main/java/eu/kanade/tachiyomi/source/SourceManager.kt",
+              "                    val mutableMap = ConcurrentHashMap<Long, Source>(mapOf(LocalSource.ID to LocalSource(context)))\n",
+              "                    val ftpSource = FtpSource(context)\n"
+              "                    val mutableMap =\n"
+              "                        ConcurrentHashMap<Long, Source>(\n"
+              "                            mapOf(\n"
+              "                                LocalSource.ID to LocalSource(context),\n"
+              "                                ftpSource.id to ftpSource,\n"
+              "                            ),\n"
+              "                        )\n",
+          )
+
+          # Route settings for a built-in configurable source.
+          browse = "app/src/main/java/eu/kanade/tachiyomi/ui/source/browse/BrowseSourceController.kt"
+          replace_once(
+              browse,
+              "import eu.kanade.tachiyomi.source.online.HttpSource\n",
+              "import eu.kanade.tachiyomi.source.online.HttpSource\n"
+              "import eu.kanade.tachiyomi.source.online.all.FtpSource\n",
+          )
+          replace_once(
+              browse,
+              "import eu.kanade.tachiyomi.ui.manga.MangaDetailsController\n",
+              "import eu.kanade.tachiyomi.ui.manga.MangaDetailsController\n"
+              "import eu.kanade.tachiyomi.ui.setting.SourcePreferencesController\n",
+          )
+          replace_once(
+              browse,
+              "        val isHttpSource = presenter.source is HttpSource\n",
+              "        val isHttpSource = presenter.source is HttpSource && presenter.source !is FtpSource\n",
+          )
+          replace_once(
+              browse,
+              """    private fun openSourceSettings() {
+                  presenter.source.pkgName()?.let { pkgName ->
+                      router.pushController(
+                          ExtensionDetailsController(
+                              pkgName,
+                              presenter.source.id,
+                          ).withFadeTransaction(),
+                      )
+                  }
+              }
+          """,
+              """    private fun openSourceSettings() {
+                  val source = presenter.source
+                  val pkgName = source.pkgName()
+                  if (pkgName != null) {
+                      router.pushController(
+                          ExtensionDetailsController(
+                              pkgName,
+                              source.id,
+                          ).withFadeTransaction(),
+                      )
+                      return
+                  }
+
+                  if (source is ConfigurableSource) {
+                      router.pushController(SourcePreferencesController(source.id).withFadeTransaction())
+                  }
+              }
+          """,
+          )
+
+          print("FTP source installed")
+          PY
 
       - name: Build Dev Debug APK
         run: |
