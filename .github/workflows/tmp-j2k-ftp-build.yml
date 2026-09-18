@@ -161,7 +161,7 @@ jobs:
         run: |
           cd j2k
           chmod +x gradlew
-          ./gradlew assembleDevDebug --no-daemon --stacktrace
+          ./gradlew assembleDevDebug --no-daemon --stacktrace -x formatKotlin -x formatKotlinMain
 
       - name: Show APKs
         if: always()
