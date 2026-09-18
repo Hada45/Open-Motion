@@ -1,0 +1,51 @@
+name: Temporary J2K FTP APK build
+
+on:
+  push:
+    branches:
+      - tmp-j2k-ftp-build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout build assets
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Clone TachiyomiJ2K
+        run: git clone --depth 1 https://github.com/Jays2Kings/tachiyomiJ2K.git j2k
+
+      - name: Apply FTP Phase 2 patch
+        run: |
+          cd j2k
+          git apply --check ../j2k-build/tachiyomiJ2K-ftp-phase2-cumulative.patch
+          git apply ../j2k-build/tachiyomiJ2K-ftp-phase2-cumulative.patch
+
+      - name: Build Dev Debug APK
+        run: |
+          cd j2k
+          chmod +x gradlew
+          ./gradlew assembleDevDebug --no-daemon --stacktrace
+
+      - name: Show APKs
+        if: always()
+        run: |
+          find j2k/app/build/outputs/apk -type f -name '*.apk' -print 2>/dev/null || true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TachiyomiJ2K-FTP-Phase2
+          path: j2k/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
