@@ -82,6 +82,19 @@ jobs:
               '    implementation("commons-net:commons-net:3.13.0")\n',
           )
 
+          # J2K pins an archived JitPack fork that can currently return 404.
+          # Use the same FlexibleAdapter release now republished on Maven Central.
+          replace_once(
+              "app/build.gradle.kts",
+              '    implementation("com.github.arkon.FlexibleAdapter:flexible-adapter:c8013533")\n',
+              '    implementation("eu.davidea:flexible-adapter:5.1.0")\n',
+          )
+          replace_once(
+              "app/build.gradle.kts",
+              '    implementation("com.github.arkon.FlexibleAdapter:flexible-adapter-ui:c8013533")\n',
+              '    implementation("eu.davidea:flexible-adapter-ui:1.0.0")\n',
+          )
+
           # Register built-in FTP source.
           replace_once(
               "app/src/main/java/eu/kanade/tachiyomi/source/SourceManager.kt",
