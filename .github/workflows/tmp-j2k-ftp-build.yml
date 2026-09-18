@@ -28,6 +28,75 @@ jobs:
           git clone https://github.com/arkon/FlexibleAdapter.git flexible
           cd flexible
           git checkout c8013533
+          python3 <<'PY'
+          from pathlib import Path
+
+          # Keep only the two runtime modules. The archived repo's publishing/versioning
+          # plugins are not needed for an AAR build and their old transitive artifacts
+          # no longer exist in current repositories.
+          Path("settings.gradle").write_text(
+              "include ':flexible-adapter', ':flexible-adapter-ui'\n"
+          )
+
+          Path("build.gradle").write_text(r"""
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath "com.android.tools.build:gradle:4.0.0"
+              }
+          }
+
+          allprojects {
+              ext {
+                  minSdk = 14
+                  targetSdk = 30
+                  recyclerViewVer = '1.1.0'
+                  googleVer = '1.3.0'
+                  androidx = [
+                      recyclerView: "androidx.recyclerview:recyclerview:${recyclerViewVer}"
+                  ]
+                  google = [
+                      material: "com.google.android.material:material:${googleVer}"
+                  ]
+              }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          """)
+
+          def simplify(path, version_name, version_code):
+              p = Path(path)
+              s = p.read_text()
+              s = s.replace("apply plugin: 'com.vanniktech.android.javadoc'\n", "")
+              s = s.replace("apply plugin: 'eu.davidea.grabver'\n", "")
+              start = s.find("versioning {")
+              if start >= 0:
+                  depth = 0
+                  end = None
+                  for i in range(start, len(s)):
+                      if s[i] == "{":
+                          depth += 1
+                      elif s[i] == "}":
+                          depth -= 1
+                          if depth == 0:
+                              end = i + 1
+                              break
+                  if end is None:
+                      raise SystemExit(f"Unclosed versioning block in {path}")
+                  s = s[:start] + f'version = "{version_name}"\n' + s[end:]
+              s = s.replace("version = versioning.name\n", "")
+              s = s.replace("versionCode versioning.code", f"versionCode {version_code}")
+              s = s.replace("versionName versioning.name", f'versionName "{version_name}"')
+              p.write_text(s)
+
+          simplify("flexible-adapter/build.gradle", "5.1.0", 50100)
+          simplify("flexible-adapter-ui/build.gradle", "1.0.0", 10000)
+          PY
           chmod +x gradlew
           ./gradlew :flexible-adapter:assembleRelease :flexible-adapter-ui:assembleRelease --no-daemon --stacktrace
 
