@@ -1,4 +1,4 @@
-name: Temporary J2K FTP APK build
+name: Repack J2K FTP ARM64 APK
 
 on:
   push:
@@ -8,269 +8,32 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  build:
+  repack:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
-      - name: Checkout build assets
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 11 for legacy FlexibleAdapter
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '11'
-
-      - name: Build exact Arkon FlexibleAdapter AARs
+      - name: Download successful build artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git clone https://github.com/arkon/FlexibleAdapter.git flexible
-          cd flexible
-          git checkout c8013533
-          python3 <<'PY'
-          from pathlib import Path
+          gh api /repos/Hada45/Open-Motion/actions/artifacts/10537434788/zip > all-apks.zip
+          mkdir extracted
+          unzip -q all-apks.zip -d extracted
+          find extracted -type f -name '*.apk' -print
 
-          # Keep only the two runtime modules. The archived repo's publishing/versioning
-          # plugins are not needed for an AAR build and their old transitive artifacts
-          # no longer exist in current repositories.
-          Path("settings.gradle").write_text(
-              "include ':flexible-adapter', ':flexible-adapter-ui'\n"
-          )
-
-          Path("build.gradle").write_text(r"""
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath "com.android.tools.build:gradle:4.0.0"
-              }
-          }
-
-          allprojects {
-              ext {
-                  minSdk = 14
-                  targetSdk = 30
-                  recyclerViewVer = '1.1.0'
-                  googleVer = '1.3.0'
-                  androidx = [
-                      recyclerView: "androidx.recyclerview:recyclerview:${recyclerViewVer}"
-                  ]
-                  google = [
-                      material: "com.google.android.material:material:${googleVer}"
-                  ]
-              }
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          """)
-
-          def simplify(path, version_name, version_code):
-              p = Path(path)
-              s = p.read_text()
-              s = s.replace("apply plugin: 'com.vanniktech.android.javadoc'\n", "")
-              s = s.replace("apply plugin: 'eu.davidea.grabver'\n", "")
-              start = s.find("versioning {")
-              if start >= 0:
-                  depth = 0
-                  end = None
-                  for i in range(start, len(s)):
-                      if s[i] == "{":
-                          depth += 1
-                      elif s[i] == "}":
-                          depth -= 1
-                          if depth == 0:
-                              end = i + 1
-                              break
-                  if end is None:
-                      raise SystemExit(f"Unclosed versioning block in {path}")
-                  s = s[:start] + f'version = "{version_name}"\n' + s[end:]
-              s = s.replace("version = versioning.name\n", "")
-              s = s.replace("versionCode versioning.code", f"versionCode {version_code}")
-              s = s.replace("versionName versioning.name", f'versionName "{version_name}"')
-              p.write_text(s)
-
-          simplify("flexible-adapter/build.gradle", "5.1.0", 50100)
-          simplify("flexible-adapter-ui/build.gradle", "1.0.0", 10000)
-          PY
-          chmod +x gradlew
-          ./gradlew :flexible-adapter:assembleRelease :flexible-adapter-ui:assembleRelease --no-daemon --stacktrace
-
-      - name: Set up JDK 17 for TachiyomiJ2K
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Clone TachiyomiJ2K
+      - name: Prepare ARM64 APK
         run: |
-          git clone --depth 1 https://github.com/Jays2Kings/tachiyomiJ2K.git j2k
-          mkdir -p j2k/app/libs
-          cp flexible/flexible-adapter/build/outputs/aar/flexible-adapter-release.aar j2k/app/libs/
-          cp flexible/flexible-adapter-ui/build/outputs/aar/flexible-adapter-ui-release.aar j2k/app/libs/
+          APK="$(find extracted -type f -name 'app-dev-arm64-v8a-debug.apk' | head -n1)"
+          test -n "$APK"
+          cp "$APK" TachiyomiJ2K-FTP-Phase2-arm64-v8a.apk
+          ls -lh TachiyomiJ2K-FTP-Phase2-arm64-v8a.apk
+          sha256sum TachiyomiJ2K-FTP-Phase2-arm64-v8a.apk
 
-      - name: Install FTP Phase 2 source
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-
-          root = Path("j2k")
-          patch = Path("j2k-build/tachiyomiJ2K-ftp-phase2-cumulative.patch").read_text()
-
-          def extract_new_file(relpath: str) -> str:
-              marker = f"diff --git a/{relpath} b/{relpath}"
-              if marker not in patch:
-                  raise SystemExit(f"missing patch section: {relpath}")
-              section = patch.split(marker, 1)[1]
-              if "\ndiff --git " in section:
-                  section = section.split("\ndiff --git ", 1)[0]
-              lines = section.splitlines()
-              try:
-                  hunk = next(i for i, line in enumerate(lines) if line.startswith("@@"))
-              except StopIteration:
-                  raise SystemExit(f"missing hunk: {relpath}")
-              out = []
-              for line in lines[hunk + 1:]:
-                  if line.startswith("+") and not line.startswith("+++"):
-                      out.append(line[1:])
-                  elif line.startswith("\\ No newline"):
-                      pass
-                  elif line:
-                      raise SystemExit(f"unexpected line in new-file patch {relpath}: {line[:80]}")
-              return "\n".join(out) + "\n"
-
-          def write_new(relpath: str):
-              p = root / relpath
-              p.parent.mkdir(parents=True, exist_ok=True)
-              p.write_text(extract_new_file(relpath))
-
-          write_new("app/src/main/java/eu/kanade/tachiyomi/source/online/all/FtpSource.kt")
-          write_new("app/src/main/java/eu/kanade/tachiyomi/ui/setting/SourcePreferencesController.kt")
-
-          def replace_once(relpath: str, old: str, new: str):
-              p = root / relpath
-              s = p.read_text()
-              if new in s:
-                  return
-              if old not in s:
-                  raise SystemExit(f"anchor not found in {relpath}: {old[:100]!r}")
-              p.write_text(s.replace(old, new, 1))
-
-          # Dependency
-          replace_once(
-              "app/build.gradle.kts",
-              '    implementation("com.squareup.okio:okio:3.18.0")\n',
-              '    implementation("com.squareup.okio:okio:3.18.0")\n\n'
-              '    // FTP source\n'
-              '    implementation("commons-net:commons-net:3.13.0")\n',
-          )
-
-          # J2K pins an archived JitPack fork. Build that exact commit above and
-          # consume the AARs locally so its custom FastScroller API is preserved.
-          replace_once(
-              "app/build.gradle.kts",
-              '    implementation("com.github.arkon.FlexibleAdapter:flexible-adapter:c8013533")\n',
-              '    implementation(files("libs/flexible-adapter-release.aar"))\n',
-          )
-          replace_once(
-              "app/build.gradle.kts",
-              '    implementation("com.github.arkon.FlexibleAdapter:flexible-adapter-ui:c8013533")\n',
-              '    implementation(files("libs/flexible-adapter-ui-release.aar"))\n',
-          )
-
-          # Register built-in FTP source.
-          replace_once(
-              "app/src/main/java/eu/kanade/tachiyomi/source/SourceManager.kt",
-              "import eu.kanade.tachiyomi.source.online.all.Cubari\n",
-              "import eu.kanade.tachiyomi.source.online.all.Cubari\n"
-              "import eu.kanade.tachiyomi.source.online.all.FtpSource\n",
-          )
-          replace_once(
-              "app/src/main/java/eu/kanade/tachiyomi/source/SourceManager.kt",
-              "                    val mutableMap = ConcurrentHashMap<Long, Source>(mapOf(LocalSource.ID to LocalSource(context)))\n",
-              "                    val ftpSource = FtpSource(context)\n"
-              "                    val mutableMap =\n"
-              "                        ConcurrentHashMap<Long, Source>(\n"
-              "                            mapOf(\n"
-              "                                LocalSource.ID to LocalSource(context),\n"
-              "                                ftpSource.id to ftpSource,\n"
-              "                            ),\n"
-              "                        )\n",
-          )
-
-          # Route settings for a built-in configurable source.
-          browse = "app/src/main/java/eu/kanade/tachiyomi/ui/source/browse/BrowseSourceController.kt"
-          replace_once(
-              browse,
-              "import eu.kanade.tachiyomi.source.online.HttpSource\n",
-              "import eu.kanade.tachiyomi.source.online.HttpSource\n"
-              "import eu.kanade.tachiyomi.source.online.all.FtpSource\n",
-          )
-          replace_once(
-              browse,
-              "import eu.kanade.tachiyomi.ui.manga.MangaDetailsController\n",
-              "import eu.kanade.tachiyomi.ui.manga.MangaDetailsController\n"
-              "import eu.kanade.tachiyomi.ui.setting.SourcePreferencesController\n",
-          )
-          replace_once(
-              browse,
-              "        val isHttpSource = presenter.source is HttpSource\n",
-              "        val isHttpSource = presenter.source is HttpSource && presenter.source !is FtpSource\n",
-          )
-          replace_once(
-              browse,
-              """    private fun openSourceSettings() {
-                  presenter.source.pkgName()?.let { pkgName ->
-                      router.pushController(
-                          ExtensionDetailsController(
-                              pkgName,
-                              presenter.source.id,
-                          ).withFadeTransaction(),
-                      )
-                  }
-              }
-          """,
-              """    private fun openSourceSettings() {
-                  val source = presenter.source
-                  val pkgName = source.pkgName()
-                  if (pkgName != null) {
-                      router.pushController(
-                          ExtensionDetailsController(
-                              pkgName,
-                              source.id,
-                          ).withFadeTransaction(),
-                      )
-                      return
-                  }
-
-                  if (source is ConfigurableSource) {
-                      router.pushController(SourcePreferencesController(source.id).withFadeTransaction())
-                  }
-              }
-          """,
-          )
-
-          print("FTP source installed")
-          PY
-
-      - name: Build Dev Debug APK
-        run: |
-          cd j2k
-          chmod +x gradlew
-          ./gradlew assembleDevDebug --no-daemon --stacktrace -x formatKotlin -x formatKotlinMain
-
-      - name: Show APKs
-        if: always()
-        run: |
-          find j2k/app/build/outputs/apk -type f -name '*.apk' -print 2>/dev/null || true
-
-      - name: Upload APK artifact
+      - name: Upload ARM64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TachiyomiJ2K-FTP-Phase2
-          path: j2k/app/build/outputs/apk/**/*.apk
+          name: TachiyomiJ2K-FTP-Phase2-arm64
+          path: TachiyomiJ2K-FTP-Phase2-arm64-v8a.apk
           if-no-files-found: error
