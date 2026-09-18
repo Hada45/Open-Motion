@@ -17,14 +17,32 @@ jobs:
       - name: Checkout build assets
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 11 for legacy FlexibleAdapter
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Build exact Arkon FlexibleAdapter AARs
+        run: |
+          git clone https://github.com/arkon/FlexibleAdapter.git flexible
+          cd flexible
+          git checkout c8013533
+          chmod +x gradlew
+          ./gradlew :flexible-adapter:assembleRelease :flexible-adapter-ui:assembleRelease --no-daemon --stacktrace
+
+      - name: Set up JDK 17 for TachiyomiJ2K
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Clone TachiyomiJ2K
-        run: git clone --depth 1 https://github.com/Jays2Kings/tachiyomiJ2K.git j2k
+        run: |
+          git clone --depth 1 https://github.com/Jays2Kings/tachiyomiJ2K.git j2k
+          mkdir -p j2k/app/libs
+          cp flexible/flexible-adapter/build/outputs/aar/flexible-adapter-release.aar j2k/app/libs/
+          cp flexible/flexible-adapter-ui/build/outputs/aar/flexible-adapter-ui-release.aar j2k/app/libs/
 
       - name: Install FTP Phase 2 source
         run: |
@@ -82,17 +100,17 @@ jobs:
               '    implementation("commons-net:commons-net:3.13.0")\n',
           )
 
-          # J2K pins an archived JitPack fork that can currently return 404.
-          # Use the same FlexibleAdapter release now republished on Maven Central.
+          # J2K pins an archived JitPack fork. Build that exact commit above and
+          # consume the AARs locally so its custom FastScroller API is preserved.
           replace_once(
               "app/build.gradle.kts",
               '    implementation("com.github.arkon.FlexibleAdapter:flexible-adapter:c8013533")\n',
-              '    implementation("eu.davidea:flexible-adapter:5.1.0")\n',
+              '    implementation(files("libs/flexible-adapter-release.aar"))\n',
           )
           replace_once(
               "app/build.gradle.kts",
               '    implementation("com.github.arkon.FlexibleAdapter:flexible-adapter-ui:c8013533")\n',
-              '    implementation("eu.davidea:flexible-adapter-ui:1.0.0")\n',
+              '    implementation(files("libs/flexible-adapter-ui-release.aar"))\n',
           )
 
           # Register built-in FTP source.
