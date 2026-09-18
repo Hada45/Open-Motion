@@ -1,0 +1,1132 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -161,6 +161,9 @@ dependencies {
+     implementation("com.squareup.okhttp3:okhttp-zstd:$okhttpVersion")
+     implementation("com.squareup.okio:okio:3.18.0")
+
++    // FTP source
++    implementation("commons-net:commons-net:3.13.0")
++
+     // Chucker
+ //    val chuckerVersion = "3.5.2"
+ //    debugImplementation("com.github.ChuckerTeam.Chucker:library:$chuckerVersion")
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/source/SourceManager.kt b/app/src/main/java/eu/kanade/tachiyomi/source/SourceManager.kt
+--- a/app/src/main/java/eu/kanade/tachiyomi/source/SourceManager.kt
++++ b/app/src/main/java/eu/kanade/tachiyomi/source/SourceManager.kt
+@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SManga
+ import eu.kanade.tachiyomi.source.online.DelegatedHttpSource
+ import eu.kanade.tachiyomi.source.online.HttpSource
+ import eu.kanade.tachiyomi.source.online.all.Cubari
++import eu.kanade.tachiyomi.source.online.all.FtpSource
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.Job
+@@ -39,7 +40,14 @@ class SourceManager(
+     init {
+         scope.launch {
+             extensionManager.installedExtensionsFlow
+                 .collectLatest { extensions ->
+-                    val mutableMap = ConcurrentHashMap<Long, Source>(mapOf(LocalSource.ID to LocalSource(context)))
++                    val ftpSource = FtpSource(context)
++                    val mutableMap =
++                        ConcurrentHashMap<Long, Source>(
++                            mapOf(
++                                LocalSource.ID to LocalSource(context),
++                                ftpSource.id to ftpSource,
++                            ),
++                        )
+                     extensions.forEach { extension ->
+                         extension.sources.forEach {
+                             mutableMap[it.id] = it
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/source/browse/BrowseSourceController.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/source/browse/BrowseSourceController.kt
+--- a/app/src/main/java/eu/kanade/tachiyomi/ui/source/browse/BrowseSourceController.kt
++++ b/app/src/main/java/eu/kanade/tachiyomi/ui/source/browse/BrowseSourceController.kt
+@@ -31,5 +31,6 @@
+ import eu.kanade.tachiyomi.source.model.FilterList
+ import eu.kanade.tachiyomi.source.online.HttpSource
++import eu.kanade.tachiyomi.source.online.all.FtpSource
+ import eu.kanade.tachiyomi.source.pkgName
+ import eu.kanade.tachiyomi.ui.base.controller.BaseCoroutineController
+ import eu.kanade.tachiyomi.ui.extension.details.ExtensionDetailsController
+@@ -40,5 +41,6 @@
+ import eu.kanade.tachiyomi.ui.main.SearchActivity
+ import eu.kanade.tachiyomi.ui.manga.MangaDetailsController
++import eu.kanade.tachiyomi.ui.setting.SourcePreferencesController
+ import eu.kanade.tachiyomi.ui.source.BrowseController
+ import eu.kanade.tachiyomi.ui.source.globalsearch.GlobalSearchController
+ import eu.kanade.tachiyomi.ui.source.searchhistory.FilterApplyResult
+@@ -389,7 +391,7 @@ open class BrowseSourceController(
+     override fun onPrepareOptionsMenu(menu: Menu) {
+         super.onPrepareOptionsMenu(menu)
+
+-        val isHttpSource = presenter.source is HttpSource
++        val isHttpSource = presenter.source is HttpSource && presenter.source !is FtpSource
+         menu.findItem(R.id.action_open_in_web_view).isVisible = isHttpSource
+
+         val isConfigurableSource = presenter.source is ConfigurableSource
+@@ -622,14 +624,21 @@ class BrowseSourceController(
+     }
+
+     private fun openSourceSettings() {
+-        presenter.source.pkgName()?.let { pkgName ->
++        val source = presenter.source
++        val pkgName = source.pkgName()
++        if (pkgName != null) {
+             router.pushController(
+                 ExtensionDetailsController(
+                     pkgName,
+-                    presenter.source.id,
++                    source.id,
+                 ).withFadeTransaction(),
+             )
++            return
++        }
++
++        if (source is ConfigurableSource) {
++            router.pushController(SourcePreferencesController(source.id).withFadeTransaction())
+         }
+     }
+
+     override fun onChangeStarted(
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/source/online/all/FtpSource.kt b/app/src/main/java/eu/kanade/tachiyomi/source/online/all/FtpSource.kt
+new file mode 100644
+--- /dev/null
++++ b/app/src/main/java/eu/kanade/tachiyomi/source/online/all/FtpSource.kt
+@@ -0,0 +1,910 @@
++package eu.kanade.tachiyomi.source.online.all
++
++import android.content.Context
++import android.text.InputType
++import android.util.Base64
++import androidx.preference.EditTextPreference
++import androidx.preference.Preference
++import androidx.preference.PreferenceScreen
++import androidx.preference.SwitchPreferenceCompat
++import eu.kanade.tachiyomi.source.ConfigurableSource
++import eu.kanade.tachiyomi.source.model.FilterList
++import eu.kanade.tachiyomi.source.model.MangasPage
++import eu.kanade.tachiyomi.source.model.Page
++import eu.kanade.tachiyomi.source.model.SChapter
++import eu.kanade.tachiyomi.source.model.SManga
++import eu.kanade.tachiyomi.source.online.HttpSource
++import eu.kanade.tachiyomi.util.chapter.ChapterRecognition
++import eu.kanade.tachiyomi.util.lang.compareToCaseInsensitiveNaturalOrder
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.withContext
++import okhttp3.Interceptor
++import okhttp3.MediaType
++import okhttp3.MediaType.Companion.toMediaTypeOrNull
++import okhttp3.OkHttpClient
++import okhttp3.Protocol
++import okhttp3.Request
++import okhttp3.Response
++import okhttp3.ResponseBody
++import okio.BufferedSource
++import okio.ForwardingSource
++import okio.buffer
++import okio.source
++import org.apache.commons.net.ftp.FTP
++import org.apache.commons.net.ftp.FTPClient
++import org.apache.commons.net.ftp.FTPFile
++import org.apache.commons.net.ftp.FTPReply
++import java.io.File
++import java.io.FileOutputStream
++import java.io.IOException
++import java.nio.charset.StandardCharsets
++import java.security.MessageDigest
++import java.util.zip.ZipFile
++
++/**
++ * Built-in FTP source for TachiyomiJ2K.
++ *
++ * Supported remote layout:
++ *
++ * root/
++ *   Manga title/
++ *     cover.jpg
++ *     Chapter 001/
++ *       001.jpg
++ *       002.webp
++ *     Chapter 002.cbz
++ *     Chapter 003.zip
++ *
++ * Directory chapters are streamed directly from FTP one page at a time.
++ * CBZ/ZIP chapters are downloaded once to an app-cache archive and pages are
++ * served from that local archive through J2K's normal HttpPageLoader pipeline.
++ */
++class FtpSource(
++    private val context: Context,
++) : HttpSource(),
++    ConfigurableSource {
++
++    override val name = "FTP Library"
++    override val lang = "all"
++    override val supportsLatest = false
++
++    // Synthetic HTTP origin consumed by FtpInterceptor before any real HTTP request.
++    override val baseUrl = INTERNAL_BASE_URL
++
++    override val client: OkHttpClient by lazy {
++        network.client
++            .newBuilder()
++            .addInterceptor(FtpInterceptor())
++            .build()
++    }
++
++    override fun toString() = name
++
++    override suspend fun getPopularManga(page: Int): MangasPage {
++        if (page != 1) return MangasPage(emptyList(), false)
++        return MangasPage(listManga(query = ""), false)
++    }
++
++    override suspend fun getSearchManga(
++        page: Int,
++        query: String,
++        filters: FilterList,
++    ): MangasPage {
++        if (page != 1) return MangasPage(emptyList(), false)
++        return MangasPage(listManga(query), false)
++    }
++
++    override suspend fun getLatestUpdates(page: Int): MangasPage =
++        MangasPage(emptyList(), false)
++
++    private suspend fun listManga(query: String): List<SManga> =
++        withFtp { ftp, cfg ->
++            ftp.listFiles(cfg.root)
++                .asSequence()
++                .filter(FTPFile::isDirectory)
++                .filterNot { isHiddenOrSpecial(it.name) }
++                .filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
++                .sortedWith { a, b -> a.name.compareToCaseInsensitiveNaturalOrder(b.name) }
++                .map { dir ->
++                    val relative = dir.name
++                    val mangaPath = remotePath(cfg.root, relative)
++                    val cover = findCover(ftp, mangaPath)
++
++                    SManga.create().apply {
++                        title = dir.name
++                        url = relative
++                        thumbnail_url =
++                            cover?.let {
++                                buildFileInternalUrl(
++                                    cfg,
++                                    remotePath(mangaPath, it.name),
++                                )
++                            }
++                    }
++                }
++                .toList()
++        }
++
++    override suspend fun getMangaDetails(manga: SManga): SManga =
++        manga.apply {
++            initialized = true
++        }
++
++    override suspend fun getChapterList(manga: SManga): List<SChapter> =
++        withFtp { ftp, cfg ->
++            val mangaPath = remotePath(cfg.root, manga.url)
++
++            ftp.listFiles(mangaPath)
++                .asSequence()
++                .filterNot { isHiddenOrSpecial(it.name) }
++                .filter { it.isDirectory || (it.isFile && isArchiveName(it.name)) }
++                .map { chapterEntry ->
++                    SChapter.create().apply {
++                        url = "${manga.url}/${chapterEntry.name}"
++                        name =
++                            if (chapterEntry.isDirectory) {
++                                chapterEntry.name
++                            } else {
++                                chapterEntry.name.substringBeforeLast('.')
++                            }
++                        date_upload = 0L
++                        ChapterRecognition.parseChapterNumber(this, manga)
++                    }
++                }
++                .sortedWith { c1, c2 ->
++                    val numberOrder = c2.chapter_number.compareTo(c1.chapter_number)
++                    if (numberOrder != 0) {
++                        numberOrder
++                    } else {
++                        c2.name.compareToCaseInsensitiveNaturalOrder(c1.name)
++                    }
++                }
++                .toList()
++        }
++
++    override suspend fun getPageList(chapter: SChapter): List<Page> =
++        withFtp { ftp, cfg ->
++            val chapterPath = remotePath(cfg.root, chapter.url)
++            if (isArchiveName(chapterPath)) {
++                getArchivePages(ftp, cfg, chapterPath)
++            } else {
++                getDirectoryPages(ftp, cfg, chapterPath)
++            }
++        }
++
++    private fun getDirectoryPages(
++        ftp: FTPClient,
++        cfg: FtpConfig,
++        chapterPath: String,
++    ): List<Page> =
++        ftp.listFiles(chapterPath)
++            .asSequence()
++            .filter(FTPFile::isFile)
++            .filter { isImageName(it.name) }
++            .filterNot { isHiddenOrSpecial(it.name) }
++            .sortedWith { a, b -> a.name.compareToCaseInsensitiveNaturalOrder(b.name) }
++            .mapIndexed { index, file ->
++                val remoteFile = remotePath(chapterPath, file.name)
++                Page(
++                    index = index,
++                    imageUrl = buildFileInternalUrl(cfg, remoteFile),
++                )
++            }
++            .toList()
++
++    private fun getArchivePages(
++        ftp: FTPClient,
++        cfg: FtpConfig,
++        remoteArchive: String,
++    ): List<Page> {
++        val archiveFile = ensureArchiveCached(ftp, cfg, remoteArchive)
++
++        return ZipFile(archiveFile).use { zip ->
++            zip.entries()
++                .asSequence()
++                .filterNot { it.isDirectory }
++                .filter { isImageName(it.name) }
++                .filterNot { it.name.startsWith("__MACOSX/", ignoreCase = true) }
++                .sortedWith { a, b -> a.name.compareToCaseInsensitiveNaturalOrder(b.name) }
++                .mapIndexed { index, entry ->
++                    Page(
++                        index = index,
++                        imageUrl = buildArchiveInternalUrl(cfg, remoteArchive, entry.name),
++                    )
++                }
++                .toList()
++        }
++    }
++
++    override fun getFilterList() = FilterList()
++
++    override fun getMangaUrl(manga: SManga): String = baseUrl
++
++    override fun getChapterUrl(chapter: SChapter): String = baseUrl
++
++    /**
++     * Used by SourcePreferencesController.
++     */
++    suspend fun testConnection(): String =
++        withFtp { ftp, cfg ->
++            val entries = ftp.listFiles(cfg.root)
++            if (!FTPReply.isPositiveCompletion(ftp.replyCode)) {
++                throw IOException(
++                    "Could not list ${cfg.root}: ${ftp.replyString.trim()}",
++                )
++            }
++
++            val mangaFolders =
++                entries.count {
++                    it.isDirectory && !isHiddenOrSpecial(it.name)
++                }
++
++            "Connected to ${cfg.host}:${cfg.port} • $mangaFolders manga folder(s)"
++        }
++
++    /**
++     * Clears only the remote CBZ/ZIP cache; normal J2K chapter/image cache is untouched.
++     * Returns the number of bytes that were removed.
++     */
++    suspend fun clearArchiveCache(): Long =
++        withContext(Dispatchers.IO) {
++            val dir = archiveCacheDir
++            val bytes =
++                dir.walkTopDown()
++                    .filter(File::isFile)
++                    .sumOf(File::length)
++            dir.deleteRecursively()
++            dir.mkdirs()
++            bytes
++        }
++
++    override fun setupPreferenceScreen(screen: PreferenceScreen) {
++        val prefs = getSourcePreferences()
++        val ctx = screen.context
++
++        screen.addPreference(
++            EditTextPreference(ctx).apply {
++                key = PREF_HOST
++                title = "FTP host"
++                dialogTitle = "FTP host"
++                summaryProvider = Preference.SummaryProvider<EditTextPreference> {
++                    it.text?.takeIf(String::isNotBlank) ?: "Not configured"
++                }
++            },
++        )
++
++        screen.addPreference(
++            EditTextPreference(ctx).apply {
++                key = PREF_PORT
++                title = "Port"
++                dialogTitle = "FTP port"
++                setDefaultValue(DEFAULT_PORT.toString())
++                summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
++                setOnBindEditTextListener {
++                    it.inputType = InputType.TYPE_CLASS_NUMBER
++                }
++            },
++        )
++
++        screen.addPreference(
++            EditTextPreference(ctx).apply {
++                key = PREF_USERNAME
++                title = "Username"
++                dialogTitle = "FTP username"
++                setDefaultValue(DEFAULT_USERNAME)
++                summaryProvider = Preference.SummaryProvider<EditTextPreference> {
++                    it.text?.takeIf(String::isNotBlank) ?: DEFAULT_USERNAME
++                }
++            },
++        )
++
++        screen.addPreference(
++            EditTextPreference(ctx).apply {
++                key = PREF_PASSWORD
++                title = "Password"
++                dialogTitle = "FTP password"
++                summaryProvider = Preference.SummaryProvider<EditTextPreference> {
++                    if (it.text.isNullOrEmpty()) "Not set" else "••••••••"
++                }
++                setOnBindEditTextListener {
++                    it.inputType =
++                        InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
++                }
++            },
++        )
++
++        screen.addPreference(
++            EditTextPreference(ctx).apply {
++                key = PREF_ROOT
++                title = "Root directory"
++                dialogTitle = "FTP root directory"
++                setDefaultValue(DEFAULT_ROOT)
++                summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
++            },
++        )
++
++        screen.addPreference(
++            SwitchPreferenceCompat(ctx).apply {
++                key = PREF_PASSIVE
++                title = "Passive mode"
++                summary = "Recommended for Wi-Fi, NAT, VPS, and mobile networks"
++                setDefaultValue(true)
++            },
++        )
++
++        // Make defaults available even before each dialog has been opened.
++        val editor = prefs.edit()
++        var changed = false
++        if (!prefs.contains(PREF_PORT)) {
++            editor.putString(PREF_PORT, DEFAULT_PORT.toString())
++            changed = true
++        }
++        if (!prefs.contains(PREF_USERNAME)) {
++            editor.putString(PREF_USERNAME, DEFAULT_USERNAME)
++            changed = true
++        }
++        if (!prefs.contains(PREF_ROOT)) {
++            editor.putString(PREF_ROOT, DEFAULT_ROOT)
++            changed = true
++        }
++        if (!prefs.contains(PREF_PASSIVE)) {
++            editor.putBoolean(PREF_PASSIVE, true)
++            changed = true
++        }
++        if (changed) editor.apply()
++    }
++
++    private fun config(): FtpConfig {
++        val prefs = getSourcePreferences()
++        val host = prefs.getString(PREF_HOST, "").orEmpty().trim()
++        if (host.isBlank()) {
++            throw IOException(
++                "FTP host is not configured. Open FTP Library source settings first.",
++            )
++        }
++
++        val port =
++            prefs.getString(PREF_PORT, DEFAULT_PORT.toString())
++                ?.toIntOrNull()
++                ?.takeIf { it in 1..65535 }
++                ?: DEFAULT_PORT
++
++        val username =
++            prefs.getString(PREF_USERNAME, DEFAULT_USERNAME)
++                .orEmpty()
++                .ifBlank { DEFAULT_USERNAME }
++
++        val password = prefs.getString(PREF_PASSWORD, "").orEmpty()
++        val root = normalizeRoot(prefs.getString(PREF_ROOT, DEFAULT_ROOT).orEmpty())
++        val passive = prefs.getBoolean(PREF_PASSIVE, true)
++
++        return FtpConfig(
++            host = host,
++            port = port,
++            username = username,
++            password = password,
++            root = root,
++            passive = passive,
++        )
++    }
++
++    private suspend fun <T> withFtp(block: (FTPClient, FtpConfig) -> T): T =
++        withContext(Dispatchers.IO) {
++            val cfg = config()
++            val ftp = createConnectedClient(cfg)
++            try {
++                block(ftp, cfg)
++            } finally {
++                closeClient(ftp)
++            }
++        }
++
++    private fun findCover(
++        ftp: FTPClient,
++        mangaPath: String,
++    ): FTPFile? =
++        runCatching {
++            ftp.listFiles(mangaPath).firstOrNull { file ->
++                file.isFile &&
++                    file.name.substringBeforeLast('.', file.name)
++                        .equals("cover", ignoreCase = true) &&
++                    isImageName(file.name)
++            }
++        }.getOrNull()
++
++    private val archiveCacheDir: File
++        get() =
++            File(context.cacheDir, ARCHIVE_CACHE_DIRECTORY).apply {
++                if (!exists()) mkdirs()
++            }
++
++    /**
++     * Cache identity is endpoint + remote path. A small metadata file tracks remote
++     * size/MDTM so reopening a chapter can invalidate a changed archive.
++     */
++    private fun archiveCacheFile(
++        cfg: FtpConfig,
++        remoteArchive: String,
++    ): File {
++        val key = sha256("${endpointKey(cfg)}|$remoteArchive")
++        return File(archiveCacheDir, "$key.zip")
++    }
++
++    private fun archiveMetaFile(archive: File): File =
++        File(archive.parentFile, "${archive.name}.meta")
++
++    private fun ensureArchiveCached(
++        ftp: FTPClient,
++        cfg: FtpConfig,
++        remoteArchive: String,
++    ): File {
++        val target = archiveCacheFile(cfg, remoteArchive)
++        val meta = archiveMetaFile(target)
++        val fingerprint = remoteFingerprint(ftp, remoteArchive)
++
++        if (
++            target.isFile &&
++            target.length() > 0L &&
++            meta.isFile &&
++            runCatching { meta.readText() }.getOrNull() == fingerprint
++        ) {
++            target.setLastModified(System.currentTimeMillis())
++            return target
++        }
++
++        val tmp = File(target.parentFile, "${target.name}.tmp")
++        tmp.delete()
++
++        try {
++            FileOutputStream(tmp).use { output ->
++                if (!ftp.retrieveFile(remoteArchive, output)) {
++                    throw IOException(
++                        "FTP download failed for $remoteArchive: ${ftp.replyString.trim()}",
++                    )
++                }
++            }
++
++            if (tmp.length() <= 0L) {
++                throw IOException("Downloaded archive is empty: $remoteArchive")
++            }
++
++            target.delete()
++            if (!tmp.renameTo(target)) {
++                tmp.copyTo(target, overwrite = true)
++                tmp.delete()
++            }
++            meta.writeText(fingerprint)
++            target.setLastModified(System.currentTimeMillis())
++            trimArchiveCache(target)
++            return target
++        } catch (t: Throwable) {
++            tmp.delete()
++            throw t
++        }
++    }
++
++    private fun remoteFingerprint(
++        ftp: FTPClient,
++        remoteArchive: String,
++    ): String {
++        val size =
++            runCatching {
++                ftp.mlistFile(remoteArchive)?.size
++                    ?: findRemoteFile(ftp, remoteArchive)?.size
++                    ?: -1L
++            }.getOrDefault(-1L)
++
++        val modified =
++            runCatching {
++                ftp.getModificationTime(remoteArchive).orEmpty().trim()
++            }.getOrDefault("")
++
++        return "$size|$modified"
++    }
++
++    private fun findRemoteFile(
++        ftp: FTPClient,
++        path: String,
++    ): FTPFile? {
++        val parent = path.substringBeforeLast('/', "/").ifBlank { "/" }
++        val name = path.substringAfterLast('/')
++        return ftp.listFiles(parent).firstOrNull { it.name == name }
++    }
++
++    private fun trimArchiveCache(keep: File) {
++        val archives =
++            archiveCacheDir.listFiles()
++                .orEmpty()
++                .filter { it.isFile && it.extension.equals("zip", ignoreCase = true) }
++                .sortedBy(File::lastModified)
++
++        var total = archives.sumOf(File::length)
++        if (total <= MAX_ARCHIVE_CACHE_BYTES) return
++
++        for (file in archives) {
++            if (total <= MAX_ARCHIVE_CACHE_BYTES) break
++            if (file == keep) continue
++
++            val size = file.length()
++            if (file.delete()) {
++                archiveMetaFile(file).delete()
++                total -= size
++            }
++        }
++    }
++
++    private inner class FtpInterceptor : Interceptor {
++        override fun intercept(chain: Interceptor.Chain): Response {
++            val request = chain.request()
++            if (request.url.host != INTERNAL_HOST) {
++                return chain.proceed(request)
++            }
++
++            val kind = request.url.pathSegments.firstOrNull()
++            return when (kind) {
++                PATH_FILE -> interceptRemoteFile(request)
++                PATH_ARCHIVE -> interceptArchiveEntry(request)
++                else -> throw IOException("Unknown internal FTP request: ${request.url}")
++            }
++        }
++
++        private fun interceptRemoteFile(request: Request): Response {
++            val remotePath =
++                request.url.pathSegments.getOrNull(2)
++                    ?.let(::decodeToken)
++                    ?: throw IOException("Invalid internal FTP file URL")
++
++            val cfg = config()
++            val ftp = createConnectedClient(cfg)
++
++            try {
++                val size =
++                    runCatching {
++                        ftp.mlistFile(remotePath)?.size
++                            ?: findRemoteFile(ftp, remotePath)?.size
++                            ?: -1L
++                    }.getOrDefault(-1L)
++
++                val stream =
++                    ftp.retrieveFileStream(remotePath)
++                        ?: throw IOException(
++                            "FTP RETR failed for $remotePath: ${ftp.replyString.trim()}",
++                        )
++
++                val body =
++                    FtpResponseBody(
++                        ftp = ftp,
++                        remotePath = remotePath,
++                        input = stream,
++                        length = size,
++                    )
++
++                return successResponse(request, remotePath, size, body)
++            } catch (t: Throwable) {
++                closeClient(ftp)
++                throw t
++            }
++        }
++
++        private fun interceptArchiveEntry(request: Request): Response {
++            val segments = request.url.pathSegments
++            if (segments.size < 4) {
++                throw IOException("Invalid internal FTP archive URL")
++            }
++
++            val remoteArchive = decodeToken(segments[2])
++            val entryName = decodeToken(segments[3])
++            val cfg = config()
++            var archive = archiveCacheFile(cfg, remoteArchive)
++
++            if (!archive.isFile || archive.length() <= 0L) {
++                val ftp = createConnectedClient(cfg)
++                try {
++                    archive = ensureArchiveCached(ftp, cfg, remoteArchive)
++                } finally {
++                    closeClient(ftp)
++                }
++            }
++
++            val zip = ZipFile(archive)
++            try {
++                val entry =
++                    zip.getEntry(entryName)
++                        ?: throw IOException(
++                            "Archive entry not found: $entryName",
++                        )
++
++                val body =
++                    ZipEntryResponseBody(
++                        zip = zip,
++                        entryName = entry.name,
++                        input = zip.getInputStream(entry),
++                        length = entry.size,
++                    )
++
++                return successResponse(
++                    request = request,
++                    contentPath = entry.name,
++                    length = entry.size,
++                    body = body,
++                )
++            } catch (t: Throwable) {
++                runCatching { zip.close() }
++                throw t
++            }
++        }
++
++        private fun successResponse(
++            request: Request,
++            contentPath: String,
++            length: Long,
++            body: ResponseBody,
++        ): Response =
++            Response.Builder()
++                .request(request)
++                .protocol(Protocol.HTTP_1_1)
++                .code(200)
++                .message("OK")
++                .header(
++                    "Content-Type",
++                    mediaTypeFor(contentPath)?.toString() ?: "application/octet-stream",
++                )
++                .apply {
++                    if (length >= 0L) {
++                        header("Content-Length", length.toString())
++                    }
++                }
++                .body(body)
++                .build()
++    }
++
++    /**
++     * ResponseBody owning an FTP data connection. Closing the body finalizes RETR.
++     */
++    private class FtpResponseBody(
++        private val ftp: FTPClient,
++        private val remotePath: String,
++        input: java.io.InputStream,
++        private val length: Long,
++    ) : ResponseBody() {
++
++        private var closed = false
++
++        private val bufferedSource: BufferedSource =
++            object : ForwardingSource(input.source()) {
++                override fun close() {
++                    if (closed) return
++                    closed = true
++
++                    try {
++                        super.close()
++                    } finally {
++                        runCatching { ftp.completePendingCommand() }
++                        closeClient(ftp)
++                    }
++                }
++            }.buffer()
++
++        override fun contentType(): MediaType? = mediaTypeFor(remotePath)
++
++        override fun contentLength(): Long = length
++
++        override fun source(): BufferedSource = bufferedSource
++    }
++
++    /**
++     * ResponseBody owning a ZipFile so the archive stays open while Coil/J2K reads
++     * the entry stream.
++     */
++    private class ZipEntryResponseBody(
++        private val zip: ZipFile,
++        private val entryName: String,
++        input: java.io.InputStream,
++        private val length: Long,
++    ) : ResponseBody() {
++
++        private var closed = false
++
++        private val bufferedSource: BufferedSource =
++            object : ForwardingSource(input.source()) {
++                override fun close() {
++                    if (closed) return
++                    closed = true
++
++                    try {
++                        super.close()
++                    } finally {
++                        runCatching { zip.close() }
++                    }
++                }
++            }.buffer()
++
++        override fun contentType(): MediaType? = mediaTypeFor(entryName)
++
++        override fun contentLength(): Long = length
++
++        override fun source(): BufferedSource = bufferedSource
++    }
++
++    private data class FtpConfig(
++        val host: String,
++        val port: Int,
++        val username: String,
++        val password: String,
++        val root: String,
++        val passive: Boolean,
++    )
++
++    companion object {
++        private const val INTERNAL_HOST = "ftp.tachiyomij2k.invalid"
++        private const val INTERNAL_BASE_URL = "https://$INTERNAL_HOST"
++        private const val PATH_FILE = "file"
++        private const val PATH_ARCHIVE = "archive"
++
++        private const val DEFAULT_PORT = 21
++        private const val DEFAULT_ROOT = "/Manga"
++        private const val DEFAULT_USERNAME = "anonymous"
++
++        private const val PREF_HOST = "ftp_host"
++        private const val PREF_PORT = "ftp_port"
++        private const val PREF_USERNAME = "ftp_username"
++        private const val PREF_PASSWORD = "ftp_password"
++        private const val PREF_ROOT = "ftp_root"
++        private const val PREF_PASSIVE = "ftp_passive"
++
++        private const val ARCHIVE_CACHE_DIRECTORY = "ftp-archives"
++        private const val MAX_ARCHIVE_CACHE_BYTES = 512L * 1024L * 1024L
++
++        private val IMAGE_EXTENSIONS =
++            setOf(
++                "jpg",
++                "jpeg",
++                "png",
++                "webp",
++                "gif",
++                "avif",
++                "jxl",
++                "bmp",
++            )
++
++        private val ARCHIVE_EXTENSIONS = setOf("cbz", "zip")
++
++        private fun isImageName(name: String): Boolean =
++            name.substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS
++
++        private fun isArchiveName(name: String): Boolean =
++            name.substringAfterLast('.', "").lowercase() in ARCHIVE_EXTENSIONS
++
++        private fun isHiddenOrSpecial(name: String): Boolean =
++            name == "." || name == ".." || name.startsWith('.')
++
++        private fun normalizeRoot(root: String): String {
++            val normalized = root.trim().replace('\\', '/').ifBlank { "/" }
++            val withLeadingSlash =
++                if (normalized.startsWith('/')) {
++                    normalized
++                } else {
++                    "/$normalized"
++                }
++            return if (withLeadingSlash.length > 1) {
++                withLeadingSlash.trimEnd('/')
++            } else {
++                "/"
++            }
++        }
++
++        private fun remotePath(
++            base: String,
++            child: String,
++        ): String {
++            val b = if (base == "/") "" else base.trimEnd('/')
++            val c = child.replace('\\', '/').trim('/')
++            return "$b/$c".ifBlank { "/" }
++        }
++
++        private fun createConnectedClient(cfg: FtpConfig): FTPClient {
++            val ftp =
++                FTPClient().apply {
++                    controlEncoding = "UTF-8"
++                    connectTimeout = 15_000
++                    defaultTimeout = 15_000
++                    setDataTimeout(30_000)
++                }
++
++            try {
++                ftp.connect(cfg.host, cfg.port)
++
++                if (!FTPReply.isPositiveCompletion(ftp.replyCode)) {
++                    throw IOException(
++                        "FTP server rejected connection: ${ftp.replyString.trim()}",
++                    )
++                }
++
++                if (!ftp.login(cfg.username, cfg.password)) {
++                    throw IOException(
++                        "FTP login failed: ${ftp.replyString.trim()}",
++                    )
++                }
++
++                if (!ftp.setFileType(FTP.BINARY_FILE_TYPE)) {
++                    throw IOException("FTP server rejected binary transfer mode")
++                }
++
++                if (cfg.passive) {
++                    ftp.enterLocalPassiveMode()
++                } else {
++                    ftp.enterLocalActiveMode()
++                }
++
++                return ftp
++            } catch (t: Throwable) {
++                closeClient(ftp)
++                throw t
++            }
++        }
++
++        private fun closeClient(ftp: FTPClient) {
++            runCatching {
++                if (ftp.isConnected) ftp.logout()
++            }
++            runCatching {
++                if (ftp.isConnected) ftp.disconnect()
++            }
++        }
++
++        private fun endpointKey(cfg: FtpConfig): String =
++            sha256(
++                "${cfg.host}:${cfg.port}:${cfg.username}:${cfg.root}",
++            ).take(16)
++
++        private fun buildFileInternalUrl(
++            cfg: FtpConfig,
++            remoteFile: String,
++        ): String =
++            "$INTERNAL_BASE_URL/$PATH_FILE/${endpointKey(cfg)}/${encodeToken(remoteFile)}"
++
++        private fun buildArchiveInternalUrl(
++            cfg: FtpConfig,
++            remoteArchive: String,
++            entryName: String,
++        ): String =
++            "$INTERNAL_BASE_URL/$PATH_ARCHIVE/${endpointKey(cfg)}/" +
++                "${encodeToken(remoteArchive)}/${encodeToken(entryName)}"
++
++        private fun encodeToken(value: String): String =
++            Base64.encodeToString(
++                value.toByteArray(StandardCharsets.UTF_8),
++                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
++            )
++
++        private fun decodeToken(token: String): String =
++            try {
++                String(
++                    Base64.decode(
++                        token,
++                        Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
++                    ),
++                    StandardCharsets.UTF_8,
++                )
++            } catch (e: IllegalArgumentException) {
++                throw IOException("Invalid internal FTP path token", e)
++            }
++
++        private fun sha256(value: String): String =
++            MessageDigest.getInstance("SHA-256")
++                .digest(value.toByteArray(StandardCharsets.UTF_8))
++                .joinToString("") { "%02x".format(it) }
++
++        private fun mediaTypeFor(path: String): MediaType? =
++            when (path.substringAfterLast('.', "").lowercase()) {
++                "jpg", "jpeg" -> "image/jpeg"
++                "png" -> "image/png"
++                "webp" -> "image/webp"
++                "gif" -> "image/gif"
++                "avif" -> "image/avif"+                "jxl" -> "image/jxl"
++                "bmp" -> "image/bmp"
++                else -> "application/octet-stream"
++            }.toMediaTypeOrNull()
++    }
++}
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/setting/SourcePreferencesController.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/setting/SourcePreferencesController.kt
+new file mode 100644
+--- /dev/null
++++ b/app/src/main/java/eu/kanade/tachiyomi/ui/setting/SourcePreferencesController.kt
+@@ -0,0 +1,122 @@
++package eu.kanade.tachiyomi.ui.setting
++
++import android.os.Bundle
++import android.text.format.Formatter
++import androidx.preference.Preference
++import androidx.preference.PreferenceScreen
++import eu.kanade.tachiyomi.data.preference.SharedPreferencesDataStore
++import eu.kanade.tachiyomi.source.ConfigurableSource
++import eu.kanade.tachiyomi.source.SourceManager
++import eu.kanade.tachiyomi.source.online.all.FtpSource
++import kotlinx.coroutines.launch
++import uy.kohesive.injekt.Injekt
++import uy.kohesive.injekt.api.get
++
++/**
++ * Preference screen for configurable sources that are built into the app rather
++ * than installed as extension APKs.
++ */
++class SourcePreferencesController() : SettingsController() {
++    constructor(sourceId: Long) : this() {
++        args.putLong(SOURCE_ID_KEY, sourceId)
++    }
++
++    private val sourceId: Long
++        get() = args.getLong(SOURCE_ID_KEY)
++
++    private val source: ConfigurableSource?
++        get() = Injekt.get<SourceManager>().get(sourceId) as? ConfigurableSource
++
++    override fun onCreatePreferences(
++        savedInstanceState: Bundle?,
++        rootKey: String?,
++    ) {
++        source?.let { configurable ->
++            preferenceManager.preferenceDataStore =
++                SharedPreferencesDataStore(configurable.getSourcePreferences())
++        }
++        super.onCreatePreferences(savedInstanceState, rootKey)
++    }
++
++    override fun setupPreferenceScreen(screen: PreferenceScreen): PreferenceScreen =
++        screen.apply {
++            val configurable = source
++            title = configurable?.name ?: "Source settings"
++            configurable?.setupPreferenceScreen(this)
++
++            if (configurable is FtpSource) {
++                addPreference(
++                    Preference(context).apply {
++                        key = "ftp_test_connection_action"
++                        title = "Test connection"
++                        summary = "Connect, authenticate, and verify the configured root folder"
++                        isPersistent = false
++
++                        setOnPreferenceClickListener {
++                            isEnabled = false
++                            summary = "Testing…"
++
++                            viewScope.launch {
++                                val result =
++                                    runCatching {
++                                        configurable.testConnection()
++                                    }
++
++                                summary =
++                                    result.fold(
++                                        onSuccess = { it },
++                                        onFailure = {
++                                            "Failed: ${it.message ?: it.javaClass.simpleName}"
++                                        },
++                                    )
++                                isEnabled = true
++                            }
++                            true
++                        }
++                    },
++                )
++
++                addPreference(
++                    Preference(context).apply {
++                        key = "ftp_clear_archive_cache_action"
++                        title = "Clear FTP archive cache"
++                        summary = "Remove locally cached remote CBZ/ZIP files"
++                        isPersistent = false
++
++                        setOnPreferenceClickListener {
++                            isEnabled = false
++                            summary = "Clearing…"
++
++                            viewScope.launch {
++                                val result =
++                                    runCatching {
++                                        configurable.clearArchiveCache()
++                                    }
++
++                                summary =
++                                    result.fold(
++                                        onSuccess = { bytes ->
++                                            "Cleared ${
++                                                Formatter.formatShortFileSize(
++                                                    context,
++                                                    bytes,
++                                                )
++                                            }"
++                                        },
++                                        onFailure = {
++                                            "Failed: ${it.message ?: it.javaClass.simpleName}"
++                                        },
++                                    )
++                                isEnabled = true
++                            }
++                            true
++                        }
++                    },
++                )
++            }
++        }
++
++    companion object {
++        private const val SOURCE_ID_KEY = "source_id"
++    }
++}
