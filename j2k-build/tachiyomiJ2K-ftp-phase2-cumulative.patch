@@ -997,7 +997,8 @@ new file mode 100644
 +                "png" -> "image/png"
 +                "webp" -> "image/webp"
 +                "gif" -> "image/gif"
-+                "avif" -> "image/avif"+                "jxl" -> "image/jxl"
++                "avif" -> "image/avif"
++                "jxl" -> "image/jxl"
 +                "bmp" -> "image/bmp"
 +                else -> "application/octet-stream"
 +            }.toMediaTypeOrNull()
