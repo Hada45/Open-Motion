@@ -66,7 +66,7 @@
 <!-- V5.07 — Stage 5: worker-assisted off-main-thread multi-source preview decode. Different-source overlaps prefer a Blob module Worker running Mediabunny CanvasSink + OffscreenCanvas/createImageBitmap, transferable ImageBitmap frames feed the existing WebGL compositor, same-asset divergent cursors retain V5.06 HTMLVideo playback, and the entire V5.05 main-thread ring-buffer decoder remains an automatic fallback. Exporter remains unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Open Motion V5.283 - Community Keyboard Shortcuts · Experimental Single HTML</title>
+<title>Open Motion · GitHub 6876cbb · Export Resolution Fix</title>
 <!-- V5.31 — Installable PWA: manifest, branded icons, Chrome install promotion and offline shell. -->
 <meta name="theme-color" content="#10121d">
 <meta name="application-name" content="Open Motion">
@@ -29590,122 +29590,119 @@ function mediaCapabilitiesContentType(codec,width,height,fps=30){
   return codec.mime||'';
 }
 
-async function probeResolutionCapability(codec,preset,fps){
-  const {width,height}=dimensionsForPreset(preset.p);
-  const bitrate=Math.max(250000,preset.bitrate);
-  let definitive=false;
+// Capability queries must follow the selected export pipeline, not the device UA.
+// A supported configuration is not a guarantee that a complete project will encode.
+let exportResolutionGeneration=0,exportResolutionTimer=null;
 
-  // Best signal for recording capability: Media Capabilities API.
-  // H.264 must use a profile/level that matches the requested resolution.
-  const probeContentType=mediaCapabilitiesContentType(codec,width,height,fps);
-  if(navigator.mediaCapabilities?.encodingInfo && probeContentType){
-    try{
-      const info=await navigator.mediaCapabilities.encodingInfo({
-        type:'record',
-        video:{
-          contentType:probeContentType,
-          width,height,
-          bitrate,
-          framerate:fps
-        }
-      });
-      definitive=true;
-      if(info.supported===false)return {supported:false,smooth:false,powerEfficient:false,width,height,source:'mediaCapabilities'};
-      if(info.supported===true){
-        // "supported" is the hard gate. smooth/powerEfficient are advisory.
-        return {supported:true,smooth:info.smooth!==false,powerEfficient:info.powerEfficient!==false,width,height,source:'mediaCapabilities'};
-      }
-    }catch(e){}
+function exportResolutionSettings(){
+  const project=model.project;
+  return {
+    projectId:project?.id,width:project?.width,height:project?.height,
+    engine:selectedExportEngine(),codec:selectedExportCodec(),
+    fps:Math.min(120,Math.max(1,+$('#exportFps').value||project?.fps||30)),
+    bitrate:Math.max(250000,+$('#qualityRange').value*1000000||8000000),
+    webCodecs:typeof VideoEncoder!=='undefined'&&typeof VideoFrame!=='undefined',
+    platform:String(navigator.userAgentData?.platform||navigator.platform||navigator.userAgent||'')
+  };
+}
+
+function exportResolutionKey(settings){return JSON.stringify(settings);}
+
+async function queryExportResolution(call){
+  let timer;
+  try{
+    return await Promise.race([
+      Promise.resolve().then(call).then(result=>({status:'result',supported:typeof result?.supported==='boolean'?result.supported:null,smooth:result?.smooth??null,powerEfficient:result?.powerEfficient??null})).catch(()=>({status:'error',supported:null})),
+      new Promise(resolve=>{timer=setTimeout(()=>resolve({status:'timeout',supported:null}),1800);})
+    ]);
+  }finally{clearTimeout(timer);}
+}
+
+async function probeResolutionCapability(codec,preset,fps,settings=exportResolutionSettings()){
+  const even=n=>Math.max(2,Math.round(n/2)*2),scale=preset.p/Math.min(settings.width,settings.height);
+  const width=even(settings.width*scale),height=even(settings.height*scale),bitrate=settings.bitrate;
+  const base={width,height,bitrate,supported:null,smooth:null,powerEfficient:null};
+  // video() falls back to realtime when the WebCodecs frame/encoder APIs are absent.
+  const useWebCodecs=settings.engine!=='realtime'&&settings.webCodecs;
+  if(useWebCodecs){
+    const code=codecStringForWebCodecs(codec,width,height,fps);
+    if(typeof VideoEncoder.isConfigSupported!=='function'||!code)return {...base,source:'webcodecs',status:'unavailable'};
+    const stable=settings.engine==='deterministic';
+    const software=stable&&/Windows/i.test(settings.platform)&&['h264-mp4','hevc-mp4'].includes(codec.id);
+    const request={codec:code,width,height,bitrate,framerate:fps,hardwareAcceleration:stable?(software?'prefer-software':'no-preference'):'prefer-hardware',latencyMode:stable?'quality':'realtime'};
+    if(codec.id==='h264-mp4')request.avc={format:'avc'};
+    // Do not let MediaCapabilities(type:record) veto the WebCodecs pipeline.
+    const result=await queryExportResolution(()=>VideoEncoder.isConfigSupported(request));
+    return {...base,...result,source:'webcodecs',request};
   }
-
-  // Secondary capability signal when WebCodecs is exposed.
-  const wcCodec=codecStringForWebCodecs(codec,width,height,fps);
-  if(window.VideoEncoder?.isConfigSupported && wcCodec){
-    try{
-      const result=await VideoEncoder.isConfigSupported({
-        codec:wcCodec,width,height,
-        bitrate,
-        framerate:fps,
-        hardwareAcceleration:'no-preference'
-      });
-      definitive=true;
-      if(result.supported)return {supported:true,smooth:true,powerEfficient:true,width,height,source:'webcodecs'};
-      return {supported:false,smooth:false,powerEfficient:false,width,height,source:'webcodecs'};
-    }catch(e){}
+  const fallback=settings.engine!=='realtime';
+  if(typeof MediaRecorder==='undefined')return {...base,supported:false,source:'mediaRecorder',status:'unavailable',fallback};
+  const mime=mediaRecorderMimeForConfig(codec,width,height,fps);
+  if(mime&&typeof MediaRecorder.isTypeSupported==='function'){
+    try{if(!MediaRecorder.isTypeSupported(mime))return {...base,supported:false,source:'mediaRecorder',status:'result',fallback};}catch(_){}
   }
+  const contentType=mediaCapabilitiesContentType(codec,width,height,fps);
+  if(typeof navigator.mediaCapabilities?.encodingInfo!=='function'||!contentType)return {...base,source:'mediaCapabilities',status:'unavailable',fallback};
+  const request={type:'record',video:{contentType,width,height,bitrate,framerate:fps}};
+  return {...base,...await queryExportResolution(()=>navigator.mediaCapabilities.encodingInfo(request)),source:'mediaCapabilities',request,fallback};
+}
 
-  // Conservative fallback for browsers that cannot report encoder capability.
-  // It only defines an upper practical tier; MediaRecorder still performs the
-  // final validation when export starts.
-  const memory=Number(navigator.deviceMemory||0);
-  const cores=Number(navigator.hardwareConcurrency||2);
-  let maxP=720;
-  if(memory>=4||cores>=6)maxP=1080;
-  if(memory>=6&&cores>=6)maxP=1440;
-  if(memory>=8&&cores>=8)maxP=2160;
-  if(!memory&&cores>=8)maxP=1440;
-  return {supported:preset.p<=maxP,smooth:preset.p<=maxP,powerEfficient:preset.p<=maxP,width,height,source:definitive?'reported':'heuristic'};
+function markExportResolutionPending(){
+  const select=$('#exportRes'),hint=$('#resolutionSupportHint');
+  if(select){select.disabled=true;select.dataset.capabilityState='pending';}
+  if(hint){hint.dataset.resolutionPolicy='engine-specific';hint.textContent='Memeriksa resolusi untuk mesin ekspor yang dipilih…';}
+}
+
+function scheduleResolutionRefresh(){
+  ++exportResolutionGeneration;
+  clearTimeout(exportResolutionTimer);
+  markExportResolutionPending();
+  exportResolutionTimer=setTimeout(()=>refreshResolutionOptions(),250);
 }
 
 async function refreshResolutionOptions(){
+  clearTimeout(exportResolutionTimer);
   const select=$('#exportRes'),hint=$('#resolutionSupportHint');
   if(!select||!model.project)return [];
-
-  const codec=selectedExportCodec();
-  const fps=+$('#exportFps').value||model.project.fps||30;
-  const previous=select.value;
-  select.disabled=true;
-  hint.textContent='Mendeteksi kemampuan '+(codec.label||'encoder')+' pada perangkat…';
-
-  const checks=[];
-  for(const preset of EXPORT_RESOLUTION_PRESETS){
-    checks.push({preset,...await probeResolutionCapability(codec,preset,fps)});
-  }
-
-  let supported=checks.filter(x=>x.supported);
-  // A device should always get at least low-resolution fallbacks.
-  if(!supported.length){
-    supported=checks.filter(x=>x.preset.p<=480);
-  }
-
+  const generation=++exportResolutionGeneration,settings=exportResolutionSettings(),key=exportResolutionKey(settings),previous=select.value;
+  markExportResolutionPending();
+  let run=null;try{run=window.omsExportDiagnostics?.automaticStart(settings.codec,settings.fps);}catch(_){}
+  // Static configuration queries only: no encoder instances, video frames or GL contexts.
+  const checks=await Promise.all(EXPORT_RESOLUTION_PRESETS.map(async preset=>({preset,...await probeResolutionCapability(settings.codec,preset,settings.fps,settings)})));
+  if(generation!==exportResolutionGeneration||key!==exportResolutionKey(exportResolutionSettings()))return [];
+  const supported=checks.filter(x=>x.supported!==false);
   select.innerHTML='';
   for(const x of supported){
-    const o=document.createElement('option');
-    o.value=`${x.width}x${x.height}`;
-    const perf=(!x.smooth||!x.powerEfficient)&&x.preset.p>=1080?' • berat':'';
-    o.textContent=`${x.preset.label} • ${x.width}×${x.height}${perf}`;
-    o.dataset.p=String(x.preset.p);
-    select.appendChild(o);
+    const option=document.createElement('option');
+    option.value=`${x.width}x${x.height}`;
+    option.textContent=`${x.preset.label} • ${x.width}×${x.height}${x.supported===null?' • belum terverifikasi':''}`;
+    option.dataset.p=String(x.preset.p);
+    option.dataset.supported=String(x.supported);
+    select.appendChild(option);
   }
-
-  // Preserve a previous choice when still available. Otherwise choose the
-  // standard preset closest to the project's native short edge.
-  if([...select.options].some(o=>o.value===previous)){
-    select.value=previous;
+  if([...select.options].some(x=>x.value===previous))select.value=previous;
+  else{
+    const nativeP=Math.min(settings.width,settings.height);
+    const closest=[...select.options].sort((a,b)=>Math.abs(+a.dataset.p-nativeP)-Math.abs(+b.dataset.p-nativeP))[0];
+    if(closest)select.value=closest.value;
+  }
+  const verified=checks.filter(x=>x.supported===true),unknown=supported.filter(x=>x.supported===null);
+  select.dataset.capabilityState=!supported.length?'unsupported':unknown.length?'unverified':'verified';
+  select.disabled=!supported.length;
+  if(!supported.length){
+    const option=document.createElement('option');option.value='';option.textContent='Tidak ada resolusi yang didukung';select.appendChild(option);
+    hint.textContent='Encoder mesin ini melaporkan tidak mendukung konfigurasi yang diuji. Coba mesin, codec atau FPS lain; ini bukan batas resolusi perangkat.';
   }else{
-    const nativeP=Math.min(model.project.width,model.project.height);
-    let best=[...select.options][0];
-    let bestDist=Infinity;
-    for(const o of select.options){
-      const d=Math.abs(+o.dataset.p-nativeP);
-      if(d<bestDist){bestDist=d;best=o}
-    }
-    if(best)select.value=best.value;
+    const max=verified.at(-1),source=checks[0].source==='webcodecs'?'WebCodecs':'MediaRecorder / Media Capabilities';
+    hint.textContent=max?`Terkonfirmasi hingga ${max.preset.label} (${max.width}×${max.height}) • ${source}. Hasil ekspor tetap perlu diuji.`:`Kemampuan resolusi belum dapat diverifikasi • ${source}. Pilihan hingga 4K tersedia untuk dicoba, bukan jaminan dukungan.`;
+    if(max&&unknown.length)hint.textContent+=` ${unknown.length} pilihan belum terverifikasi.`;
+    if(checks[0].fallback)hint.textContent+=' WebCodecs tidak tersedia; ekspor memakai fallback Realtime.';
   }
-
-  select.disabled=false;
-  const max=supported.at(-1);
-  const maxLabel=max?`${max.preset.label} (${max.width}×${max.height})`:'tidak diketahui';
-  const source=max?.source==='mediaCapabilities'
-    ? 'Media Capabilities'
-    : max?.source==='webcodecs'
-      ? 'WebCodecs'
-      : 'estimasi perangkat';
-  hint.textContent=`Maksimum terdeteksi: ${maxLabel} • ${source}`;
-
   updateResolutionEstimate();
+  try{window.omsExportDiagnostics?.automaticFinish(run,checks,supported);}catch(_){}
   return supported;
 }
+
 
 function selectedExportDimensions(){
   const raw=$('#exportRes')?.value||'';
@@ -29724,7 +29721,7 @@ function updateResolutionEstimate(){
   const mb=(mbps*1_000_000/8)*model.project.duration/1_000_000;
   $('#estSize').textContent=`~${Math.max(1,Math.round(mb))} MB`;
   const hint=$('#resolutionSupportHint');
-  if(hint && !hint.textContent.includes('Maksimum'))hint.textContent=`Output ${width}×${height} • ${fps} fps`;
+  if(hint && hint.dataset.resolutionPolicy!=='engine-specific' && !hint.textContent.includes('Maksimum'))hint.textContent=`Output ${width}×${height} • ${fps} fps`;
 }
 
 const EXPORT_CODEC_CANDIDATES = [
@@ -29833,9 +29830,10 @@ function initExportEngineOptions(){
   const buttons=$$('#exportEngineOptions button');
   const valid=buttons.some(b=>b.dataset.engine===saved)?saved:'gpu-fast';
   buttons.forEach(b=>b.classList.toggle('active',b.dataset.engine===valid));
-  buttons.forEach(b=>b.onclick=()=>{
+  buttons.forEach(b=>b.onclick=async()=>{
     buttons.forEach(x=>x.classList.toggle('active',x===b));
     try{localStorage.setItem('oms_export_engine',b.dataset.engine||'gpu-fast')}catch(e){}
+    await refreshResolutionOptions();
   });
 }
 
@@ -29890,6 +29888,11 @@ function initExportFormatOptions(){
   const doExportBtn=$('#doExport');
   if(doExportBtn){
     doExportBtn.onclick=()=>{
+      if(currentExportFormat==='video'){
+        const state=$('#exportRes')?.dataset.capabilityState;
+        if(state==='pending'){toast('Tunggu pemeriksaan resolusi selesai');return;}
+        if(state==='unsupported'){toast('Pilih mesin, codec atau FPS lain; belum ada konfigurasi yang didukung');return;}
+      }
       $('#exportSheet').classList.add('hidden');
       window.omsWakeLock?.release('exportSheet');
       const isId=(typeof homeLanguage!=='undefined'&&homeLanguage==='id')||(document.documentElement.lang==='id');
@@ -34084,7 +34087,7 @@ const AMEffectGPU={
     // Proxy prevents the reference constructor from resizing Open Motion's stage.
     const proxy={width:r.canvas.width,height:r.canvas.height,getContext:type=>type==='webgl'?gl:null};
     const logs=[],engine=new AMReference.Engine(proxy,line=>logs.push(line));
-    state={r,gl,engine,logs,ready:false,frame:new Map(),lastFrame:0,frames:0};this.states.set(r,state);
+    state={r,gl,engine,logs,ready:false,frame:new Map(),lastFrame:0,frames:0};this.states.set(r,state);try{window.omsExportDiagnostics?.watchState(r,state)}catch(_){}
     const base=r.layerValues.bind(r);r.layerValues=(l,t=model.time)=>this.transform(state,l,t,base(l,t));
     state.baseValues=base;
     const vs='attribute vec3 aPosition;attribute vec2 aUV;uniform mat4 uMVP;varying vec2 vUV;void main(){vUV=aUV;gl_Position=uMVP*vec4(aPosition,1.0);}';
@@ -34236,7 +34239,7 @@ const AMEffectGPU={
   renderFrame(r){
     r.amFramePresented=false;
     if((!model.project?.amGPU&&!window.omsAMParts?.needsComposite())||!r.gl||r.fallback)return false;
-    const s=this.state(r);if(!s.ready||this.missingEffects(s,model.layers).length){if(r.exporting||r.fastExportRenderer)throw Error('Efek AM belum siap untuk ekspor. Coba kembali setelah persiapan selesai.');if(!s.previewReadyRequested){s.previewReadyRequested=true;this.prepare(r,model.layers).then(()=>{s.previewReadyRequested=false;if(model.project?.amGPU||window.omsAMParts?.needsComposite())r.render()}).catch(error=>{s.previewReadyRequested=false;console.error('AM preview preparation failed',error)})}return true}
+    const s=this.state(r);if(!s.ready||this.missingEffects(s,model.layers).length){if(r.exporting||r.fastExportRenderer){const error=Error('Efek AM belum siap untuk ekspor. Coba kembali setelah persiapan selesai.');try{window.omsExportDiagnostics?.captureEffectFailure(r,s,error,'am-composite-not-ready')}catch(_){}throw error;}if(!s.previewReadyRequested){s.previewReadyRequested=true;this.prepare(r,model.layers).then(()=>{s.previewReadyRequested=false;if(model.project?.amGPU||window.omsAMParts?.needsComposite())r.render()}).catch(error=>{s.previewReadyRequested=false;console.error('AM preview preparation failed',error)})}return true}
     // The playback clock owns cadence. Never skip here: background pre-render,
     // cache capture, scrub and export must receive the exact requested frame.
     const maxH=Math.max(2,Math.round(r.canvas.height*(r.exporting||r.fastExportRenderer?1:omsPreviewQualityScale()))),w=Math.max(2,Math.round(maxH*r.canvas.width/r.canvas.height)),h=Math.max(2,Math.round(maxH));
@@ -38566,7 +38569,8 @@ $('#viewport').ondragover=e=>{e.preventDefault();$('#viewport').classList.add('d
 initExportEngineOptions();initExportFormatOptions();$('#openExport').onclick=()=>openExportSheet();$('#closeExport').onclick=()=>closeExportSheet();
 $('#exportRes').onchange=()=>updateResolutionEstimate();
 $('#exportFps').onchange=async()=>{await refreshResolutionOptions();updateResolutionEstimate()};
-$('#qualityRange').oninput=()=>updateResolutionEstimate();
+$('#qualityRange').oninput=()=>{updateResolutionEstimate();scheduleResolutionRefresh()};
+$('#qualityRange').onchange=()=>refreshResolutionOptions();
 $('#homeImportMain').onclick=()=>$('#projectInput').click();
 $('#homeAMLink').onclick=()=>AMIndependentLinkUI.open();
 $('#homeLanguageBtn').onclick=openLanguageModal;
@@ -40495,12 +40499,12 @@ const OMSMemoryDiagnostics = (() => {
     };
     const mark=()=>{const s=get();latest=s;tracker.mark(s);original.log.call(hub,'memory','MEMORY_BASELINE','Titik awal baru; cache tidak dihapus',compact(s),{force:true});hub.refreshPanel();};
     const test=()=>{hub.prefs.enabled=true;for(const id of ['memory','cache','playback','video','render'])hub.prefs.categories[id]=true;hub.save();mark();};
-    const report=()=>{const snapshot=hub.snapshot();return redact({schema:'open-motion-diagnostics/3',version:VERSION,createdAt:new Date().toISOString(),units:'bytes; surfaces use RGBA8 estimates',warnings,
+    const report=()=>{const snapshot=hub.snapshot();return redact({schema:'open-motion-diagnostics/3',version:window.omsExportDiagnostics?.buildLabel||VERSION,exportDiagnostics:window.omsExportDiagnostics?.report()||null,createdAt:new Date().toISOString(),units:'bytes; surfaces use RGBA8 estimates',warnings,
       environment:{userAgent:label(navigator.userAgent),hardwareConcurrency:num(navigator.hardwareConcurrency),deviceMemoryGiBHint:num(navigator.deviceMemory)||null,heapAvailable:!!snapshot.heap},
       enabledCategories:hub.enabledCategories(),snapshot,baseline:tracker.baseline,history:tracker.history,boundaries:tracker.boundaries,
       decoderDiagnostics:hub.decoderV203?.report?.()||snapshot.decoderDiagnostics||null,previewDiagnostics:snapshot.previewDiagnostics||null,audioDiagnostics:snapshot.audioDiagnostics||null,previewRateExperiment:snapshot.previewRateExperiment||null,logBudget:{...logBudget},logs:hub.logs.filter(row=>hub.is(row.category)).slice(-hub.maxLogs)});};
     const download=()=>{const blob=new Blob([JSON.stringify(report(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
-      a.href=url;a.download=`OpenMotion-Diagnostics-${VERSION}-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;document.body.append(a);
+      a.href=url;a.download=`OpenMotion-Diagnostics-${window.omsExportDiagnostics?.buildLabel||VERSION}-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;document.body.append(a);
       try{a.click()}finally{a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)};};
     function updatePanel(){const el=hub.panel?.querySelector('#omsDiagMemorySummary');if(!el)return;
       if(!latest){el.textContent='Tekan UJI RAM atau SNAPSHOT untuk memeriksa resource.';return}
@@ -40958,7 +40962,7 @@ const OMSUnifiedRender=(()=>{
   AMEffectGPU.renderFrame=function(r){
     if(model.project.amGPU||window.omsAMParts?.needsComposite())return oldRenderFrame(r);
     if(!model.layers.some(l=>enabled(l).some(isAM)))return oldRenderFrame(r);
-    const s=this.state(r);s.frame.clear();if(this.missingEffects(s,model.layers).length){if(r.exporting||r.fastExportRenderer)throw Error('Efek belum siap untuk ekspor.');requestPrepare()}return false;
+    const s=this.state(r);s.frame.clear();if(this.missingEffects(s,model.layers).length){if(r.exporting||r.fastExportRenderer){const error=Error('Efek belum siap untuk ekspor.');try{window.omsExportDiagnostics?.captureEffectFailure(r,s,error,'unified-effects-not-ready')}catch(_){}throw error;}requestPrepare()}return false;
   };
   renderer.worldOpacity=function(l,t=model.time,seen=new Set()){
     if(!l||!enabled(l).some(isAM))return oldOpacity(l,t,seen);
@@ -55226,6 +55230,54 @@ const OMSDetachedMatte250=(()=>{
 })();
 window.omsDetachedMatte=OMSDetachedMatte250;
 
+
+// Additive, bounded export diagnostics. No quality, codec policy, recovery,
+// encoder allocation, pixel readback or render cadence changes.
+const OMSExportDiagnostics302=(()=>{
+ 'use strict';
+ const BUILD='GitHub-6876cbb-ExportFix1',KEY='oms_export_reporter_v1',LIMITS={automaticRuns:8,manualRuns:3,sessions:4,events:24,ids:128,logs:16,rows:128,perCallMs:1800,totalProbeMs:20000},automatic=[],manual=[],sessions=[],events=[],watched=new WeakSet(),contextNames=new WeakMap();let sequence=0,currentSession=null,probePromise=null,lastFailure=null,dropped={automaticRuns:0,manualRuns:0,sessions:0,events:0};
+ const number=v=>typeof v==='number'&&Number.isFinite(v)?v:null;
+ function text(value,max=2048){return String(value??'').slice(0,max).replace(/\b(?:https?|file|blob|data):[^\s"'<>]+/gi,'[URL disamarkan]').replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[email disamarkan]');}
+ function plain(value,depth=0){if(value==null)return null;if(typeof value==='number')return number(value);if(typeof value==='boolean')return value;if(typeof value==='string')return text(value);if(depth>9)return'[depth limit]';if(Array.isArray(value))return value.slice(0,LIMITS.rows).map(v=>plain(v,depth+1));if(typeof value==='object'){const o={};for(const k of Object.keys(value).slice(0,100))o[k]=plain(value[k],depth+1);return o;}return null;}
+ const copy=value=>JSON.parse(JSON.stringify(plain(value))),stamp=()=>new Date().toISOString();
+ function push(list,value,key,max){list.push(copy(value));while(list.length>max){list.shift();dropped[key]++;}}
+ let reporter={deviceModel:'',browserContext:''};try{const old=JSON.parse(localStorage.getItem(KEY)||'null');if(old&&typeof old==='object')for(const k of Object.keys(reporter))reporter[k]=text(old[k],100);}catch(_){}
+ function setReporter(patch){for(const k of Object.keys(reporter))if(Object.hasOwn(patch,k))reporter[k]=text(patch[k],100);try{localStorage.setItem(KEY,JSON.stringify(reporter));}catch(_){}return copy(reporter);}
+ function project(){const p=model.project;return p?{id:text(p.id,160),name:text(p.name,160),width:number(p.width),height:number(p.height),fps:number(p.fps),duration:number(p.duration),layerCount:model.layers.length}:null;}
+ function settings(){let codec=null,dimensions=null;try{codec=selectedExportCodec();dimensions=selectedExportDimensions();}catch(_){}return{project:project(),engine:selectedExportEngine(),codec:codec?{id:text(codec.id,80),mime:text(codec.mime,160)}:null,dimensions,fps:Math.min(120,Math.max(1,+document.querySelector('#exportFps')?.value||model.project?.fps||30)),bitrate:Math.max(250000,+document.querySelector('#qualityRange')?.value*1000000||8000000),resolutionHint:text(document.querySelector('#resolutionSupportHint')?.textContent,400)};}
+ function environment(){return{reportedDeviceModel:reporter.deviceModel||null,reportedBrowserContext:reporter.browserContext||null,modelEvidence:reporter.deviceModel?'user-entered, not inferred from user agent':'not provided; do not guess an exact model',userAgent:text(navigator.userAgent),platform:text(navigator.platform,160),hardwareConcurrency:number(navigator.hardwareConcurrency),deviceMemoryGiBHint:number(navigator.deviceMemory),secureContext:window.isSecureContext===true,crossOriginIsolated:window.crossOriginIsolated===true,protocol:location.protocol,standalone:!!(navigator.standalone||window.matchMedia?.('(display-mode: standalone)').matches),visibility:document.visibilityState,viewport:{width:innerWidth,height:innerHeight,devicePixelRatio:number(devicePixelRatio)},screen:{width:screen.width,height:screen.height},apis:{videoEncoder:typeof VideoEncoder!=='undefined',videoEncoderProbe:typeof VideoEncoder!=='undefined'&&typeof VideoEncoder.isConfigSupported==='function',videoDecoder:typeof VideoDecoder!=='undefined',videoFrame:typeof VideoFrame!=='undefined',mediaRecorder:typeof MediaRecorder!=='undefined',mediaCapabilitiesEncoding:typeof navigator.mediaCapabilities?.encodingInfo==='function'}};}
+ function glInfo(gl,label='renderer'){if(!gl)return{label,available:false};const lost=!!gl.isContextLost?.(),get=name=>{try{return gl[name]===undefined?null:plain(gl.getParameter(gl[name]));}catch(_){return null;}};const result={label,available:true,contextLost:lost,drawingBuffer:{width:gl.drawingBufferWidth,height:gl.drawingBufferHeight}};if(lost)return result;Object.assign(result,{version:get('VERSION'),vendor:get('VENDOR'),renderer:get('RENDERER'),shadingLanguage:get('SHADING_LANGUAGE_VERSION'),maxTextureSize:get('MAX_TEXTURE_SIZE'),maxRenderbufferSize:get('MAX_RENDERBUFFER_SIZE'),maxViewportDims:get('MAX_VIEWPORT_DIMS')});try{const ext=gl.getExtension('WEBGL_debug_renderer_info');if(ext){result.unmaskedVendor=text(gl.getParameter(ext.UNMASKED_VENDOR_WEBGL));result.unmaskedRenderer=text(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL));}}catch(_){}return result;}
+ function watch(gl,label){const canvas=gl?.canvas;if(!canvas||watched.has(canvas))return;watched.add(canvas);contextNames.set(gl,label);for(const name of['webglcontextlost','webglcontextrestored'])canvas.addEventListener(name,event=>{push(events,{at:stamp(),event:name,label,statusMessage:text(event.statusMessage,500),project:project(),sessionId:currentSession?.id||null,frame:exporter.gpuFastDiag?.frame??null,operation:exporter.gpuFastDiag?.operation||null},'events',LIMITS.events);/* The renderer, not diagnostics, owns preventDefault/recovery. */});}
+ function watchState(r,s){watch(r?.gl,'stage');if(s?.gl!==r?.gl)watch(s?.gl,'AM-effects');}
+ function effectContext(r,s,reason){const missing=Array.from(AMEffectGPU.missingEffects(s,model.layers)||[]),failed=Array.from(s?.engine?.failedEffects||[]),wanted=Array.from(AMEffectGPU.requiredEffects(model.layers)||[]),missingSet=new Set([...missing,...failed]);const layers=[];for(const l of model.layers){const fx=AMEffectGPU.effects(l).filter(x=>!x.disabled&&missingSet.has(x.id));if(!fx.length)continue;layers.push({id:text(l.id,160),name:text(l.name,160),type:l.type,start:number(l.start),duration:number(l.duration),active:model.time>=l.start&&model.time<=l.start+l.duration,missingOrFailedEffectIds:fx.map(x=>x.id).slice(0,LIMITS.ids)});}
+  return{at:stamp(),reason,sessionId:currentSession?.id||null,runProject:currentSession?.project||null,currentProject:project(),projectMatchesSession:!!currentSession&&currentSession.project?.id===model.project?.id,projectTime:number(model.time),frame:exporter.gpuFastDiag?.frame??null,operation:exporter.gpuFastDiag?.operation||null,settings:settings(),renderer:{exporting:!!r?.exporting,fastExportRenderer:!!r?.fastExportRenderer,fallback:!!r?.fallback,canvasWidth:r?.canvas?.width??null,canvasHeight:r?.canvas?.height??null},effectReadiness:{ready:!!s?.ready,preparing:!!s?.preparing,requiredTotal:wanted.length,requiredIds:wanted.slice(0,LIMITS.ids),missingTotal:missing.length,missingIds:missing.slice(0,LIMITS.ids),failedTotal:failed.length,failedIds:failed.slice(0,LIMITS.ids),programCount:s?.engine?.programs?.size||0,compileLogTotal:s?.logs?.length||0,compileLogs:(s?.logs||[]).slice(-LIMITS.logs).map(x=>text(x)),affectedLayerTotal:layers.length,affectedLayers:layers.slice(0,LIMITS.rows),idsLimit:LIMITS.ids},webgl:glInfo(r?.gl,'failed-renderer'),amWebgl:s?.gl!==r?.gl?glInfo(s?.gl,'failed-AM-effects'):null};
+ }
+ function captureEffectFailure(r,s,error,reason){try{const detail=copy(effectContext(r,s,reason));if(error&&typeof error==='object')error.omsExportContext302=detail;lastFailure=detail;watchState(r,s);return detail;}catch(failure){const detail={at:stamp(),reason,captureError:text(failure.message),project:project()};if(error&&typeof error==='object')error.omsExportContext302=detail;lastFailure=detail;return detail;}}
+ function automaticStart(codec,fps){return{id:'resolution-'+(++sequence),at:stamp(),project:project(),engine:selectedExportEngine(),codec:{id:codec.id,mime:codec.mime||''},fps,rows:[]};}
+ function automaticFinish(run,checks,supported){if(!run)return;run.finishedAt=stamp();run.rows=checks.map(x=>({preset:x.preset.p,label:x.preset.label,width:x.width,height:x.height,bitrate:x.bitrate??x.preset.bitrate,supported:x.supported??null,status:x.status||'unknown',smooth:x.smooth??null,powerEfficient:x.powerEfficient??null,source:x.source,request:plain(x.request),codecString:codecStringForWebCodecs(run.codec,x.width,x.height,run.fps),webCodecsAttempted:x.source==='webcodecs'&&x.status!=='unavailable',secondarySkippedReason:x.source==='mediaCapabilities'?'Selected pipeline is MediaRecorder, not WebCodecs':null,offeredInUI:supported.includes(x)}));run.unverifiedPresetsOffered=supported.some(x=>x.supported===null);run.fallbackPresetsOffered=false;run.selectionPolicy='engine-specific/1';run.selected=settings();push(automatic,run,'automaticRuns',LIMITS.automaticRuns);}
+ async function query(call,deadline){const left=Math.min(LIMITS.perCallMs,Math.max(0,deadline-performance.now()));if(left<=0)return{status:'not-run',supported:null,reason:'diagnostic-total-time-budget'};let timer;const at=performance.now();try{return await Promise.race([Promise.resolve().then(call).then(result=>({status:'result',supported:typeof result?.supported==='boolean'?result.supported:null,smooth:typeof result?.smooth==='boolean'?result.smooth:null,powerEfficient:typeof result?.powerEfficient==='boolean'?result.powerEfficient:null,config:result?.config?plain(result.config):null,elapsedMs:Math.round(performance.now()-at)})).catch(e=>({status:'error',supported:null,error:{name:text(e?.name,100),message:text(e?.message)},elapsedMs:Math.round(performance.now()-at)})),new Promise(resolve=>{timer=setTimeout(()=>resolve({status:'timeout',supported:null,elapsedMs:Math.round(performance.now()-at)}),left);})]);}finally{clearTimeout(timer);}}
+ async function fullProbe(){if(probePromise)return probePromise;if(exporter.running||renderer.exporting)throw Error('Tunggu ekspor selesai sebelum menjalankan uji kemampuan.');if(!model.project)throw Error('Buka proyek sebelum menjalankan uji ekspor.');const before=settings(),codec=selectedExportCodec();
+  probePromise=(async()=>{const run={id:'probe-'+(++sequence),at:stamp(),project:project(),settings:before,environment:environment(),rows:[],policyChanged:false,encoderInstancesCreated:0,notes:'Configuration queries only; supported is not a completed encode or a measured hardware limit.'},deadline=performance.now()+LIMITS.totalProbeMs;
+   for(const preset of EXPORT_RESOLUTION_PRESETS){const{width,height}=dimensionsForPreset(preset.p),code=codecStringForWebCodecs(codec,width,height,before.fps),row={preset:preset.p,width,height,fps:before.fps,bitrate:before.bitrate,webCodecsCodec:code,mediaCapabilities:null,webCodecs:[]},contentType=mediaCapabilitiesContentType(codec,width,height,before.fps),config={type:'record',video:{contentType,width,height,bitrate:before.bitrate,framerate:before.fps}};
+    row.mediaCapabilities={request:config,...(typeof navigator.mediaCapabilities?.encodingInfo==='function'&&contentType?await query(()=>navigator.mediaCapabilities.encodingInfo(config),deadline):{status:'unavailable',supported:null})};
+    for(const hardwareAcceleration of['prefer-hardware','no-preference']){const request={codec:code,width,height,bitrate:before.bitrate,framerate:before.fps,hardwareAcceleration,latencyMode:'realtime'};if(codec.id==='h264-mp4')request.avc={format:'avc'};row.webCodecs.push({request,...(typeof VideoEncoder!=='undefined'&&typeof VideoEncoder.isConfigSupported==='function'&&code?await query(()=>VideoEncoder.isConfigSupported(request),deadline):{status:'unavailable',supported:null})});}
+    run.rows.push(row);
+   }
+   run.finishedAt=stamp();run.settingsAfter=settings();run.projectUnchanged=run.project?.id===model.project?.id;push(manual,run,'manualRuns',LIMITS.manualRuns);return copy(run);
+  })();try{return await probePromise;}finally{probePromise=null;}
+ }
+function startSession(d){if(currentSession&&!currentSession.terminal){currentSession.terminal=true;currentSession.outcome='superseded';const prior=sessions.find(x=>x.id===currentSession.id);if(prior)Object.assign(prior,{terminal:true,outcome:'superseded',finishedAt:stamp()});}currentSession={id:'gpu-'+(++sequence),at:stamp(),project:copy(d?.project||project()),settings:copy(settings()),environment:copy(environment()),initialWebgl:copy(glInfo(renderer.gl,'stage')),terminal:false,outcome:'running',failure:null};push(sessions,currentSession,'sessions',LIMITS.sessions);watch(renderer.gl,'stage');}
+ function updateSession(outcome,d,error){if(!currentSession)return;const saved=sessions.find(x=>x.id===currentSession.id);if(!saved)return;if(saved.terminal&&saved.outcome==='failed')return;const failure=error?.omsExportContext302||(lastFailure?.sessionId===currentSession.id?lastFailure:null);Object.assign(saved,{terminal:true,outcome,finishedAt:stamp(),frame:d?.frame??null,operation:d?.operation||null,encoder:copy(d?.encoder||null),failure:copy(failure),error:error?{name:text(error.name,100),message:text(error.message),stack:text(error.stack)}:null,runProject:copy(d?.project||currentSession.project)});currentSession.terminal=true;currentSession.outcome=outcome;}
+ const reset=exporter.resetGpuFastDiagnostic;exporter.resetGpuFastDiagnostic=function(...args){const result=reset.apply(this,args);try{startSession(this.gpuFastDiag);this.gpuFastDiag.exportContext302={sessionId:currentSession.id,settings:currentSession.settings,environment:currentSession.environment};}catch(_){}return result;};
+ const gpuError=exporter.gpuDiagError;exporter.gpuDiagError=function(error){const result=gpuError.call(this,error);try{const detail=error?.omsExportContext302||(lastFailure?.sessionId===currentSession?.id?lastFailure:null);if(this.gpuFastDiag&&!this.gpuFastDiag.failureContext302)this.gpuFastDiag.failureContext302=copy(detail||{at:stamp(),runProject:currentSession?.project,currentProject:project(),settings:settings(),reason:'non-readiness-error; no AM guard context captured'});updateSession('failed',this.gpuFastDiag,error);}catch(_){}return result;};
+ const gpuLog=exporter.gpuDiag;exporter.gpuDiag=function(stage,...args){const result=gpuLog.call(this,stage,...args);if(stage==='SUCCESS')try{updateSession('success',this.gpuFastDiag,null);}catch(_){}return result;};
+ function report(){return copy({schema:'open-motion-export-diagnostics/1',build:BUILD,sourceCommit:'6876cbbb5b953820211f0787e264901ad6d3d11b',createdAt:stamp(),environment:environment(),selection:settings(),webgl:glInfo(renderer.gl,'stage'),automaticResolutionRuns:automatic,manualCapabilityRuns:manual,gpuSessions:sessions.map(x=>({...x,currentProjectMatches:x.project?.id===model.project?.id})),lastReadinessFailure:lastFailure,contextEvents:events,probeRunning:!!probePromise,limits:LIMITS,dropped,notes:['Exact device model is user-reported; do not infer a series from generic iPhone UA or screen dimensions.','No new WebGL contexts, decoders or encoders are created by these probes.','Capability false/unknown and completed export are different evidence. Resolution selection is engine-specific; false, unknown and a successful export are separate evidence.','Session failure context is frozen at the guard before cleanup; a different current project is explicitly marked.','No automatic upload. URLs/emails are redacted, but review project/layer names before sharing.']});}
+ const open=omsDiagnostics.openPanel;omsDiagnostics.openPanel=function(...args){const result=open.apply(this,args),box=this.panel?.firstElementChild;if(!box||box.querySelector('#omsDiagExport302'))return result;const section=document.createElement('section');section.id='omsDiagExport302';section.style.cssText='background:#fff;border:1px solid #d9dee7;border-radius:12px;padding:12px;margin:10px 0;display:grid;gap:9px';section.innerHTML='<b>Diagnostik ekspor · Resolusi & GPU Fast</b><small>Bandingkan Media Capabilities dan WebCodecs tanpa mengekspor video atau mengubah kualitas.</small><label style="display:grid;gap:5px">Model perangkat (opsional)<input id="omsDiagDeviceModel" maxlength="100" placeholder="mis. iPhone 17" style="width:100%;box-sizing:border-box;min-height:36px"></label><label style="display:grid;gap:5px">Browser / cara membuka (opsional)<input id="omsDiagBrowserContext" maxlength="100" placeholder="mis. Safari / PWA / browser dalam aplikasi" style="width:100%;box-sizing:border-box;min-height:36px"></label><button type="button" id="omsDiagExportProbe" style="min-height:38px">UJI KEMAMPUAN EKSPOR</button><small id="omsDiagExportStatus" role="status"></small><small>Untuk laporan lengkap: jalankan uji, coba ekspor pada proyek yang bermasalah, lalu UNDUH LAPORAN. Model di atas adalah keterangan pengguna, bukan tebakan otomatis.</small>';const anchor=box.querySelector('#omsDiagMemoryV198');if(anchor)anchor.after(section);else box.append(section);
+  const modelInput=section.querySelector('#omsDiagDeviceModel'),browserInput=section.querySelector('#omsDiagBrowserContext'),status=section.querySelector('#omsDiagExportStatus'),button=section.querySelector('#omsDiagExportProbe');modelInput.value=reporter.deviceModel;browserInput.value=reporter.browserContext;modelInput.oninput=()=>setReporter({deviceModel:modelInput.value});browserInput.oninput=()=>setReporter({browserContext:browserInput.value});status.textContent=manual.length?'Hasil uji terakhir tersimpan dalam laporan JSON.':'Belum ada uji lengkap; hasil pemilihan resolusi otomatis tetap dicatat.';button.onclick=async()=>{button.disabled=true;status.textContent='Memeriksa tiap resolusi pada FPS/codec saat ini…';try{const run=await fullProbe();status.textContent='Selesai: '+run.rows.length+' resolusi diperiksa. Hasil true/false/error/timeout tersimpan di laporan JSON.';}catch(error){status.textContent=error.message;}finally{button.disabled=false;}};return result;};
+ watch(renderer.gl,'stage');const existing=AMEffectGPU.states.get(renderer);if(existing)watchState(renderer,existing);
+ return{buildLabel:BUILD,report,setReporter,automaticStart,automaticFinish,fullProbe,captureEffectFailure,watchState};
+})();
+window.omsExportDiagnostics=OMSExportDiagnostics302;
 
 if(window.__OMS_TEST__)Object.assign(window,{omsEffectSpec,omsEffectInstance,omsEffectRawValue,omsHistory:history});
 })();
