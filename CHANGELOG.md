@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-10-22 — Export Resolution & Diagnostics
+
+Published in [ee4e288](https://github.com/Hada45/Open-Motion/commit/ee4e2886ce4bea60a2793ff73410122ffab33f62).
+
+### Export resolution detection
+
+- Fix the misleading 480p ceiling: GPU Fast and the other WebCodecs export engines now query their encoder configuration instead of being limited by Media Capabilities recording results.
+- Match capability checks to the selected engine, output dimensions, FPS, quality bitrate and encoder preference. Recheck support after engine, codec, FPS or quality changes.
+- Preserve an existing resolution choice when it remains available, debounce quality-slider checks and ignore stale asynchronous responses.
+- Distinguish unsupported configurations from unavailable, failed or timed-out capability queries. Unknown choices are explicitly marked unverified rather than reported as a detected device limit.
+- Remove the fabricated low-resolution maximum when every configuration is rejected; ask for another engine, codec or FPS instead. Unverified options up to 4K are not a guarantee of successful export.
+
+### Diagnostics and export UI
+
+- Retain detailed capability matrices, optional user-reported device/browser information and GPU effect-readiness failure context in the Diagnostics panel.
+- Remove the direct "Diagnostik resolusi & GPU Fast" shortcut from the export sheet.
+- Capability queries do not instantiate encoders, decoders or additional WebGL contexts. Codec profiles, rendering algorithms and output quality remain unchanged.
+
+### Verification and limitations
+
+- 345 local checks passed: 75 resolution-policy checks, 80 diagnostics checks and 190 UI/keyboard/community-feature regression checks in desktop/mobile-size Chrome and WebGL1 contexts.
+- Capability responses used by the tests are fixtures, not measurements from an iPhone 17. Physical Safari/iPhone and complete video exports remain unverified; a supported configuration is not proof that a full project will export successfully.
+- The separate AM effect-readiness failure is not fixed by this change. Unfinished V5.300/V5.301 native-effects experiments are not included.
+
 ## V5.285 — 2026-10-19
 
 ### Mobile & PWA UX Refinements
