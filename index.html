@@ -66,7 +66,7 @@
 <!-- V5.07 — Stage 5: worker-assisted off-main-thread multi-source preview decode. Different-source overlaps prefer a Blob module Worker running Mediabunny CanvasSink + OffscreenCanvas/createImageBitmap, transferable ImageBitmap frames feed the existing WebGL compositor, same-asset divergent cursors retain V5.06 HTMLVideo playback, and the entire V5.05 main-thread ring-buffer decoder remains an automatic fallback. Exporter remains unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Open Motion · GitHub 6876cbb · Export Resolution Fix</title>
+<title>Open Motion · Inspector & Freehand · 2026-10-23</title>
 <!-- V5.31 — Installable PWA: manifest, branded icons, Chrome install promotion and offline shell. -->
 <meta name="theme-color" content="#10121d">
 <meta name="application-name" content="Open Motion">
@@ -10640,6 +10640,40 @@ window.omsNativeBenchmark=omsNativeBenchmark;
 // Native preview preserves authored layer rates. No persistent project mutation.
 // Preview policy does not add timers/decoders/audio nodes or change the exporter.
 window.omsPreviewRateExperiment=Object.freeze({"id":"native-authored-rate-v209","mode":"authored-only","automaticRateCorrection":false,"scope":"native-multi-source-preview","hardSeekRecoveryUnchanged":true,"exportUnchanged":true,"note":"Native multi-source preview preserves authored layer rates; decoder stalls may still occur."});
+// File extensions supplement absent/generic MIME metadata; decoding still validates bytes.
+const OMSMediaTypes={image:{jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',gif:'image/gif',avif:'image/avif',heic:'image/heic',heif:'image/heif',svg:'image/svg+xml',bmp:'image/bmp'},video:{mp4:'video/mp4',mov:'video/quicktime',m4v:'video/mp4',webm:'video/webm',mkv:'video/x-matroska',avi:'video/x-msvideo',mpeg:'video/mpeg',mpg:'video/mpeg'},audio:{mp3:'audio/mpeg',m4a:'audio/mp4',aac:'audio/aac',wav:'audio/wav',flac:'audio/flac',ogg:'audio/ogg',opus:'audio/ogg',aiff:'audio/aiff',aif:'audio/aiff',caf:'audio/x-caf'}};
+function omsMediaKind(file){
+  const mime=String(file?.type||'').toLowerCase().split(';')[0];
+  for(const kind of Object.keys(OMSMediaTypes))if(mime.startsWith(kind+'/'))return kind;
+  if(mime&&!['application/octet-stream','binary/octet-stream','application/ogg'].includes(mime))return null;
+  const ext=String(file?.name||'').toLowerCase().split('.').pop();
+  return Object.keys(OMSMediaTypes).find(kind=>Object.hasOwn(OMSMediaTypes[kind],ext))||null;
+}
+function omsNormalizeMediaFile(file){
+  const kind=omsMediaKind(file),ext=String(file?.name||'').toLowerCase().split('.').pop();
+  if(!kind||String(file.type||'').startsWith(kind+'/'))return file;
+  const type=OMSMediaTypes[kind][ext];
+  return new File([file],file.name,{type,lastModified:file.lastModified||Date.now()});
+}
+function omsMediaAccept(kind){
+  const kinds=OMSMediaTypes[kind]?[kind]:Object.keys(OMSMediaTypes);
+  // Audio extensions avoid the ambiguous audio/* capture/photo-library route on iOS.
+  return kinds.flatMap(k=>[...(k==='audio'?[]:[k+'/*']),...Object.keys(OMSMediaTypes[k]).map(e=>'.'+e)]).join(',');
+}
+function omsPickMediaInput(input,kind='media'){
+  document.getElementById('omsMediaPicker')?.remove();
+  const host=document.createElement('div');host.id='omsMediaPicker';host.className='omsMediaPicker';host.setAttribute('role','dialog');host.setAttribute('aria-modal','true');host.setAttribute('aria-label','Pilih sumber media');
+  const label={image:'Foto',video:'Video',audio:'Audio'},specific=!!OMSMediaTypes[kind],choices=specific?[kind]:['image','video','audio'];
+  host.innerHTML='<section><header><b>Pilih '+(label[kind]||'Media')+'</b><button type="button" data-picker-close aria-label="Tutup">×</button></header><p>'+(specific?'Jenis layer tetap '+label[kind]+'. Pilih dari perangkat atau lewat Berkas.':'Pilih foto, video, musik, atau telusuri Berkas.')+'</p><div data-picker-options></div><small>Jika galeri tidak menampilkan file, gunakan Berkas. Format yang tidak dapat dibaca akan diberi pesan, bukan diabaikan.</small></section>';
+  const focus=document.activeElement,close=()=>{host.remove();focus?.focus?.();};
+  const choose=(selected,unfiltered)=>{input.accept=unfiltered?'':omsMediaAccept(selected);input.dataset.omsKind=specific?kind:(selected==='media'?'':selected);input.value='';close();input.click();};
+  for(const selected of choices){const b=document.createElement('button');b.type='button';b.dataset.pickerKind=selected;b.textContent=label[selected];b.onclick=()=>choose(selected,false);host.querySelector('[data-picker-options]').append(b);}
+  const files=document.createElement('button');files.type='button';files.dataset.pickerKind='files';files.textContent='Berkas / semua file';files.onclick=()=>choose(specific?kind:'media',true);host.querySelector('[data-picker-options]').append(files);
+  host.querySelector('[data-picker-close]').onclick=close;host.onclick=e=>{if(e.target===host)close();};host.onkeydown=e=>{if(e.key==='Escape'){e.stopPropagation();close();}if(e.key==='Tab'){const all=[...host.querySelectorAll('button')],first=all[0],last=all.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};
+  document.body.append(host);host.querySelector('[data-picker-kind]')?.focus();
+}
+window.omsMediaPicker={kind:omsMediaKind,normalize:omsNormalizeMediaFile,accept:omsMediaAccept,open:omsPickMediaInput};
+
 class MediaManager{
   constructor(model){
     this.model=model;
@@ -11067,40 +11101,40 @@ class MediaManager{
     for(const l of model.layers)this.ensureWaveform(l)
   }
 
-  async importFiles(files){for(const file of files){const kind=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;if(!kind)continue;history.push();const assetId=uid('asset'),dataUrl=mediaAssets.attachBlob(assetId,file),l=model.addLayer(kind,{name:file.name,assetId,dataUrl});await this.probe(l);if(kind==='video'||kind==='audio')this.ensureWaveform(l)}ui.rebuildAll();toast(`${files.length} media diimpor`)}
-  probe(l){return new Promise(resolve=>{
-    if(l.type==='image'){
-      l.img.onload=()=>{
-        const fit=mediaProjectFitRect(model.project,l.img.naturalWidth,l.img.naturalHeight);
-        l.w=fit.w;
-        l.h=fit.h;
-        resolve()
-      };l.img.onerror=()=>resolve();
+  async importFiles(files,{expected=null}={}){
+    let count=0;const errors=[];
+    for(const raw of files){
+      const kind=omsMediaKind(raw);
+      if(!kind||expected&&kind!==expected){errors.push(raw.name+': jenis file tidak sesuai');continue;}
+      const file=omsNormalizeMediaFile(raw);let layer=null;
+      try{
+        history.push();const assetId=uid('asset'),dataUrl=mediaAssets.attachBlob(assetId,file);
+        layer=model.addLayer(kind,{name:file.name,assetId,dataUrl});await this.probe(layer);
+        if(kind==='video'||kind==='audio')this.ensureWaveform(layer);count++;
+      }catch(error){if(layer&&model.layers.includes(layer))model.removeLayer(layer.id);errors.push(file.name+': '+String(error.message||error));}
     }
-    else if(l.type==='video'){
-      l.video.onloadedmetadata=()=>{
-        const d=Number.isFinite(l.video.duration)?l.video.duration:model.project.duration;
-        l.sourceDuration=d;l.sourceIn=0;l.sourceOut=d;l.mediaExtendIn=0;l.mediaExtendOut=0;l.duration=d;
-        model.ensureProjectDuration(l.start+l.duration);
-        const fit=mediaProjectFitRect(model.project,l.video.videoWidth,l.video.videoHeight);
-        l.w=fit.w;
-        l.h=fit.h;
-        try{
-          l.video.currentTime=clamp(+l.sourceIn||0,0,Math.max(0,d-.001));
-        }catch(e){}
-        requestAnimationFrame(()=>l.cacheVideoFrame?.());
-        resolve();
-      };l.video.onerror=()=>resolve();
-    }
-    else if(l.type==='audio'){
-      l.audio.onloadedmetadata=()=>{
-        const d=Number.isFinite(l.audio.duration)?l.audio.duration:model.project.duration;
-        l.sourceDuration=d;l.sourceIn=0;l.sourceOut=d;l.mediaExtendIn=0;l.mediaExtendOut=0;l.duration=d;
-        model.ensureProjectDuration(l.start+l.duration);resolve();
-      };l.audio.onerror=()=>resolve();
-    }
-    else resolve();
+    ui.rebuildAll();toast(count+' media diimpor'+(errors.length?' • '+errors.join('; '):''));
+    return{imported:count,errors};
+  }
+  probe(l){return new Promise((resolve,reject)=>{
+    const el=l.img||l.video||l.audio;if(!el){reject(Error('Sumber media tidak tersedia'));return;}
+    let done=false,timer;const image=l.type==='image',event=image?'load':'loadedmetadata';
+    const cleanup=()=>{clearTimeout(timer);el.removeEventListener(event,ready);el.removeEventListener('error',failed);};
+    const failed=()=>{if(done)return;done=true;cleanup();reject(Error('Media tidak dapat dibaca. Periksa format/codec atau pilih file lain.'));};
+    const ready=()=>{
+      if(done)return;
+      if(image&&!(el.naturalWidth>0))return;
+      if(!image&&el.readyState<1)return;
+      done=true;cleanup();
+      if(image){const fit=mediaProjectFitRect(model.project,el.naturalWidth,el.naturalHeight);l.w=fit.w;l.h=fit.h;}
+      else{const d=Number.isFinite(el.duration)?el.duration:model.project.duration;l.sourceDuration=d;l.sourceIn=0;l.sourceOut=d;l.mediaExtendIn=0;l.mediaExtendOut=0;l.duration=d;model.ensureProjectDuration(l.start+l.duration);if(l.type==='video'){const fit=mediaProjectFitRect(model.project,el.videoWidth,el.videoHeight);l.w=fit.w;l.h=fit.h;try{el.currentTime=0;}catch(_){}requestAnimationFrame(()=>l.cacheVideoFrame?.());}}
+      resolve();
+    };
+    el.addEventListener(event,ready);el.addEventListener('error',failed);
+    timer=setTimeout(()=>{if(done)return;done=true;cleanup();reject(Error('Media belum siap setelah 12 detik. Coba Berkas atau codec lain.'));},12000);
+    if(el.error){failed();return;}ready();
   })}
+
   async scrubDecoderModule(){
     if(this.scrubDecoderModulePromise)return this.scrubDecoderModulePromise;
     if(typeof VideoDecoder==='undefined')return null;
@@ -13901,7 +13935,7 @@ class WebGLRenderer{
     this.gl=canvas.getContext('webgl2',options)||canvas.getContext('webgl',options);
     if(!this.gl){this.fallback=new Renderer(projectModel,canvas);return}
     this.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();toast('Renderer 3D terhenti. Muat ulang proyek')});
-    this.initGL()
+    try{this.initGL()}catch(error){this.gpuStartupError=String(error.message||error);const replacement=canvas.cloneNode(false);canvas.replaceWith(replacement);this.canvas=replacement;this.gl=null;this.fallback=new Renderer(projectModel,replacement);}
   }
   disposeTexture(id){
     const entry=this.textures.get(id);
@@ -22628,6 +22662,8 @@ class UIController{
 
         pager.addEventListener('wheel', (e) => {
           if (Math.abs(e.deltaX) < Math.abs(e.deltaY)) {
+            const body=pager.closest('.amContentHolder');
+            if(body&&body.scrollHeight>body.clientHeight+1)return;
             e.preventDefault();
             const dir = e.deltaY > 0 ? 1 : -1;
             const w = pager.clientWidth || 1;
@@ -22691,8 +22727,8 @@ class UIController{
     $('#btnQuickVector')?.addEventListener('click',()=>{this.closeDrawer();this.startVectorPenTool()});
     $('#btnQuickText')?.addEventListener('click',()=>{history.push();this.closeDrawer();model.addLayer('text',{name:'Teks'});this.rebuildAll();this.openInspectorRoot()});
 
-    $('#pickMedia')?.addEventListener('click',()=>$('#mediaInput').click());
-    $('#pickAudio')?.addEventListener('click',()=>$('#mediaInput').click());
+    $('#pickMedia')?.addEventListener('click',()=>omsPickMediaInput($('#mediaInput'),'media'));
+    $('#pickAudio')?.addEventListener('click',()=>omsPickMediaInput($('#mediaInput'),'audio'));
     $('#startVectorPen')?.addEventListener('click',()=>this.startVectorPenTool());
     $('#addText')?.addEventListener('click',()=>{history.push();model.addLayer('text');this.rebuildAll();this.openInspectorRoot()});
     $$('[data-template]').forEach(b=>b.onclick=()=>this.applyTemplate(b.dataset.template));
@@ -27072,6 +27108,7 @@ class UIController{
     const graphColor=graphVisual?.color||'#58ddc0';
     let ys=samples.map(p=>p.y).filter(Number.isFinite);
     if(view==='speed')ys.push(0);
+    if(view==='value')for(let i=0;i<arr.length-1;i++){const a=arr[i],b=arr[i+1];if(!a.easing||['linear','cubic-bezier'].includes(a.easing.type)){const bez=this.normalizeBezierSpec(a.easing||EASING_PRESETS.linear),v=+a.v||0,dv=(+b.v||0)-v;ys.push(v+bez.y1*dv,v+bez.y2*dv);}}
     if(!ys.length)ys=[-1,1];
     let minY=Math.min(...ys),maxY=Math.max(...ys);
     if(Math.abs(maxY-minY)<1e-6){const p=Math.max(1,Math.abs(maxY)*.15);minY-=p;maxY+=p}
@@ -39729,15 +39766,15 @@ scheduleWholeAppLanguage();
   let relinkTarget=null;
   function selectedMissingLayer(){const l=model.selectedLayer?.()||model.layers.find(x=>x.id===model.selected);return isMedia(l)&&!l.dataUrl&&!mediaAssets.sources.get(l.assetId)?l:null}
   async function relinkLayer(layer){
-    if(!layer)return;relinkTarget=layer;relinkInput.accept=layer.type==='image'?'image/*':layer.type==='video'?'video/*':'audio/*';relinkInput.value='';relinkInput.click();
+    if(!layer)return;relinkTarget=layer;relinkInput.accept=omsMediaAccept(layer.type);relinkInput.value='';omsPickMediaInput(relinkInput,layer.type);
   }
   relinkInput.addEventListener('change',async()=>{
     const file=relinkInput.files?.[0],layer=relinkTarget;relinkTarget=null;if(!file||!layer)return;
-    const expected=layer.type,actual=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
+    const expected=layer.type,actual=omsMediaKind(file);
     if(actual!==expected){safeToast(`Pilih file ${expected} yang sesuai`);return}
     try{
       history.push();
-      model.disposeLayerRuntime(layer);layer.assetId=uid('asset');layer.dataUrl=mediaAssets.attachBlob(layer.assetId,file);persistentStore.knownAssets.delete(layer.assetId);model.hydrateLayer(layer);
+      model.disposeLayerRuntime(layer);layer.assetId=uid('asset');layer.dataUrl=mediaAssets.attachBlob(layer.assetId,omsNormalizeMediaFile(file));persistentStore.knownAssets.delete(layer.assetId);model.hydrateLayer(layer);
       try{await media.probe(layer)}catch(e){}
       ui.rebuildAll();bus.emit('model:changed');await autosave.flush(true);safeToast('Media berhasil ditautkan ulang');
     }catch(e){console.error(e);safeToast('Gagal menautkan ulang media')}
@@ -40107,7 +40144,7 @@ const OMSSavedMediaRecovery=(()=>{
 
   async function applyManualFile(file,layer){
     if(!file||!isMedia(layer))return false;
-    const actual=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
+    const actual=omsMediaKind(file);
     if(actual!==layer.type){say(`Pilih file ${layer.type} yang sesuai`);updateStatus(`File yang dipilih bukan ${layer.type} yang sesuai.`,'fail');return false}
     const state=rememberClipState(layer);
     try{
@@ -40116,7 +40153,7 @@ const OMSSavedMediaRecovery=(()=>{
       try{model.disposeLayerRuntime(layer)}catch(e){}
       // Use a new asset id so a stale IndexedDB record cannot block overwriting the relinked media.
       layer.assetId=uid('asset');
-      layer.dataUrl=mediaAssets.attachBlob(layer.assetId,file);
+      layer.dataUrl=mediaAssets.attachBlob(layer.assetId,omsNormalizeMediaFile(file));
       try{persistentStore.knownAssets.delete(layer.assetId)}catch(e){}
       model.hydrateLayer(layer);
       try{await media.probe(layer)}catch(e){}
@@ -40148,8 +40185,8 @@ const OMSSavedMediaRecovery=(()=>{
   function startManual(layer){
     if(!isMedia(layer))return;
     target=layer;
-    input.accept=layer.type==='image'?'image/*':layer.type==='video'?'video/*':'audio/*';
-    input.value='';input.click();
+    input.accept=omsMediaAccept(layer.type);
+    input.value='';omsPickMediaInput(input,layer.type);
   }
   input.addEventListener('change',async()=>{
     const file=input.files?.[0],layer=target;target=null;
@@ -52071,12 +52108,12 @@ const OMSTemplateEditor=(()=>{
   const slot=collect().find(s=>s.key===key);if(!slot)throw Error('Slot media tidak ditemukan.');
   if(locked(slot))throw Error('Slot memuat layer terkunci. Buka kuncinya dahulu.');
   if(!(file instanceof Blob)||!file.size)throw Error('Pilih file media yang tidak kosong.');
-  const allowed=slot.type==='image'?'image/':slot.type==='video'?'video/':'audio/';
-  if(file.type&&!file.type.startsWith(allowed))throw Error('Slot ini membutuhkan '+(slot.type==='image'?'foto':slot.type==='video'?'video':'audio')+'.');
+  const allowed=slot.type;
+  if(omsMediaKind(file)!==allowed)throw Error('Slot ini membutuhkan '+(slot.type==='image'?'foto':slot.type==='video'?'video':'audio')+'.');
   if(exporter.running||window.omsBackgroundRemoval?.stats().jobs)throw Error('Tunggu ekspor / proses AI selesai dahulu.');
   const project=model.project,token=epoch,controller=new AbortController(),targets=[...slot.layers];pending=controller;clock.stop({continuePreRender:false});status('Memeriksa media pengganti…');update(true);if(root)renderSlots();
   try{
-   const meta=await probe(file,slot.type,controller.signal);
+   file=omsNormalizeMediaFile(file);const meta=await probe(file,slot.type,controller.signal);
    if(controller.signal.aborted||token!==epoch||model.project!==project||targets.some(l=>!model.layers.includes(l))||locked(slot))throw Error('Proyek/slot berubah; penggantian dibatalkan.');
    // Capture before assigning the new asset. History retains old blobs for Undo.
    const backup=model.snapshot({includeMedia:false}),oldPast=[...history.past],oldFuture=[...history.future],warnings=new Set();
@@ -52109,7 +52146,7 @@ const OMSTemplateEditor=(()=>{
   }catch(e){if(token===epoch)status(e.message,true);throw e;}
   finally{if(pending===controller)pending=null;if(root){renderSlots();update(true);}}
  }
- function pick(){const slot=slots.find(s=>s.key===selectedKey);if(!slot||pending)return;const input=root.querySelector('[data-template-file]');input.accept=slot.type+'/*';input.value='';input.dataset.key=slot.key;input.click();}
+ function pick(){const slot=slots.find(s=>s.key===selectedKey);if(!slot||pending)return;const input=root.querySelector('[data-template-file]');input.accept=omsMediaAccept(slot.type);input.value='';input.dataset.key=slot.key;omsPickMediaInput(input,slot.type);}
  function close({refit=true}={}){
   if(!root)return;epoch++;pending?.abort();thumbnails.dispose();if(seekFrame)cancelAnimationFrame(seekFrame);seekFrame=0;clock.stop({continuePreRender:false});resizeObserver?.disconnect();resizeObserver=null;
   const previous=root,restore=saved;root=null;saved=null;slots=[];selectedKey=null;document.body.classList.remove('omsTemplateOpen');
@@ -55235,7 +55272,7 @@ window.omsDetachedMatte=OMSDetachedMatte250;
 // encoder allocation, pixel readback or render cadence changes.
 const OMSExportDiagnostics302=(()=>{
  'use strict';
- const BUILD='GitHub-6876cbb-ExportFix1',KEY='oms_export_reporter_v1',LIMITS={automaticRuns:8,manualRuns:3,sessions:4,events:24,ids:128,logs:16,rows:128,perCallMs:1800,totalProbeMs:20000},automatic=[],manual=[],sessions=[],events=[],watched=new WeakSet(),contextNames=new WeakMap();let sequence=0,currentSession=null,probePromise=null,lastFailure=null,dropped={automaticRuns:0,manualRuns:0,sessions:0,events:0};
+ const BUILD='OpenMotion-Usability-20261023',KEY='oms_export_reporter_v1',LIMITS={automaticRuns:8,manualRuns:3,sessions:4,events:24,ids:128,logs:16,rows:128,perCallMs:1800,totalProbeMs:20000},automatic=[],manual=[],sessions=[],events=[],watched=new WeakSet(),contextNames=new WeakMap();let sequence=0,currentSession=null,probePromise=null,lastFailure=null,dropped={automaticRuns:0,manualRuns:0,sessions:0,events:0};
  const number=v=>typeof v==='number'&&Number.isFinite(v)?v:null;
  function text(value,max=2048){return String(value??'').slice(0,max).replace(/\b(?:https?|file|blob|data):[^\s"'<>]+/gi,'[URL disamarkan]').replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[email disamarkan]');}
  function plain(value,depth=0){if(value==null)return null;if(typeof value==='number')return number(value);if(typeof value==='boolean')return value;if(typeof value==='string')return text(value);if(depth>9)return'[depth limit]';if(Array.isArray(value))return value.slice(0,LIMITS.rows).map(v=>plain(v,depth+1));if(typeof value==='object'){const o={};for(const k of Object.keys(value).slice(0,100))o[k]=plain(value[k],depth+1);return o;}return null;}
@@ -55278,6 +55315,184 @@ function startSession(d){if(currentSession&&!currentSession.terminal){currentSes
  return{buildLabel:BUILD,report,setReporter,automaticStart,automaticFinish,fullProbe,captureEffectFailure,watchState};
 })();
 window.omsExportDiagnostics=OMSExportDiagnostics302;
+
+// Editable vector brush geometry. Pressure is baked into the outline, so old
+// project/XML/render paths need no new brush-specific schema or live stylus.
+const OMSFreehandGeometry=(()=>{
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),distance=(a,b)=>Math.hypot(b.x-a.x,b.y-a.y),node=p=>({x:p.x,y:p.y,inX:p.x,inY:p.y,outX:p.x,outY:p.y,handleMode:'smooth'});
+  function simplify(points,tolerance,pressureScale=8){
+    if(points.length<3)return points.slice();
+    const keep=new Uint8Array(points.length),stack=[[0,points.length-1]];keep[0]=keep[points.length-1]=1;
+    while(stack.length){const[a,b]=stack.pop(),p=points[a],q=points[b],dx=q.x-p.x,dy=q.y-p.y,len=dx*dx+dy*dy;let best=tolerance,index=-1;
+      for(let i=a+1;i<b;i++){const v=points[i],t=len?clamp(((v.x-p.x)*dx+(v.y-p.y)*dy)/len,0,1):0,spatial=Math.hypot(v.x-p.x-t*dx,v.y-p.y-t*dy),pressure=Math.abs(v.p-(p.p+(q.p-p.p)*t))*pressureScale,error=Math.max(spatial,pressure);if(error>best){best=error;index=i;}}
+      if(index>=0){keep[index]=1;stack.push([a,index],[index,b]);}
+    }
+    return points.filter((_,i)=>keep[i]);
+  }
+  function curve(points,strength){
+    return points.map((p,i)=>{const n=node(p),a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(!d)return n;
+      const before=i?distance(a,p):distance(p,b),after=i<points.length-1?distance(p,b):before,handle=Math.min(before,after)*strength/3;
+      n.inX-=dx/d*handle;n.inY-=dy/d*handle;n.outX+=dx/d*handle;n.outY+=dy/d*handle;return n;
+    });
+  }
+  function dot(p,r){const k=.5522847498307936*r,x=p.x,y=p.y;return[
+    {x:x+r,y,inX:x+r,inY:y-k,outX:x+r,outY:y+k,handleMode:'smooth'},
+    {x,y:y+r,inX:x+k,inY:y+r,outX:x-k,outY:y+r,handleMode:'smooth'},
+    {x:x-r,y,inX:x-r,inY:y+k,outX:x-r,outY:y-k,handleMode:'smooth'},
+    {x,y:y-r,inX:x-k,inY:y-r,outX:x+k,outY:y-r,handleMode:'smooth'}];}
+  function build(raw,{width=5,smoothing=.65,pressure=false,unit=1}={}){
+    width=clamp(+width||5,1,40);smoothing=clamp(+smoothing||0,0,1);unit=Math.max(.01,+unit||1);
+    let points=raw.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)).map(p=>({x:p.x,y:p.y,p:pressure?clamp(Number.isFinite(p.p)?p.p:.5,0,1):.5}));
+    if(!points.length)return null;
+    const radius=p=>width*(pressure?(.25+1.5*p):1)/2;
+    const spread=points.reduce((m,p)=>Math.max(m,distance(points[0],p)),0);
+    if(spread<Math.max(.35*unit,width*.08)){const p=points[0],r=radius(points.reduce((m,v)=>Math.max(m,v.p),p.p));return{nodes:dot(p,r),dot:true,samples:1,minWidth:r*2,maxWidth:r*2};}
+    // Symmetric local filtering has no trailing pen lag; endpoints stay fixed.
+    if(smoothing)points=points.map((p,i,list)=>{if(!i||i===list.length-1)return p;const a=list[i-1],b=list[i+1],s=smoothing*.22;return{x:p.x*(1-2*s)+(a.x+b.x)*s,y:p.y*(1-2*s)+(a.y+b.y)*s,p:p.p*(1-2*s)+(a.p+b.p)*s};});
+    points=simplify(points,(.15+smoothing*.8)*unit,pressure?Math.max(width*1.5,unit*8):0);
+    const nodes=curve(points,smoothing),samples=[],length=points.reduce((sum,p,i)=>sum+(i?distance(points[i-1],p):0),0),step=Math.max(.7*unit,width*.22,length/2048);
+    for(let i=0;i<nodes.length-1;i++){
+      const a=nodes[i],b=nodes[i+1],estimate=distance(a,{x:a.outX,y:a.outY})+distance({x:a.outX,y:a.outY},{x:b.inX,y:b.inY})+distance({x:b.inX,y:b.inY},b),count=Math.max(1,Math.ceil(estimate/step));
+      for(let j=0;j<count;j++){const t=j/count,u=1-t;samples.push({x:u*u*u*a.x+3*u*u*t*a.outX+3*u*t*t*b.inX+t*t*t*b.x,y:u*u*u*a.y+3*u*u*t*a.outY+3*u*t*t*b.inY+t*t*t*b.y,p:points[i].p+(points[i+1].p-points[i].p)*t});}
+    }
+    samples.push(points.at(-1));
+    const left=[],right=[],axes=[],widths=[];
+    for(let i=0;i<samples.length;i++){const p=samples[i],a=samples[Math.max(0,i-1)],b=samples[Math.min(samples.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,t={x:dx/d,y:dy/d},n={x:-t.y,y:t.x},r=radius(p.p);axes.push({t,n,r});widths.push(r*2);left.push({x:p.x+n.x*r,y:p.y+n.y*r});right.push({x:p.x-n.x*r,y:p.y-n.y*r});}
+    // Simplify the dense offset edges before generating editable Bezier handles.
+    const tolerance=Math.max(.05*unit,width*.012),edge=list=>curve(simplify(list.map(p=>({...p,p:.5})),tolerance),smoothing*.6),L=edge(left),R=edge(right.reverse()),first=axes[0],last=axes.at(-1),start=samples[0],end=samples.at(-1),k=.5522847498307936;
+    const cap=(p,{t,n,r},sign)=>node({x:p.x+t.x*r*sign,y:p.y+t.y*r*sign}),endCap=cap(end,last,1),startCap=cap(start,first,-1);
+    const set=(target,key,p,axis,scale)=>{target[key+'X']=p.x+axis.x*scale;target[key+'Y']=p.y+axis.y*scale;};
+    set(L.at(-1),'out',L.at(-1),last.t,last.r*k);set(endCap,'in',endCap,last.n,last.r*k);set(endCap,'out',endCap,last.n,-last.r*k);set(R[0],'in',R[0],last.t,last.r*k);
+    set(R.at(-1),'out',R.at(-1),first.t,-first.r*k);set(startCap,'in',startCap,first.n,-first.r*k);set(startCap,'out',startCap,first.n,first.r*k);set(L[0],'in',L[0],first.t,-first.r*k);
+    return{nodes:[...L,endCap,...R,startCap],dot:false,samples:samples.length,minWidth:Math.min(...widths),maxWidth:Math.max(...widths)};
+  }
+  return{build,simplify};
+})();
+
+// Mobile compatibility fixes: layout ownership, audio lifecycle, drawing and GPU recovery.
+const OMSMobileCompat=(()=>{
+  const root=document.documentElement,drawer=$('#drawer'),area=$('.timelineArea');let layoutRAF=0,freehand=null,recovery=0;
+  const panelStorageKey='oms.panelSizes.v1',panelSizes=(()=>{try{const value=JSON.parse(localStorage.getItem(panelStorageKey)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch(_){return{};}})();let panelDrag=null;
+  const panelKind=()=>`${drawer.classList.contains('addDrawer')?'add':'inspector'}:${innerWidth<900&&!root.classList.contains('omsMobileLandscapeDesktop')?'portrait':'wide'}`;
+  const panelBounds=()=>{const css=getComputedStyle(area),contentHeight=area.clientHeight-(parseFloat(css.paddingTop)||0)-(parseFloat(css.paddingBottom)||0),toolbar=Math.max(38,area.querySelector(':scope > .transport')?.getBoundingClientRect().height||38)+24,max=Math.max(64,Math.floor(contentHeight-toolbar-104));area.style.setProperty('--oms-panel-toolbar',toolbar+'px');return{min:Math.min(drawer.classList.contains('addDrawer')?128:116,max),max};};
+  function savePanel(){try{localStorage.setItem(panelStorageKey,JSON.stringify(panelSizes));}catch(_){} }
+  function finishPanel(cancel=false){
+    if(!panelDrag)return;const state=panelDrag;panelDrag=null;
+    if(cancel){if(state.before===undefined)delete panelSizes[state.key];else panelSizes[state.key]=state.before;}else savePanel();
+    root.classList.remove('omsPanelResizing');try{state.handle.releasePointerCapture(state.pointer);}catch(_){}schedule();
+  }
+  function mountPanelHandle(){
+    // Overlay the existing header at the center of the WHOLE panel, including
+    // Add Object and the effects rack whose content starts after a side rail.
+    // Absolute positioning keeps this out of flex/grid sizing entirely.
+    const host=drawer;
+    let handle=drawer.querySelector('.omsPanelResize');if(handle&&handle.parentElement===host)return handle;
+    if(panelDrag)finishPanel(true);
+    if(handle){host.append(handle);return handle;}
+    handle=document.createElement('div');handle.className='omsPanelResize';handle.tabIndex=0;handle.setAttribute('role','separator');handle.setAttribute('aria-orientation','horizontal');handle.setAttribute('aria-label','Tinggi panel inspector');handle.title='Tarik untuk mengatur tinggi panel • panah atas/bawah • klik dua kali untuk reset';handle.innerHTML='<span aria-hidden="true"></span>';
+    handle.onpointerdown=e=>{if(panelDrag||e.button!==0)return;e.preventDefault();e.stopPropagation();const key=panelKind();panelDrag={key,before:panelSizes[key],pointer:e.pointerId,y:e.clientY,height:drawer.getBoundingClientRect().height,handle};root.classList.add('omsPanelResizing');try{handle.setPointerCapture(e.pointerId);}catch(_){} };
+    handle.onpointermove=e=>{if(!panelDrag||panelDrag.pointer!==e.pointerId)return;e.preventDefault();e.stopPropagation();const bounds=panelBounds();panelSizes[panelDrag.key]=clamp(panelDrag.height+panelDrag.y-e.clientY,bounds.min,bounds.max)/bounds.max;schedule();};
+    handle.onpointerup=e=>{if(panelDrag?.pointer!==e.pointerId)return;e.preventDefault();e.stopPropagation();handle.onpointermove(e);finishPanel();};
+    handle.onpointercancel=e=>{if(panelDrag?.pointer===e.pointerId)finishPanel(true);};handle.onlostpointercapture=e=>{if(panelDrag?.pointer===e.pointerId)finishPanel(true);};
+    handle.ondblclick=e=>{e.preventDefault();delete panelSizes[panelKind()];savePanel();layout();};
+    handle.onkeydown=e=>{if(!['ArrowUp','ArrowDown','Home','End','Escape'].includes(e.key))return;e.preventDefault();e.stopPropagation();if(e.key==='Escape'){finishPanel(true);return;}const b=panelBounds(),height=drawer.getBoundingClientRect().height;panelSizes[panelKind()]=(e.key==='Home'?b.min:e.key==='End'?b.max:clamp(height+(e.key==='ArrowUp'?1:-1)*(e.shiftKey?40:16),b.min,b.max))/b.max;savePanel();layout();};
+    host.append(handle);return handle;
+  }
+  const usabilityOpenInspector=ui.openInspector;ui.openInspector=function(...args){const value=usabilityOpenInspector.apply(this,args);layout();return value;};
+  function layout(){
+    layoutRAF=0;const open=!!drawer&&!drawer.classList.contains('hidden'),portrait=innerWidth<900&&!root.classList.contains('omsMobileLandscapeDesktop');
+    root.classList.toggle('omsPanelOpen',open);root.classList.toggle('omsPanelPortrait',open&&portrait);
+    if(!open){finishPanel(true);return;}
+    const handle=mountPanelHandle(),bounds=panelBounds(),saved=panelSizes[panelKind()],wanted=Number.isFinite(saved)?saved*bounds.max:(drawer.classList.contains('addDrawer')?251:Math.min(380,innerHeight*.38)),height=Math.floor(clamp(wanted,bounds.min,bounds.max)),value=height+'px';
+    if(area.style.getPropertyValue('--oms-panel-height')!==value)area.style.setProperty('--oms-panel-height',value);
+    handle.setAttribute('aria-valuemin',bounds.min);handle.setAttribute('aria-valuemax',bounds.max);handle.setAttribute('aria-valuenow',height);handle.setAttribute('aria-valuetext',height+' piksel');
+    timeline.updateDrawerOverlap?.();
+  }
+
+  const schedule=()=>{if(!layoutRAF)layoutRAF=requestAnimationFrame(layout);};
+  new MutationObserver(schedule).observe(drawer,{attributes:true,attributeFilter:['class']});
+  new MutationObserver(schedule).observe(root,{attributes:true,attributeFilter:['class']});
+  new ResizeObserver(schedule).observe(area);window.addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);
+  // Native file dialogs are opened synchronously by a user click in the picker.
+  $('#mediaInput').onchange=async e=>{const input=e.target,files=[...input.files];try{await media.importFiles(files,{expected:input.dataset.omsKind||null});}finally{input.value='';}};
+  const openTool=ui.openTool;ui.openTool=function(...args){if(freehand)endFreehand();const value=openTool.apply(this,args);const b=$('#btnQuickFreehand');if(b){const clone=b.cloneNode(true);b.replaceWith(clone);clone.onclick=()=>startFreehand();}layout();return value;};
+  const shell=ui.drawerShell;ui.drawerShell=function(...args){const value=shell.apply(this,args);layout();return value;};
+  const close=ui.closeDrawer;ui.closeDrawer=function(...args){const value=close.apply(this,args);layout();schedule();return value;};
+
+  function silence(el){if(!el)return;el._omsAudioWanted=false;try{el.muted=true;el.pause();}catch(_){} }
+  function proxyWanted(l,map,playing,muted){return !!(playing&&!muted&&!l.hidden&&!l.amSilentVideo&&omsLayerIncludedInExport(l)&&(l.volume??1)>0&&map?.active&&map.region==='content');}
+  function manageProxy(el){
+    if(!el||el._omsManagedAudio)return;el._omsManagedAudio=true;const play=el.play.bind(el);
+    el.play=function(){if(this._omsAudioPending)return this._omsAudioPending;let promise;promise=Promise.resolve().then(()=>{if(!this._omsAudioWanted)return;return play();}).then(value=>{if(!this._omsAudioWanted)silence(this);return value;}).finally(()=>{if(this._omsAudioPending===promise)this._omsAudioPending=null;});this._omsAudioPending=promise;return promise;};
+  }
+  const syncProxy=media.syncSharedAudioProxy;media.syncSharedAudioProxy=function(l,map,playing,muted,options){
+    if(!proxyWanted(l,map,playing,muted)){silence(l?._sharedAudioProxy);const state=this.sharedAudioClockStates.get(l?.id);if(state)state.active=false;return;}
+    const proxy=this.ensureSharedAudioProxy(l);if(!proxy)return;manageProxy(proxy);proxy._omsAudioWanted=true;
+    silence(l.video); // A proxy is the sole audible owner for this layer in this mode.
+    return syncProxy.call(this,l,map,true,false,options);
+  };
+  function reconcile(t,playing,muted=false){
+    for(const l of model.layers){const map=mediaClipMap(l,t),active=!!(playing&&!l.hidden&&omsLayerIncludedInExport(l)&&map.active&&map.region==='content'),usesProxy=l.type==='video'&&(media.sharedPlaybackMode||media.isSharedVideoFollower(l));
+      if(!usesProxy||!proxyWanted(l,map,playing,muted))silence(l._sharedAudioProxy);
+      for(const el of [l.video,l.audio]){if(!el)continue;const silent=!active||muted||!!l.amSilentVideo||(l.volume??1)<=0||usesProxy;try{el.muted=silent;if(!active||usesProxy)el.pause();}catch(_){} }
+    }
+  }
+  for(const name of ['sync','tick']){const old=media[name];media[name]=function(t,...args){const value=old.call(this,t,...args);reconcile(t,name==='tick'?true:!!args[0],name==='tick'?!!args[0]:!!args[1]);return value;};}
+  const pause=media.pause;media.pause=function(...args){const value=pause.apply(this,args);for(const l of model.layers){silence(l.video);silence(l.audio);silence(l._sharedAudioProxy);const s=this.sharedAudioClockStates.get(l.id);if(s)s.active=false;}return value;};
+  const start=clock.start;clock.start=function(...args){if(model.playing)return;media.pause({sync:false});return start.apply(this,args);};
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){if(model.playing)clock.stop({syncMedia:false,renderDecay:false,continuePreRender:false});else media.pause({sync:false});}});
+
+  const brushStorageKey='oms.freehandBrush.v1';
+  bus.on('model:restored',()=>{if(freehand)endFreehand();});
+  function readBrush(){try{const p=JSON.parse(localStorage.getItem(brushStorageKey)||'{}');return{color:/^#[0-9a-f]{6}$/i.test(p.color)?p.color:'#27d3b5',width:clamp(+p.width||5,1,40),smoothing:Number.isFinite(+p.smoothing)?clamp(+p.smoothing,0,100):65,pressure:p.pressure!==false};}catch(_){return{color:'#27d3b5',width:5,smoothing:65,pressure:true};}}
+  function endFreehand(){if(!freehand)return;const state=freehand;freehand=null;if(state.raf)cancelAnimationFrame(state.raf);try{state.overlay.releasePointerCapture(state.pointer);}catch(_){}state.overlay.remove();state.hud.remove();renderer.render();}
+  function startFreehand(){
+    if(freehand)return;ui.closeDrawer({immediate:true});if(ui.vectorPenState)ui.finishVectorPenTool();clock.stop({continuePreRender:false});
+    const project=model.project;if(!project)return;const overlay=document.createElement('canvas'),hud=document.createElement('div'),settings=readBrush();overlay.className='omsFreehandOverlay';overlay.width=project.width;overlay.height=project.height;overlay.setAttribute('aria-label','Gambar bebas: seret untuk menggambar atau ketuk untuk titik');
+    hud.className='omsFreehandHUD';hud.innerHTML='<header><b>Gambar Bebas</b><button data-options type="button" aria-expanded="false" aria-controls="omsFreehandOptions">Pengaturan</button><button data-done type="button">Selesai</button></header><div id="omsFreehandOptions" class="omsFreehandOptions" hidden><label>Warna <input type="color" aria-label="Warna goresan"></label><label>Tebal <input type="range" min="1" max="40" aria-label="Tebal goresan"><output data-width></output></label><label>Halus <input data-smoothing type="range" min="0" max="100" aria-label="Penghalusan goresan"><output data-smooth></output></label><label><input data-pressure type="checkbox"> Tekanan stylus</label><small>Seret untuk menggambar, ketuk untuk titik. Tekanan mengikuti stylus; jari/mouse memakai tebal tetap.</small></div>';
+    const color=hud.querySelector('[type=color]'),width=hud.querySelector('[aria-label="Tebal goresan"]'),smoothing=hud.querySelector('[data-smoothing]'),pressure=hud.querySelector('[data-pressure]');color.value=settings.color;width.value=settings.width;smoothing.value=settings.smoothing;pressure.checked=settings.pressure;
+    function update(){settings.color=color.value;settings.width=+width.value;settings.smoothing=+smoothing.value;settings.pressure=pressure.checked;hud.querySelector('[data-width]').textContent=settings.width;hud.querySelector('[data-smooth]').textContent=settings.smoothing+'%';try{localStorage.setItem(brushStorageKey,JSON.stringify(settings));}catch(_){} }
+    const options=hud.querySelector('.omsFreehandOptions'),toggle=hud.querySelector('[data-options]');toggle.onclick=()=>{options.hidden=!options.hidden;toggle.setAttribute('aria-expanded',String(!options.hidden));};if(innerWidth>=480&&$('#viewport').clientHeight>=400)toggle.click();
+    hud.oninput=update;update();$('#canvasWrap').append(overlay);$('#viewport').append(hud);
+    const state=freehand={overlay,hud,project,points:[],pointer:null,raf:0,brush:null},ctx=overlay.getContext('2d');
+    const point=e=>{const r=overlay.getBoundingClientRect(),last=state.points.at(-1),p=state.brush.pressure&&e.pressure>0?e.pressure:(last?.p??.5);return{x:clamp((e.clientX-r.left)*project.width/Math.max(1,r.width),0,project.width),y:clamp((e.clientY-r.top)*project.height/Math.max(1,r.height),0,project.height),p};};
+    function geometry(){return OMSFreehandGeometry.build(state.points,state.brush);}
+    function paint(){state.raf=0;if(freehand!==state)return;ctx.clearRect(0,0,overlay.width,overlay.height);const shape=geometry();if(!shape)return;ctx.fillStyle=state.brush.color;traceVectorShapePath(ctx,{vectorNodes:shape.nodes,vectorClosed:true});ctx.fill();}
+    const schedulePaint=()=>{if(!state.raf)state.raf=requestAnimationFrame(paint);};
+    function sample(e){const p=point(e),last=state.points.at(-1);if(last&&Math.hypot(p.x-last.x,p.y-last.y)<.3*state.brush.unit&&Math.abs(p.p-last.p)<.025)return;state.points.push(p);
+      // Bound exceptionally long input streams, while normal strokes stay untouched.
+      if(state.points.length>16384){state.points=OMSFreehandGeometry.simplify(state.points,state.brush.unit*1.5);if(state.points.length>8192)state.points=state.points.filter((_,i,list)=>i===0||i===list.length-1||i%2===0);}
+      schedulePaint();
+    }
+    overlay.onpointerdown=e=>{if(state.pointer!==null||e.button!==0||!e.isPrimary)return;e.preventDefault();e.stopPropagation();const r=overlay.getBoundingClientRect();state.brush={color:settings.color,width:settings.width,smoothing:settings.smoothing/100,pressure:settings.pressure&&e.pointerType==='pen',unit:project.width/Math.max(1,r.width)};state.pointer=e.pointerId;state.points=[];sample(e);try{overlay.setPointerCapture(e.pointerId);}catch(_){} };
+    overlay.onpointermove=e=>{if(state.pointer!==e.pointerId)return;e.preventDefault();e.stopPropagation();const events=e.getCoalescedEvents?.();for(const value of events?.length?events:[e])sample(value);};
+    const finish=(e,cancel=false)=>{if(state.pointer!==e.pointerId)return;e.preventDefault();e.stopPropagation();if(!cancel)sample(e);state.pointer=null;try{overlay.releasePointerCapture(e.pointerId);}catch(_){}if(state.raf)cancelAnimationFrame(state.raf);state.raf=0;const shape=!cancel&&model.project===project?geometry():null;state.points=[];ctx.clearRect(0,0,overlay.width,overlay.height);if(!shape)return;
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(const n of shape.nodes)for(const[x,y]of[[n.x,n.y],[n.inX,n.inY],[n.outX,n.outY]]){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}const x=(minX+maxX)/2,y=(minY+maxY)/2,pad=2;
+      const nodes=shape.nodes.map(n=>({...n,x:n.x-x,y:n.y-y,inX:n.inX-x,inY:n.inY-y,outX:n.outX-x,outY:n.outY-y}));
+      history.push();model.addLayer('shape',{shape:'vector',name:shape.dot?'Titik Bebas':'Gambar Bebas',x,y,w:Math.max(2,maxX-minX+pad*2),h:Math.max(2,maxY-minY+pad*2),radius:0,color:state.brush.color,stroke:state.brush.color,strokeWidth:0,vectorClosed:true,vectorNodes:nodes});timeline.rebuild();renderer.render();
+    };
+    overlay.onpointerup=e=>finish(e);overlay.onpointercancel=e=>finish(e,true);overlay.onlostpointercapture=e=>{if(state.pointer===e.pointerId)finish(e,true);};hud.querySelector('[data-done]').onclick=endFreehand;
+  }
+
+  document.addEventListener('keydown',e=>{if(freehand&&e.key==='Escape'){e.preventDefault();endFreehand();}});bus.on('project:will-change',()=>{if(freehand)endFreehand();media.pause({sync:false});});
+
+  function notice(message){
+    let box=$('#omsPreviewHealth');if(!message){box?.remove();return;}
+    if(!box){box=document.createElement('div');box.id='omsPreviewHealth';box.className='omsPreviewHealth';box.setAttribute('role','status');$('#viewport').append(box);}
+    box.replaceChildren(document.createTextNode(message));const button=document.createElement('button');button.type='button';button.textContent='Diagnostik';button.onclick=()=>omsDiagnostics.openPanel();box.append(button);
+  }
+  function watchContext(){
+    const canvas=renderer.gl?.canvas;if(!canvas)return;
+    canvas.addEventListener('webglcontextlost',()=>{recovery++;renderer._omsContextLost=true;if(model.playing)clock.stop({syncMedia:false,renderDecay:false,continuePreRender:false});else media.pause({sync:false});notice('Konteks GPU terhenti. Menunggu pemulihan browser; proyek tetap tersimpan.');});
+    canvas.addEventListener('webglcontextrestored',async()=>{const token=++recovery,project=model.project;try{renderer.textures.clear();renderer.trackMatteTargets.clear();AMEffectGPU.states.delete(renderer);renderer.initGL();renderer._omsContextLost=false;renderer.resize();if(model.project?.amGPU)await window.omsAMGPU?.prepare(renderer,model.layers);if(token!==recovery||project!==model.project)return;notice(null);renderer.render();}catch(error){renderer._omsContextLost=false;notice('GPU belum dapat dipulihkan: '+error.message);}});
+    const render=renderer.render;renderer.render=function(...args){if(this._omsContextLost||this.gl?.isContextLost?.())return;return render.apply(this,args);};
+  }
+  watchContext();if(renderer.gpuStartupError)notice('Renderer GPU gagal dimulai. Preview memakai jalur kompatibilitas 2D; hasil 3D/efek GPU perlu diperiksa. '+renderer.gpuStartupError);
+  const watched=new WeakSet();function watchMedia(){for(const l of model.layers){const el=l.video||l.audio||l.img;if(!el||watched.has(el))continue;watched.add(el);el.addEventListener('error',()=>{if(!model.layers.includes(l)||l.hidden)return;notice('Media gagal dimuat: '+l.name+'. Pilih Tautkan Ulang atau coba codec lain.');});}}
+  bus.on('model:changed',watchMedia);const hydrate=model.hydrateLayer;model.hydrateLayer=function(...args){const value=hydrate.apply(this,args);watchMedia();return value;};watchMedia();layout();
+  return{version:'MobileCompatibility2-Usability',notice,startFreehand,endFreehand,reconcileAudio:reconcile,layout,freehandActive:()=>!!freehand};
+})();
+window.omsMobileCompat=OMSMobileCompat;
 
 if(window.__OMS_TEST__)Object.assign(window,{omsEffectSpec,omsEffectInstance,omsEffectRawValue,omsHistory:history});
 })();
@@ -59618,3 +59833,101 @@ THE SOFTWARE.
 <!-- V5.21 — Native Multi-source Timeline Preview: capable Android/touch devices keep 2–4 different video sources on independent HTMLVideo decoders; Stage 4/5 remains fallback for larger/low-memory overlaps. Adds safe deferred shared-decoder cleanup and richer Worker diagnostics. Export pipeline unchanged. -->
 <!-- V5.24 — Native Frame-Token Texture Pacing: keeps V5.23 native HTMLVideo -> WebGL playback, but keys texture uploads to requestVideoFrameCallback frame tokens instead of continuously changing currentTime. This prevents duplicate full-resolution GPU uploads between decoded frames and adds upload timing diagnostics. Export pipeline unchanged. -->
 <!-- V5.25 — GPU Fast is now the default and first export engine. Other engines are labeled Legacy; existing installs migrate once to GPU Fast. Automatic GPU Fast fallback remains Video HW -> Stabil Presisi. Rendering algorithms are unchanged from V5.24. -->
+
+<style id="oms-mobile-compat-20261023">
+/* One responsive layout owner for inspector and Add Object; timeline never sits underneath. */
+html.omsPanelOpen .timelineArea{grid-template-rows:38px minmax(96px,1fr) minmax(64px,var(--oms-panel-height,250px))!important;overflow:hidden!important}
+html.omsPanelOpen .timelineArea>#timelineScroll{grid-row:2!important;min-height:96px!important;max-height:100%!important;position:relative!important}
+html.omsPanelOpen .timelineArea>#drawer:not(.hidden){position:relative!important;inset:auto!important;grid-column:1!important;grid-row:3!important;width:100%!important;min-width:0!important;height:100%!important;min-height:0!important;max-height:none!important;align-self:stretch!important;border:0!important;border-top:1px solid #353c52!important;border-radius:0!important;transform:none!important;animation:none!important;overflow:hidden!important}
+html.omsPanelOpen .timelineArea>#drawer>.drawerHead{flex:0 0 36px!important;min-height:36px!important;height:36px!important}
+html.omsPanelOpen .timelineArea>#drawer>.drawerBody{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;overscroll-behavior:contain}
+html.omsPanelOpen #plusBtn{display:none!important}
+html.omsPanelPortrait .editorMain{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:minmax(100px,.42fr) minmax(234px,.58fr)!important}
+#drawer.addDrawer .amAddPopup{display:grid!important;grid-template-columns:minmax(0,1fr) 1px 54px!important;grid-template-rows:52px minmax(0,1fr)!important;width:100%!important;height:100%!important;min-height:0!important}
+#drawer.addDrawer .amTabHolder{grid-column:1!important;grid-row:1!important;display:flex!important;overflow-x:auto!important;min-width:0!important;padding:0!important}
+#drawer.addDrawer .amTabDivider{grid-column:2!important;grid-row:1/3!important;background:#353c50}
+#drawer.addDrawer .amQuickAddBar{grid-column:3!important;grid-row:1/3!important;display:flex!important;flex-direction:column!important;gap:2px!important;overflow-y:auto!important;min-height:0!important;padding:3px!important}
+#drawer.addDrawer .amQuickBtn,#drawer.addDrawer .amCloseBtn{width:100%!important;min-height:40px!important;flex:0 0 auto!important;border:0!important;border-radius:6px!important;background:#202638!important;color:#d6e2ed!important;padding:4px!important;display:flex!important;flex-direction:column!important;align-items:center!important}
+#drawer.addDrawer .amQuickBtn span{font-size:9px!important;line-height:1.1!important}
+#drawer.addDrawer .amContentHolder{grid-column:1!important;grid-row:2!important;min-width:0!important;min-height:0!important;overflow:auto!important;padding:6px!important}
+#drawer.addDrawer .amTab{flex:1 0 54px!important;min-width:54px!important;max-width:none!important;height:52px!important;min-height:52px!important;max-height:52px!important;padding:4px 2px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important}
+#drawer.addDrawer .amTab>span,#drawer.addDrawer .amTabIconWrap{font-size:10px!important;line-height:1.15!important;margin:2px 0 0!important;white-space:nowrap!important}
+#drawer.addDrawer .amTab svg{width:20px!important;height:20px!important;flex:0 0 auto!important}
+#drawer.addDrawer .amTab .amNewBadge{font-size:6px!important;position:absolute!important;top:-5px!important;right:-9px!important}
+#drawer.addDrawer .templateGrid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(90px,1fr))!important;gap:6px!important}
+#drawer.addDrawer .templateCard{min-width:0!important;overflow-wrap:anywhere!important;font-size:11px!important}
+#drawer.addDrawer .templateCard b{font-size:11px!important;line-height:1.3!important}
+#drawer.addDrawer .createBtn{min-height:36px!important;width:100%!important;font-size:12px!important;white-space:normal!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amTab span{font-size:10px!important;line-height:1.15!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amTab .amNewBadge{font-size:6px!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amQuickBtn span{display:block!important;font-size:9px!important;line-height:1.1!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amTemplatesGrid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(100px,1fr))!important;gap:7px!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amTemplateCard{display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;width:100%!important;height:auto!important;min-height:84px!important;min-width:0!important;padding:8px!important;box-sizing:border-box!important;white-space:normal!important;overflow-wrap:anywhere!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amTemplateCard b{font-size:11px!important;line-height:1.35!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amTemplateCard small{font-size:10px!important;line-height:1.4!important;color:#a3b0c4!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amDropBox{display:grid!important;justify-items:center!important;gap:8px!important;width:100%!important;box-sizing:border-box!important;padding:12px!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amDropBox b{font-size:12px!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amDropBox button{min-height:38px!important;border:1px solid #40536c!important;border-radius:8px!important;background:#22364a!important;color:#ebf7ff!important;font-size:12px!important;padding:7px 14px!important}
+.omsMediaPicker{position:fixed;inset:0;z-index:40000;display:grid;place-items:center;padding:16px;background:#0009;color:#edf4fa}
+.omsMediaPicker section{width:min(410px,100%);max-height:85dvh;overflow:auto;background:#1a2030;border:1px solid #536076;border-radius:14px;padding:15px;font:13px/1.5 system-ui;box-sizing:border-box}
+.omsMediaPicker header{display:flex;justify-content:space-between;align-items:center}.omsMediaPicker p{margin:10px 0}.omsMediaPicker small{display:block;color:#a9b8ca;margin-top:10px}
+.omsMediaPicker [data-picker-options]{display:grid;gap:8px;grid-template-columns:1fr 1fr}.omsMediaPicker button{min-height:42px;border:1px solid #46566d;border-radius:8px;background:#253247;color:#eaf7ff;font:inherit;padding:8px}
+.omsFreehandHUD{position:absolute;top:6px;left:6px;right:6px;z-index:200;display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:#141d2ee8;border:1px solid #43536b;border-radius:8px;padding:6px;color:#e5f4fa;font:11px system-ui}
+.omsFreehandHUD input[type=range]{width:80px}.omsFreehandHUD button{min-height:32px;background:#294a49;color:white;border:1px solid #4da795;border-radius:6px}.omsFreehandOverlay{position:absolute;inset:0;width:100%;height:100%;z-index:180;touch-action:none;cursor:crosshair}
+.omsPreviewHealth{position:absolute;z-index:300;top:8px;left:8px;max-width:calc(100% - 16px);padding:9px;background:#452b18f2;border:1px solid #bd8e4e;color:#fff3de;border-radius:8px;font:11px/1.4 system-ui;box-sizing:border-box;overflow-wrap:anywhere}.omsPreviewHealth button{margin-left:8px;min-height:28px}
+
+</style>
+
+<style id="oms-usability-20261023">
+html.omsPanelOpen #drawer>.omsPanelResize{position:absolute!important;top:0!important;left:50%!important;right:auto!important;bottom:auto!important;transform:translateX(-50%)!important;z-index:90;display:flex!important;align-items:center;justify-content:center;flex:none!important;min-height:14px!important;height:14px!important;width:56px!important;box-sizing:border-box;cursor:ns-resize;touch-action:none;user-select:none;background:transparent;border:0;border-radius:0 0 6px 6px;margin:0!important;padding:0;outline-offset:-2px;color:#a1bdc9}
+.omsPanelResize>span{display:block;width:32px;height:3px;border-radius:4px;background:currentColor;opacity:.65;pointer-events:none}
+/* Keep the grip above tab icons, within the existing 52px Add Object header. */
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amTabHolder{height:52px!important;min-height:0!important;max-height:52px!important;padding:0!important;box-sizing:border-box!important}
+html.omsPanelOpen .timelineArea>#drawer.addDrawer .amTab{padding-top:13px!important;padding-bottom:2px!important;box-sizing:border-box!important}
+.omsPanelResize:hover,.omsPanelResize:focus-visible{color:#78d4bf!important;background:#213635!important}
+html.omsPanelResizing,html.omsPanelResizing *{cursor:ns-resize!important;user-select:none!important}
+.omsFreehandHUD{max-height:44%;overflow:auto;overscroll-behavior:contain;box-sizing:border-box;align-content:flex-start;row-gap:5px}
+.omsFreehandHUD label{display:inline-flex;align-items:center;gap:4px;min-height:24px;white-space:nowrap}
+.omsFreehandHUD input[type=color]{width:27px;height:26px;padding:0;border:0;background:transparent}
+.omsFreehandHUD input[type=range]{width:70px;max-width:20vw;accent-color:#64cbb3}
+.omsFreehandHUD input[type=checkbox]{accent-color:#64cbb3;width:16px;height:16px}
+.omsFreehandHUD output{min-width:22px;font-variant-numeric:tabular-nums}
+.omsFreehandHUD small{flex-basis:100%;font-size:10px;line-height:1.35;color:#afc3d3}
+.omsFreehandHUD>header{display:flex;align-items:center;gap:8px;width:100%;min-height:30px}
+.omsFreehandHUD>header>b{flex:1}
+.omsFreehandOptions{display:flex;flex-wrap:wrap;gap:5px 10px;align-items:center;width:100%}
+.omsFreehandOptions[hidden]{display:none!important}
+/* Legacy tablet rules use flex; the resizable panel requires actual grid tracks. */
+html.omsPanelOpen #editor .timelineArea:has(>#drawer:not(.hidden)){display:grid!important;grid-template-rows:var(--oms-panel-toolbar,68px) minmax(96px,1fr) minmax(64px,var(--oms-panel-height,250px))!important}
+html.omsPanelOpen .timelineArea>.transport{grid-row:1!important;align-self:start!important;height:calc(var(--oms-panel-toolbar,68px) - 24px)!important;min-height:38px!important}
+html.omsPanelOpen .timelineArea>#timelineScroll{height:auto!important;margin:0!important}
+html.omsPanelOpen .timelineArea>#timeRead{position:absolute!important;top:calc(var(--oms-panel-toolbar,68px) - 23px)!important;bottom:auto!important;left:50%!important;transform:translateX(-50%)!important;height:20px!important;padding:0 4px!important;box-sizing:border-box!important;display:flex;align-items:center;justify-content:center;z-index:35}
+
+</style>
+
+<style id="oms-responsive-content-20261023">
+/* Add Object content owns the remaining grid track, not the old 193px dock. */
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer>.amAddPopup{flex:1 1 auto!important;height:100%!important;min-height:0!important;max-height:none!important;box-sizing:border-box!important;grid-template-rows:52px minmax(0,1fr)!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amContentHolder{grid-column:1!important;grid-row:2!important;align-self:stretch!important;height:auto!important;min-height:0!important;max-height:none!important;padding:6px!important;box-sizing:border-box!important;display:flex!important;flex-direction:column!important;justify-content:flex-start!important;overflow:auto!important;overscroll-behavior:contain}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapeViewPagerWrap{display:flex!important;flex-direction:column!important;flex:1 0 auto!important;width:100%!important;height:100%!important;min-height:160px!important;max-height:none!important;box-sizing:border-box!important;justify-content:flex-start!important;overflow:hidden!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapeViewPager{display:flex!important;flex-direction:row!important;flex:1 1 0!important;width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow-x:auto!important;overflow-y:hidden!important;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapePage{display:flex!important;flex-direction:column!important;flex:0 0 100%!important;width:100%!important;min-width:100%!important;max-width:100%!important;height:100%!important;min-height:0!important;box-sizing:border-box!important;align-items:stretch!important;justify-content:flex-start!important;scroll-snap-align:start;scroll-snap-stop:always;padding:2px 4px!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapeGrid{display:grid!important;flex:1 1 auto!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;box-sizing:border-box!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;grid-template-rows:repeat(3,minmax(44px,1fr))!important;grid-auto-rows:minmax(44px,1fr)!important;gap:2px 4px!important;align-content:stretch!important;padding:0!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapeItem{height:100%!important;min-height:44px!important;max-height:none!important;width:100%!important;min-width:0!important;max-width:48px!important;aspect-ratio:auto!important;display:flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;background:transparent!important;border:0!important;border-radius:8px!important;padding:0!important;color:#fff!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapeItem:hover{background:rgba(255,255,255,.06)!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapeItem:active{background:rgba(0,215,167,.12)!important;color:var(--accent,#00d7a7)!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapeItem svg{display:block!important;width:28px!important;height:28px!important;max-width:100%;max-height:28px!important;margin:0!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amQuickAddBar{height:auto!important;min-height:0!important;max-height:none!important;align-self:stretch!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amQuickAddBar>.amQuickBtn,
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amQuickAddBar>.amCloseBtn{height:40px!important;min-height:40px!important;flex:0 0 40px!important;box-sizing:border-box!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amQuickAddBar>.amCloseBtn{margin-top:auto!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapePagination{display:flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;flex:0 0 16px!important;height:16px!important;min-height:16px!important;max-height:16px!important;margin:0!important;box-sizing:border-box!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapePagination .amDot{display:block;width:5px;height:5px;border-radius:3px;background:#474b5c;cursor:pointer}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amShapePagination .amDot.active{width:15px;background:var(--accent,#00d7a7)}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amDropBox{flex:1 0 auto!important;width:100%!important;height:auto!important;min-height:154px!important;max-height:none!important;box-sizing:border-box!important;align-content:center!important;justify-content:center!important;margin:0!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amTemplatesGrid,
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amObjectsGrid{display:grid!important;flex:1 0 auto!important;width:100%!important;height:auto!important;min-height:min-content!important;max-height:none!important;box-sizing:border-box!important;grid-template-columns:repeat(auto-fit,minmax(96px,1fr))!important;grid-template-rows:none!important;grid-auto-rows:minmax(84px,1fr)!important;align-content:stretch!important;gap:7px!important;padding:0!important}
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amTemplateCard,
+html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amObjectCard{width:100%!important;min-width:0!important;max-width:none!important;height:100%!important;min-height:84px!important;max-height:none!important;box-sizing:border-box!important;padding:8px!important;white-space:normal!important;overflow-wrap:anywhere!important}
+
+</style>
