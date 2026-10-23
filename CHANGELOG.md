@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-10-23 — AM Template Workflow, Effect Geometry & Element Labels
+
+### AM Link starts in Template Editor
+
+- After a successful AM Link download/import, close the import dialog and open the existing Template Editor automatically, for official, premium and third-party resolver choices.
+- Replace shared photo, video and audio sources before continuing through **Lanjut → Buka Timeline** or **Ekspor**. Retain clip timing, keyframes, effects and shared-source slot grouping.
+- Update the import button, description and Home tooltip to explain this flow. Failed/cancelled imports remain in their existing dialogs; reopening a saved project, other file imports and missing-media recovery do not gain a new automatic Template Editor step.
+
+### Native AM layer geometry
+
+- Correct the shared shader contract: `acLayerSize` is the untransformed primitive/content size, not the extent after layer or parent scaling, rotation or mirroring.
+- Keep logical layer/scene sizes, centers and motion vectors separate from preview raster buffers, FBOs and texture dimensions. Preserve shader source, imported values and keyframes.
+- Fix the Turbulent Displace pattern distortion in the supplied Renaxprst 9:16 project. The shared correction also covers live size readers such as Tiles, Noise, Displacement Map, Fractal Warp and procedural patterns.
+- Audit 315 registered effect definitions: 104 have live layer-size consumers in WebGL1/2; three other Swirl definitions have unused size expressions optimized out by the compiler. This is not a claim of complete native Android effect parity.
+
+### Element labels and PWA refresh
+
+- Restore **Kamera**, **Objek Null**, **Grup Kosong** and **Elemen** labels. Limit icon-only text hiding to the actual shape grid; retain readable icon-above-text object cards and scrolling in short panels.
+- Refresh the offline shell cache for this release without changing imported media or project storage.
+
+### Verification and limitations
+
+- 64 local import-flow/UI checks pass on the new HTML in isolated Chrome desktop and mobile emulation, covering all three resolver choices, delayed completion, errors/cancellation, project selection, empty templates, media replacement and returning to/reopening the timeline. Resolver responses are mocked; these are not live premium-service or physical-phone tests.
+- The retained geometry implementation was separately verified with 642 WebGL1/2 graph variants, 48 supplemental variants, 1,544 numeric contract assertions, 12 user-project frame cases, 16 real local/composition/parent/group/animated-bounds route cases and 295 UI regressions. Its shader/runtime changes are preserved unchanged by the import-flow update.
+- Physical iPhone/iPad/Android GPUs, full MP4 encoding/muxing and full native AM visual parity remain unverified. This release does not include the unfinished V5.300/V5.301 experiments or fix the separate AM effect-readiness export failure.
+
+## 2026-10-23 — Home Banner, Media Recovery & Preview Warnings
+
+Previously published in [ed642c8](https://github.com/Hada45/Open-Motion/commit/ed642c87ed7629581eb9cfb6d317cf803b78859b); this entry backfills the missing changelog.
+
+- Fix the giant desktop download icon caused by install-banner CSS being limited to mobile media queries. Keep the banner compact, dismissible and hidden in standalone mode.
+- Let media recovery explicitly choose premium, official anonymous (5 MB maximum package), or third-party resolver, with provider-specific notes and no automatic provider switching.
+- Recover media without reimporting layers or changing IDs, animations, effects, trim or relationships. Reject stale recovery results after switching projects; commit the resolver choice only after media is complete and recovery starts.
+- Add a focusable dismiss button and readable controls to preview warnings. Clear recovered/deleted/hidden/replaced media errors, ignore late events from obsolete sources and avoid video-codec advice for image failures.
+- Historical validation: 121 added checks and 755 scoped checks across the then-published build. Live resolver downloads, physical iPhone/iPad/Infinix and full 4K export were not verified. The static 1080p/4K encoder probe was diagnostic evidence only; no encoder fallback policy was changed.
+
+## 2026-10-23 — Mobile Compatibility, Resizable Panels & Freehand
+
+Previously published in [1a25e6f](https://github.com/Hada45/Open-Motion/commit/1a25e6fb7e94dabe07695ad4247eca2b40db5dc9); this entry backfills the missing changelog.
+
+- Add separate photo, video, audio and Files picker paths, safer MIME fallback and bounded media-probe cleanup for browser/device compatibility.
+- Guard video/audio proxy ownership, pending playback and background teardown to prevent overlapping playback.
+- Keep the timeline visible alongside responsive inspector/Add panels. Center resize grips inside existing panel headers, remember per-layout sizes, and let Add content fill the resized area with vertical overflow and retained shape paging.
+- Add adjustable freehand stroke smoothing, optional stylus-pressure width and single-tap dots as editable vector outlines, with Undo/Redo and XML persistence.
+- Keep Bezier handles reachable without rewriting curve overshoot. Expose GPU/media failures and retain a limited 2D startup fallback.
+- Preserve community PWA, AM share/export, project thumbnails and keyboard-shortcut contributions and the prior export-resolution fixes.
+- Historical validation: 634 scoped local checks on the then-published build. Physical iPhone/iPad/Infinix, hardware stylus and complete video export remain unverified; not every black-preview case is confirmed fixed.
+
 ## 2026-10-22 — Export Resolution & Diagnostics
 
 Published in [ee4e288](https://github.com/Hada45/Open-Motion/commit/ee4e2886ce4bea60a2793ff73410122ffab33f62).
