@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-23 — Timeline Ruler: Start-of-Project Gap
+
+- Cover the leading blank area to the left of the time ruler at 0 seconds and the first frames, so vertically scrolled layer headers cannot show through above the track boundary.
+- Let that area receive ruler input rather than selecting the hidden layer underneath. Retain the previous stacking-order correction, zero/tick positions, horizontal scrolling and playhead visibility.
+- Refresh the PWA shell-cache identity for this build.
+- Validation: 166 scoped browser checks passed in four desktop/mobile layouts, including the entire leading gap at 0 seconds, frames 1 and 10, later times, vertical scrolling, ruler input and layer controls. The v1 gap was reproduced. Physical phones were not tested.
+
+## 2026-10-23 — Timeline Ruler Visibility
+
+- Keep sticky layer headers below the fixed time ruler when vertically scrolling the timeline, including the left side during horizontal scrolling.
+- Preserve playhead visibility, ruler seeking, horizontal timeline zoom/pan, and layer controls. Only the header stacking order changes; project data and application scripts are unchanged.
+- Refresh the PWA shell-cache identity for this build.
+- Validation: 181 scoped browser checks passed across two portrait phone sizes, mobile landscape and desktop, including real touch gestures, ruler seeking, layer visibility controls and animation-data preservation. No uncaught page errors. Physical phones were not tested.
+
 ## 2026-10-23 — AM Template Workflow, Effect Geometry & Element Labels
 
 ### AM Link starts in Template Editor

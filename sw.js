@@ -1,7 +1,7 @@
-/* Open Motion AM Template First (2026-10-23) PWA service worker.
+/* Open Motion Timeline Ruler Fix v2 (2026-10-23) PWA service worker.
    Network-first navigation keeps GitHub deployments fresh while retaining an
    offline shell. User-imported Blob/File media is never cached here. */
-const CACHE_NAME = 'open-motion-pwa-20261023-am-template-first';
+const CACHE_NAME = 'open-motion-pwa-20261023-timeline-ruler-fix-v2';
 const SHELL = [
   './',
   './manifest.webmanifest',

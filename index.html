@@ -851,7 +851,8 @@ input[type=range]{accent-color:var(--accent)}
 
 /* V3.46 — trim handle tidak boleh menutup UI lain */
 /* Head layer, ruler, dan transport harus selalu tampil di atas handle trim. */
-.trackHead{z-index:18 !important; position:sticky}
+/* Judul layer tetap di bawah ruler (12) saat daftar digulir, dan di atas lane/trim (1). */
+.trackHead{z-index:11 !important; position:sticky}
 .ruler{z-index:18 !important}
 .transport{position:relative; z-index:18 !important}
 .trackLane{z-index:1}
@@ -1142,6 +1143,22 @@ input[type=range]{accent-color:var(--accent)}
   will-change:transform;
   transform:translate3d(0,0,0);
 }
+
+/* Tutup celah kiri sebelum detik 0 dengan latar ruler yang sama.
+   Pita ini ikut transformasi Y ruler dan scroll X native, serta menangkap
+   sentuhan agar judul layer yang tertutup tidak dapat terpilih. */
+.ruler::before{
+  content:"";
+  position:absolute;
+  right:100%;
+  top:0;
+  bottom:-1px;
+  width:98px;
+  background:inherit;
+  border-bottom:inherit;
+  pointer-events:auto;
+}
+
 
 
 /* V3.36 — clean transport rebuild: position only, original button styling retained */
