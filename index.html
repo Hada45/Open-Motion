@@ -66,7 +66,7 @@
 <!-- V5.07 — Stage 5: worker-assisted off-main-thread multi-source preview decode. Different-source overlaps prefer a Blob module Worker running Mediabunny CanvasSink + OffscreenCanvas/createImageBitmap, transferable ImageBitmap frames feed the existing WebGL compositor, same-asset divergent cursors retain V5.06 HTMLVideo playback, and the entire V5.05 main-thread ring-buffer decoder remains an automatic fallback. Exporter remains unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Open Motion · Inspector & Freehand · 2026-10-23</title>
+<title>Open Motion · Home & Media Recovery · 2026-10-23</title>
 <!-- V5.31 — Installable PWA: manifest, branded icons, Chrome install promotion and offline shell. -->
 <meta name="theme-color" content="#10121d">
 <meta name="application-name" content="Open Motion">
@@ -4779,106 +4779,7 @@ html.omsIOSStandalone #editor.editor:not(.hidden) {
   }
 }
 
-/* ==========================================================================
-   MOBILE HOME SCREEN (ALIGHT MOTION APP PARITY)
-   ========================================================================== */
-@media (max-width: 899px) {
-  html, body {
-    height: 100% !important;
-    height: 100dvh !important;
-    min-height: 100% !important;
-    min-height: 100dvh !important;
-    max-height: 100dvh !important;
-    overflow: hidden !important;
-  }
-
-  #home.hidden,
-  #editor.hidden {
-    display: none !important;
-  }
-
-  #home.home:not(.hidden) {
-    display: flex !important;
-    flex-direction: column !important;
-    width: 100vw !important;
-    height: 100% !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    min-height: 100% !important;
-    min-height: 100dvh !important;
-    max-height: 100dvh !important;
-    background: radial-gradient(circle at 85% 0%, rgba(115, 226, 189, 0.12), transparent 35%),
-                radial-gradient(circle at 10% 90%, rgba(139, 131, 255, 0.08), transparent 40%),
-                var(--oms-m-bg) !important;
-    overflow: hidden !important;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  /* Sticky Top Bar */
-  #home .homeTop {
-    flex: 0 0 auto !important;
-    height: calc(54px + var(--oms-sat)) !important;
-    padding-top: var(--oms-sat) !important;
-    padding-left: max(14px, var(--oms-sal)) !important;
-    padding-right: max(14px, var(--oms-sar)) !important;
-    background: rgba(14, 18, 26, 0.94) !important;
-    backdrop-filter: blur(14px) !important;
-    -webkit-backdrop-filter: blur(14px) !important;
-    border-bottom: 1px solid var(--oms-m-border) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    z-index: 50 !important;
-  }
-
-  #home .homeBrand {
-    display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
-  }
-  #home .homeBrandLogo {
-    width: 28px !important;
-    height: 28px !important;
-    border-radius: 7px !important;
-    overflow: hidden !important;
-  }
-  #home .homeWordmark b {
-    font-size: 16px !important;
-    font-weight: 800 !important;
-    letter-spacing: -0.01em !important;
-    background: linear-gradient(135deg, #ffffff 40%, var(--oms-m-accent) 100%) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-  }
-
-  #home .homeTopActions {
-    display: flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-  }
-  #home .homeTopActions .rightBtn {
-    height: 32px !important;
-    padding: 0 10px !important;
-    border-radius: 16px !important;
-    font-size: 11px !important;
-    font-weight: 750 !important;
-    background: rgba(255, 255, 255, 0.06) !important;
-    border: 1px solid var(--oms-m-border) !important;
-    color: var(--oms-m-text) !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-  }
-  #home .homeTopActions .rightBtn .langCode,
-  #home .homeTopActions .languageBtn .langCode,
-  #homeLanguageCode {
-    color: #ffffff !important;
-  }
-  #home .homeTopActions #homeInstallBtn {
-    display: none !important;
-  }
-
+/* Install banner is shared by desktop and mobile, including hidden state. */
   /* Small Mobile PWA Install Notification */
   .mPwaNotification {
     display: flex !important;
@@ -5002,6 +4903,107 @@ html.omsIOSStandalone #editor.editor:not(.hidden) {
   .mPwaNotifCloseBtn:active {
     color: #cbd5e1 !important;
     background: rgba(255, 255, 255, 0.08) !important;
+  }
+
+
+/* ==========================================================================
+   MOBILE HOME SCREEN (ALIGHT MOTION APP PARITY)
+   ========================================================================== */
+@media (max-width: 899px) {
+  html, body {
+    height: 100% !important;
+    height: 100dvh !important;
+    min-height: 100% !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  #home.hidden,
+  #editor.hidden {
+    display: none !important;
+  }
+
+  #home.home:not(.hidden) {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100vw !important;
+    height: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100% !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    background: radial-gradient(circle at 85% 0%, rgba(115, 226, 189, 0.12), transparent 35%),
+                radial-gradient(circle at 10% 90%, rgba(139, 131, 255, 0.08), transparent 40%),
+                var(--oms-m-bg) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Sticky Top Bar */
+  #home .homeTop {
+    flex: 0 0 auto !important;
+    height: calc(54px + var(--oms-sat)) !important;
+    padding-top: var(--oms-sat) !important;
+    padding-left: max(14px, var(--oms-sal)) !important;
+    padding-right: max(14px, var(--oms-sar)) !important;
+    background: rgba(14, 18, 26, 0.94) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border-bottom: 1px solid var(--oms-m-border) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    z-index: 50 !important;
+  }
+
+  #home .homeBrand {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  #home .homeBrandLogo {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 7px !important;
+    overflow: hidden !important;
+  }
+  #home .homeWordmark b {
+    font-size: 16px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.01em !important;
+    background: linear-gradient(135deg, #ffffff 40%, var(--oms-m-accent) 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+  }
+
+  #home .homeTopActions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+  #home .homeTopActions .rightBtn {
+    height: 32px !important;
+    padding: 0 10px !important;
+    border-radius: 16px !important;
+    font-size: 11px !important;
+    font-weight: 750 !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid var(--oms-m-border) !important;
+    color: var(--oms-m-text) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+  #home .homeTopActions .rightBtn .langCode,
+  #home .homeTopActions .languageBtn .langCode,
+  #homeLanguageCode {
+    color: #ffffff !important;
+  }
+  #home .homeTopActions #homeInstallBtn {
+    display: none !important;
   }
 
   /* Main Scroll Area */
@@ -7345,7 +7347,7 @@ body #desktopCanvasSplitToolbarBtn,
     <div id="mPwaInstallNotification" class="mPwaNotification hidden" role="alert">
       <div class="mPwaNotifLeft" id="mPwaNotifTrigger">
         <div class="mPwaNotifIcon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
           </svg>
         </div>
@@ -39891,27 +39893,34 @@ const OMSSavedMediaRecovery=(()=>{
     return failures;
   }
   let recoveryBusy=false;
-  async function recover(layers,progress=()=>{}){
+  const recoveryProviders=[
+    {id:'premium',label:'Akun premium AM (mendukung > 5 MB)',note:'Menggunakan resolver Open Motion dengan akun premium Alight Motion untuk paket besar (> 5 MB). Memerlukan internet. Link tidak dikirim ke API pihak ketiga.'},
+    {id:'official',label:'Open Motion: resmi, tanpa akun, maks. 5 MB',note:'Menggunakan resolver Open Motion tanpa akun. Maksimal 5 MB untuk seluruh paket ZIP, sesuai izin server AM. Memerlukan internet. Link tidak dikirim ke API pihak ketiga.'},
+    {id:'zervida',label:'API pihak ketiga',note:'Link AM dan pilihan proyek akan diteruskan ke API pihak ketiga melalui resolver Open Motion. Ketersediaan mengikuti layanan tersebut; maksimal 256 MB per media. Memerlukan internet.'}
+  ];
+  const storedProvider=project=>recoveryProviders.some(p=>p.id===project?.amLinkResolver)?project.amLinkResolver:'official';
+  async function recover(layers,progress=()=>{},selectedProvider=null){
     const project=model.project;if(!project?.amShareLink)throw Error('Proyek ini tidak menyimpan AM Link asal. Gunakan Tautkan Ulang Media pada layer.');
+    const provider=selectedProvider===null?storedProvider(project):selectedProvider;
+    if(!recoveryProviders.some(p=>p.id===provider))throw Error('Pilihan resolver AM tidak valid.');
     if(recoveryBusy||AMLinkPackageImporter.busy)throw Error('Pemulihan atau impor media masih berjalan.');
     const targets=layers.filter(l=>isMedia(l)&&model.layers.includes(l));
-    if(!targets.length)return {layers:0};
+    if(!targets.length)return {layers:0,provider};
     if(targets.some(l=>!l.sourceRef))throw Error('Ada media tanpa referensi paket AM. Gunakan Tautkan Ulang Media pada layer tersebut.');
+    const assertCurrent=()=>{if(model.project!==project||targets.some(l=>!model.layers.includes(l)))throw Error('Proyek berubah. Tidak ada media yang diganti.');};
     recoveryBusy=true;AMLinkPackageImporter.busy=true;
     try{
-      // Reuse the explicitly selected provider, never silently switch services.
-      const provider=['zervida','premium'].includes(project.amLinkResolver)?project.amLinkResolver:'official';
-      progress('Mengambil salinan media dari resolver yang dipakai proyek ini…');
-      let payload=await AMLinkPackageImporter.resolve(project.amShareLink,project.amXMLName||'',provider);
+      // This attempt uses one explicit provider; never fall back to another service.
+      progress('Mengambil salinan media melalui '+recoveryProviders.find(p=>p.id===provider).label+'…');
+      let payload=await AMLinkPackageImporter.resolve(project.amShareLink,project.amXMLName||'',provider);assertCurrent();
       const choices=AMLinkPackageImporter.projectChoices(payload);
-      if(!project.amXMLName&&choices.length>1){const selected=await AMLinkPackageImporter.chooseProject(choices);if(!selected)throw Error('Pemulihan dibatalkan.');payload=await AMLinkPackageImporter.resolve(project.amShareLink,selected,provider)}
+      if(!project.amXMLName&&choices.length>1){const selected=await AMLinkPackageImporter.chooseProject(choices);assertCurrent();if(!selected)throw Error('Pemulihan dibatalkan.');payload=await AMLinkPackageImporter.resolve(project.amShareLink,selected,provider);assertCurrent();}
       // Only missing source references are downloaded. The XML is not parsed:
       // original layer ids, trim, parent links, effects and keyframes stay intact.
-      const assets=await AMLinkPackageImporter.materializeMedia(payload.media,{project,layers:targets},progress);
-      if(model.project!==project||targets.some(l=>!model.layers.includes(l)))throw Error('Proyek berubah. Tidak ada media yang diganti.');
+      const assets=await AMLinkPackageImporter.materializeMedia(payload.media,{project,layers:targets},progress);assertCurrent();
       const replacements=targets.map(l=>({layer:l,asset:assets.byKey.get(AMLinkPackageImporter.fileName(l.sourceRef))}));
       if(replacements.some(x=>!x.asset))throw Error('Media pemulihan belum lengkap. Proyek tidak diganti.');
-      history.push();clock.stop?.();
+      history.push();clock.stop?.();project.amLinkResolver=provider;
       for(const {layer:l,asset:a} of replacements){
         model.disposeLayerRuntime(l);l.assetId=a.id;l.dataUrl=a.blob instanceof Blob?mediaAssets.attachBlob(a.id,a.blob):a.dataUrl;
         if(l.dataUrl)mediaAssets.sources.set(a.id,l.dataUrl);
@@ -39923,22 +39932,29 @@ const OMSSavedMediaRecovery=(()=>{
       bus.emit('model:changed');const saved=await persistentStore.saveCurrent();
       if(failures.length)throw Error(`${failures.length} media sudah diunduh tetapi belum dapat didekode. Periksa format file asli.`);
       toast(saved&&persistentStore.lastMediaSaveComplete?'Media lama dipulihkan dan tersimpan; editan tetap utuh.':'Media dipulihkan. Simpan cadangan proyek; penyimpanan browser belum lengkap.');
-      return {layers:targets.length,saved:saved&&persistentStore.lastMediaSaveComplete};
+      return {layers:targets.length,saved:saved&&persistentStore.lastMediaSaveComplete,provider};
     }finally{recoveryBusy=false;AMLinkPackageImporter.busy=false;AMLinkPackageImporter.currentPackageId=null;AMCloudPackage.cache=null}
   }
   function open(layers=model.layers.filter(l=>isMedia(l)&&!ready(l)&&!(!(l.img||l.audio||l.video)&&window.omsPreviewResources?.hasSourceBytes(l)))){
     const project=model.project;if(!layers.length){toast('Media proyek tersedia.');return}
-    const d=document.createElement('dialog');d.className='amDialog';d.style.cssText='width:480px;max-width:90vw;background:#171c27;color:white;padding:24px;border:1px solid #65d4c9;border-radius:14px';
+    const d=document.createElement('dialog');d.className='amDialog amRecoveryDialog';d.style.cssText='width:480px;max-width:90vw;background:#171c27;color:white;padding:24px;border:1px solid #65d4c9;border-radius:14px';
     const title=document.createElement('h3');title.textContent='Pulihkan media proyek lama';
     const note=document.createElement('p');note.textContent=`${layers.length} layer media belum dapat dibuka. Layer, keyframe, efek dan potongan waktu tidak akan diganti.`;
-    const info=document.createElement('p');info.textContent=project?.amShareLink?`Ambil ulang hanya media dari AM Link asal melalui ${project.amLinkResolver==='zervida'?'API pihak ketiga':'resolver Open Motion (5 MB)'}. Memerlukan internet.`:'Tidak ada AM Link asal. Pilih layer lalu gunakan Tautkan Ulang Media untuk mencari file asli.';
-    const status=document.createElement('p');status.setAttribute('role','status');
-    const button=document.createElement('button');button.textContent='Pulihkan Media AM';button.disabled=!project?.amShareLink;
-    const close=document.createElement('button');close.textContent='Nanti';close.style.marginLeft='10px';
+    const label=document.createElement('label');label.textContent='Resolver pemulihan';
+    const select=document.createElement('select');select.dataset.recoveryResolver='';select.disabled=!project?.amShareLink;
+    for(const provider of recoveryProviders){const option=document.createElement('option');option.value=provider.id;option.textContent=provider.label;select.append(option)}select.value=storedProvider(project);label.append(select);
+    const info=document.createElement('p');info.dataset.providerNote='';
+    const update=()=>{info.textContent=project?.amShareLink?'Ambil ulang hanya media dari AM Link asal. '+recoveryProviders.find(p=>p.id===select.value).note:'Tidak ada AM Link asal. Pilih layer lalu gunakan Tautkan Ulang Media untuk mencari file asli.';};update();
+    const status=document.createElement('p');status.setAttribute('role','status');status.dataset.recoveryStatus='';
+    select.onchange=()=>{status.textContent='';update()};
+    const button=document.createElement('button');button.type='button';button.dataset.recover='';button.textContent='Pulihkan Media AM';button.disabled=!project?.amShareLink;
+    const close=document.createElement('button');close.type='button';close.dataset.close='';close.textContent='Nanti';
+    const actions=document.createElement('div');actions.className='amDialogActions';actions.append(button,close);
     close.onclick=()=>{if(!recoveryBusy){d.close();d.remove()}};d.oncancel=e=>{if(recoveryBusy)e.preventDefault();else d.remove()};
-    button.onclick=async()=>{button.disabled=true;close.disabled=true;try{await recover(layers,message=>status.textContent=amImportDisplayText(message));d.close();d.remove()}catch(e){status.textContent=amImportDisplayText(e.message);button.disabled=false}finally{close.disabled=false}};
-    d.append(title,note,info,status,button,close);document.body.append(d);d.showModal();
+    button.onclick=async()=>{button.disabled=true;close.disabled=true;select.disabled=true;d.setAttribute('aria-busy','true');try{if(model.project!==project)throw Error('Proyek berubah. Buka kembali pemulihan media dari proyek yang aktif.');await recover(layers,message=>status.textContent=amImportDisplayText(message),select.value);d.close();d.remove()}catch(e){status.textContent=amImportDisplayText(e.message)}finally{button.disabled=!project?.amShareLink;select.disabled=!project?.amShareLink;close.disabled=false;d.removeAttribute('aria-busy')}};
+    d.append(title,note,label,info,status,actions);document.body.append(d);d.showModal();
   }
+
   const openBefore=ui.loadLocal.bind(ui);
   ui.loadLocal=async function(...args){
     const result=await openBefore(...args);if(!result)return result;
@@ -39950,6 +39966,7 @@ const OMSSavedMediaRecovery=(()=>{
   settingsButton.onclick=function(...args){const result=settingsBefore?.apply(this,args);if(model.project?.amShareLink){const parent=document.querySelector('#previewQualitySelect')?.closest('.drawerBody');if(parent){const button=document.createElement('button');button.id='omsRecoverAMMedia';button.className='omsSettingsAction';button.type='button';button.textContent='Pulihkan Media AM';button.onclick=()=>open();parent.append(button)}}return result};
   return {open,recover,prepare};
 })();
+if(window.__OMS_TEST__)window.omsSavedMediaRecovery=OMSSavedMediaRecovery;
 
 
 /* V3.63 — reversible relink freeze + ratio mismatch warning */
@@ -55272,7 +55289,7 @@ window.omsDetachedMatte=OMSDetachedMatte250;
 // encoder allocation, pixel readback or render cadence changes.
 const OMSExportDiagnostics302=(()=>{
  'use strict';
- const BUILD='OpenMotion-Usability-20261023',KEY='oms_export_reporter_v1',LIMITS={automaticRuns:8,manualRuns:3,sessions:4,events:24,ids:128,logs:16,rows:128,perCallMs:1800,totalProbeMs:20000},automatic=[],manual=[],sessions=[],events=[],watched=new WeakSet(),contextNames=new WeakMap();let sequence=0,currentSession=null,probePromise=null,lastFailure=null,dropped={automaticRuns:0,manualRuns:0,sessions:0,events:0};
+ const BUILD='OpenMotion-HomeRecovery-20261023',KEY='oms_export_reporter_v1',LIMITS={automaticRuns:8,manualRuns:3,sessions:4,events:24,ids:128,logs:16,rows:128,perCallMs:1800,totalProbeMs:20000},automatic=[],manual=[],sessions=[],events=[],watched=new WeakSet(),contextNames=new WeakMap();let sequence=0,currentSession=null,probePromise=null,lastFailure=null,dropped={automaticRuns:0,manualRuns:0,sessions:0,events:0};
  const number=v=>typeof v==='number'&&Number.isFinite(v)?v:null;
  function text(value,max=2048){return String(value??'').slice(0,max).replace(/\b(?:https?|file|blob|data):[^\s"'<>]+/gi,'[URL disamarkan]').replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[email disamarkan]');}
  function plain(value,depth=0){if(value==null)return null;if(typeof value==='number')return number(value);if(typeof value==='boolean')return value;if(typeof value==='string')return text(value);if(depth>9)return'[depth limit]';if(Array.isArray(value))return value.slice(0,LIMITS.rows).map(v=>plain(v,depth+1));if(typeof value==='object'){const o={};for(const k of Object.keys(value).slice(0,100))o[k]=plain(value[k],depth+1);return o;}return null;}
@@ -55476,11 +55493,20 @@ const OMSMobileCompat=(()=>{
 
   document.addEventListener('keydown',e=>{if(freehand&&e.key==='Escape'){e.preventDefault();endFreehand();}});bus.on('project:will-change',()=>{if(freehand)endFreehand();media.pause({sync:false});});
 
-  function notice(message){
-    let box=$('#omsPreviewHealth');if(!message){box?.remove();return;}
+  let healthOwner=null;
+  const dismissedMediaHealth=new WeakMap(),healthSource=el=>el.getAttribute?.('src')||el.currentSrc||'';
+  function notice(message,owner=null){
+    let box=$('#omsPreviewHealth');
+    if(!message){healthOwner=null;box?.remove();return;}
+    if(owner&&dismissedMediaHealth.get(owner.el)===healthSource(owner.el))return;
+    healthOwner=owner;
     if(!box){box=document.createElement('div');box.id='omsPreviewHealth';box.className='omsPreviewHealth';box.setAttribute('role','status');$('#viewport').append(box);}
-    box.replaceChildren(document.createTextNode(message));const button=document.createElement('button');button.type='button';button.textContent='Diagnostik';button.onclick=()=>omsDiagnostics.openPanel();box.append(button);
+    const text=document.createElement('span');text.className='omsPreviewHealthText';text.textContent=message;
+    const button=document.createElement('button');button.type='button';button.textContent='Diagnostik';button.onclick=()=>omsDiagnostics.openPanel();
+    const close=document.createElement('button');close.type='button';close.textContent='×';close.dataset.dismissHealth='';close.setAttribute('aria-label','Tutup peringatan');close.title='Tutup peringatan';close.onclick=()=>{if(healthOwner?.el)dismissedMediaHealth.set(healthOwner.el,healthSource(healthOwner.el));notice(null)};
+    box.dataset.kind=owner?'media':'gpu';box.replaceChildren(text,button,close);
   }
+
   function watchContext(){
     const canvas=renderer.gl?.canvas;if(!canvas)return;
     canvas.addEventListener('webglcontextlost',()=>{recovery++;renderer._omsContextLost=true;if(model.playing)clock.stop({syncMedia:false,renderDecay:false,continuePreRender:false});else media.pause({sync:false});notice('Konteks GPU terhenti. Menunggu pemulihan browser; proyek tetap tersimpan.');});
@@ -55488,8 +55514,31 @@ const OMSMobileCompat=(()=>{
     const render=renderer.render;renderer.render=function(...args){if(this._omsContextLost||this.gl?.isContextLost?.())return;return render.apply(this,args);};
   }
   watchContext();if(renderer.gpuStartupError)notice('Renderer GPU gagal dimulai. Preview memakai jalur kompatibilitas 2D; hasil 3D/efek GPU perlu diperiksa. '+renderer.gpuStartupError);
-  const watched=new WeakSet();function watchMedia(){for(const l of model.layers){const el=l.video||l.audio||l.img;if(!el||watched.has(el))continue;watched.add(el);el.addEventListener('error',()=>{if(!model.layers.includes(l)||l.hidden)return;notice('Media gagal dimuat: '+l.name+'. Pilih Tautkan Ulang atau coba codec lain.');});}}
-  bus.on('model:changed',watchMedia);const hydrate=model.hydrateLayer;model.hydrateLayer=function(...args){const value=hydrate.apply(this,args);watchMedia();return value;};watchMedia();layout();
+  const watched=new WeakMap();
+  const mediaHealthy=el=>el instanceof HTMLImageElement?!!(el.complete&&el.naturalWidth>0):!!(!el.error&&el.readyState>=1);
+  const healthCurrent=state=>model.project===state.project&&model.layers.includes(state.layer)&&!state.layer.hidden&&(state.layer.img||state.layer.video||state.layer.audio)===state.el;
+  function watchMedia(){
+    for(const layer of model.layers){
+      const el=layer.img||layer.video||layer.audio;if(!el)continue;
+      let state=watched.get(el);
+      if(state){state.layer=layer;state.project=model.project;continue;}
+      state={layer,el,project:model.project};watched.set(el,state);
+      el.addEventListener('error',()=>{
+        // Old/retired runtimes and already-recovered resources are not failures
+        // of the layer's current source. Ignore those late events.
+        if(!healthCurrent(state)||mediaHealthy(el))return;
+        const help=layer.type==='image'?'Pilih Tautkan Ulang jika gambar tetap tidak tampil.':'Pilih Tautkan Ulang atau coba format/codec lain jika media tetap tidak tampil.';
+        notice('Media gagal dimuat: '+state.layer.name+'. '+help,state);
+      });
+      const recovered=()=>{if(!mediaHealthy(el))return;dismissedMediaHealth.delete(el);if(healthOwner?.el===el)notice(null)};
+      for(const event of ['load','loadedmetadata','loadeddata','canplay'])el.addEventListener(event,recovered);
+    }
+    if(healthOwner&&(!healthCurrent(healthOwner)||mediaHealthy(healthOwner.el)))notice(null);
+  }
+  bus.on('project:will-change',()=>notice(null));
+  bus.on('model:changed',watchMedia);
+  const hydrate=model.hydrateLayer;model.hydrateLayer=function(...args){const value=hydrate.apply(this,args);watchMedia();return value;};watchMedia();layout();
+
   return{version:'MobileCompatibility2-Usability',notice,startFreehand,endFreehand,reconcileAudio:reconcile,layout,freehandActive:()=>!!freehand};
 })();
 window.omsMobileCompat=OMSMobileCompat;
@@ -59929,5 +59978,23 @@ html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amTemplatesGrid,
 html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amObjectsGrid{display:grid!important;flex:1 0 auto!important;width:100%!important;height:auto!important;min-height:min-content!important;max-height:none!important;box-sizing:border-box!important;grid-template-columns:repeat(auto-fit,minmax(96px,1fr))!important;grid-template-rows:none!important;grid-auto-rows:minmax(84px,1fr)!important;align-content:stretch!important;gap:7px!important;padding:0!important}
 html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amTemplateCard,
 html.omsPanelOpen #editor .timelineArea>#drawer.addDrawer .amObjectCard{width:100%!important;min-width:0!important;max-width:none!important;height:100%!important;min-height:84px!important;max-height:none!important;box-sizing:border-box!important;padding:8px!important;white-space:normal!important;overflow-wrap:anywhere!important}
+
+</style>
+
+<style id="oms-home-recovery-health-20261023">
+/* The added install banner needs its own auto-height grid track on desktop. */
+#home.simpleHome #homeInstallBtn[hidden]{display:none!important}
+@media(min-width:900px){
+  #home.simpleHome{grid-template-rows:68px auto minmax(0,1fr)!important}
+  #home.simpleHome>.homeTop{grid-row:1}
+  #home.simpleHome>#mPwaInstallNotification{grid-row:2;align-self:start}
+  #home.simpleHome>.homeMain{grid-row:3}
+}
+/* Health banners stay compact, readable and dismissible in either theme. */
+#omsPreviewHealth{display:flex;align-items:center;gap:8px;max-height:min(160px,32vh);overflow:auto}
+#omsPreviewHealth .omsPreviewHealthText{min-width:0;flex:1;overflow-wrap:anywhere}
+#omsPreviewHealth button{margin:0;flex:0 0 auto;min-height:30px;padding:4px 8px;border:1px solid #c49c65;border-radius:6px;background:#5b3c24;color:#fff3de;font:600 11px/1.3 system-ui}
+#omsPreviewHealth button:focus-visible{outline:2px solid #fff3de;outline-offset:2px}
+#omsPreviewHealth button[data-dismiss-health]{width:32px;min-height:32px;padding:0;font-size:22px;line-height:1}
 
 </style>
