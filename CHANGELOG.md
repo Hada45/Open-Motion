@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-10-30 — Timeline Markers, Home About & Recent Projects
+
+### Timeline markers and Alight Motion bookmarks
+
+- Import native AM Link/XML `<bookmark>` nodes, retaining millisecond times and appearance indices. Keep nested-scene bookmarks in their own group workspace, with the same trim, in-point and speed mapping as the group's contents.
+- Show colored marker flags at the top of the ruler. Tap the live timecode to add/remove a current-frame marker; hold for 500 ms to open marker settings without changing markers on release.
+- Rename, retime, recolor, delete, and navigate markers through the marker settings dialog. Share data with the expression marker API and retain Undo/Redo, project JSON and additive Open Motion XML persistence.
+- Use the existing timeline start/end buttons to seek previous/next markers on tap and composition boundaries on hold. From the first/last marker frame, one additional tap reaches the corresponding timeline edge. Apply the same behavior inside groups; keep the separate keyframe buttons unchanged.
+- Preserve imported times while mapping display/seek positions to frames. Keep out-of-span imported bookmarks in project data. Increase the shared marker access budget to 4096. Add root bookmark nodes to the existing AM XML exporter; this does not replace the legacy layer exporter with a complete native AM exporter.
+- Support mouse, touch and keyboard operation, including gesture cancellation, focus restoration and Back/Escape handling. No separate marker toolbar is added.
+
+### Home About, credits and recent projects
+
+- Open **About Open Motion** from the existing Home logo/wordmark without requiring an open project. Include searchable credits, source links, full offline license notices and a bundled `THIRD_PARTY_NOTICES.txt` copy.
+- Surface existing library/reference/community notices and the pinned Mediabunny MPL-2.0 notice. Keep Alight Motion/Aurea compatibility references separate from verified open-source licenses. Retain the original embedded notices.
+- Fix unresponsive cards in **Recent Projects**: handle the actual click/tap or Enter/Space on each card rather than forwarding an untrusted synthetic click to another card. Preserve project storage, thumbnails, selection behavior and homepage-first navigation guards.
+
+### Preserve published changes and refresh the PWA
+
+- Merge and retain the ruler stacking-order and start-of-project gap fixes already published in [cdd7f7e](https://github.com/Hada45/Open-Motion/commit/cdd7f7ec9a26ae5879aa84420cf7b766eb8e92ca). Keep every prior changelog entry and all unrelated repository files, including README, unchanged.
+- Refresh only the service worker's shell-cache identity; retain its network-first navigation and exclusion of imported media/project storage.
+- Local Chrome checks cover marker navigation, group boundaries, imported bookmarks, gesture cancellation, timecode controls, recent project loading and About. Physical phones, live resolver services, full native AM visual parity and complete video export remain outside this release's validation.
+
 ## 2026-10-23 — Timeline Ruler: Start-of-Project Gap
 
 - Cover the leading blank area to the left of the time ruler at 0 seconds and the first frames, so vertically scrolled layer headers cannot show through above the track boundary.
