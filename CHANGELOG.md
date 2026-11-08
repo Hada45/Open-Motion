@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-11-08 — Timeline Playhead, Layer Header & Export Menu Fixes
+
+## Timeline and playhead
+
+- Fix the playhead line stopping prematurely instead of extending to the bottom of the timeline.
+- Add frame-by-frame snapping based on the timeline ruler.
+- Fix inconsistent playhead positioning and unwanted drifting during timeline interaction.
+
+## Layer interface
+
+- Add a dedicated header when selecting a layer.
+
+## Export and Share menus
+
+- Fix crashes and performance issues when opening or interacting with the Export and Share menus.
+
+## Source code optimization
+
+- Streamline the source code to reduce the overall HTML file size.
+
 ## 2026-10-30 — Timeline Markers, Home About & Recent Projects
 
 ### Timeline markers and Alight Motion bookmarks
