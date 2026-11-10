@@ -1,22 +1,52 @@
 # Changelog
 
+## 2026-11-10 — UI Redesign, Dark Theme, Export & Clip Handle
+
+# Added
+
+- Added additional export options to the Export & Share menu.
+- Added Space Grotesk as the primary interface font.
+- Added a three-line drag handle to timeline clips for vertical layer repositioning.
+- Added an About Open Motion sidebar with application information and credits.
+- Added automatic audio visualizer activation.
+
+# Changed
+
+- Redesigned the Main Menu, New Project menu, Export & Share menu, Rendering Progress Panel, and Editor interface.
+- Transitioned the application's interface to a consistent dark theme.
+- Updated UI components, layouts, spacing, and visual elements.
+- Removed the audio visualizer toggle button from the Playhead Toolbar.
+
+# Fixed
+
+- Fixed timeline scrolling behavior in the Editor.
+- Fixed the Frame Ruler incorrectly scrolling vertically along with the timeline.
+- Fixed the "|<" and ">|" buttons on the Playhead Toolbar.
+- Improved timeline navigation and clip dragging interactions.
+
+# Notes
+
+- Some UI changes have not yet been fully implemented across the application.
+- Further refinements, consistency improvements, and bug fixes are still needed.
+- Additional issues may be discovered during development and testing.
+
 ## 2026-11-08 — Timeline Playhead, Layer Header & Export Menu Fixes
 
-## Timeline and playhead
+# Timeline and playhead
 
 - Fix the playhead line stopping prematurely instead of extending to the bottom of the timeline.
 - Add frame-by-frame snapping based on the timeline ruler.
 - Fix inconsistent playhead positioning and unwanted drifting during timeline interaction.
 
-## Layer interface
+# Layer interface
 
 - Add a dedicated header when selecting a layer.
 
-## Export and Share menus
+# Export and Share menus
 
 - Fix crashes and performance issues when opening or interacting with the Export and Share menus.
 
-## Source code optimization
+# Source code optimization
 
 - Streamline the source code to reduce the overall HTML file size.
 
